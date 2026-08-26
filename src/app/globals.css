@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #0B0D10;
+    --surface: #161A20;
+    --surface-2: #1C2028;
+    --border: #2A2F38;
+    --text-primary: #F4F4F2;
+    --text-secondary: #9CA3AF;
+    --text-muted: #6B7280;
+    --accent: #DFD0B8;
+    --accent-dark: #C4B49E;
+    --success: #4ADE80;
+    --warning: #FBBF24;
+    --error: #F87171;
+    --info: #60A5FA;
+  }
+
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
+  }
+
+  /* Focus styles */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--surface);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors;
+    background-color: var(--accent);
+    color: var(--background);
+  }
+  .btn-primary:hover {
+    background-color: var(--accent-dark);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors border;
+    border-color: var(--border);
+    color: var(--text-secondary);
+  }
+  .btn-secondary:hover {
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors;
+    background-color: #EF4444;
+    color: white;
+  }
+  .btn-danger:hover {
+    background-color: #DC2626;
+  }
+  .btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .card {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 rounded-md text-sm transition-colors;
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .input-field:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .input-field::placeholder {
+    color: var(--text-muted);
+  }
+  .input-field:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .label {
+    @apply block text-sm font-medium mb-1;
+    color: var(--text-secondary);
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+  .badge-active { background-color: #14532D; color: #4ADE80; }
+  .badge-pending { background-color: #1C1F0A; color: #FBBF24; }
+  .badge-suspended { background-color: #3B1A1A; color: #F87171; }
+  .badge-default { background-color: var(--surface-2); color: var(--text-secondary); }
+
+  .sidebar-link {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors;
+    color: var(--text-secondary);
+  }
+  .sidebar-link:hover {
+    background-color: var(--surface-2);
+    color: var(--text-primary);
+  }
+  .sidebar-link.active {
+    background-color: var(--surface-2);
+    color: var(--text-primary);
+  }
+
+  .divider {
+    border-top: 1px solid var(--border);
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded;
+    background-color: var(--surface-2);
+  }
+
+  .alert-banner {
+    @apply flex items-start gap-3 p-4 rounded-md;
+  }
+  .alert-banner-error {
+    background-color: #3B1A1A;
+    border: 1px solid #EF444440;
+    color: #F87171;
+  }
+  .alert-banner-success {
+    background-color: #14532D20;
+    border: 1px solid #4ADE8040;
+    color: #4ADE80;
+  }
+  .alert-banner-warning {
+    background-color: #1C1F0A;
+    border: 1px solid #FBBF2440;
+    color: #FBBF24;
+  }
+  .alert-banner-info {
+    background-color: #1E3A5F20;
+    border: 1px solid #60A5FA40;
+    color: #60A5FA;
+  }
+}

@@ -6,21 +6,44 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "seed:admin": "tsx scripts/seed-admin.ts",
+    "seed:dev": "tsx scripts/seed-dev.ts",
+    "test": "jest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
+    "@types/argon2": "^0.14.1",
+    "@types/nodemailer": "^8.0.1",
+    "argon2": "^0.45.1",
+    "date-fns": "^4.4.0",
+    "dotenv": "^17.4.2",
+    "iron-session": "^8.0.4",
+    "jose": "^6.2.10",
+    "mongoose": "^9.9.4",
     "next": "16.3.3",
+    "nodemailer": "^9.0.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-hook-form": "^7.86.0",
+    "tsx": "^4.23.12",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
+    "jest": "^30.4.2",
+    "jest-environment-node": "^30.4.1",
     "tailwindcss": "^4",
+    "ts-jest": "^29.4.12",
     "typescript": "^5"
   }
 }
