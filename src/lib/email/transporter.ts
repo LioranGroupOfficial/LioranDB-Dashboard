@@ -5,29 +5,13 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 let cachedTransporter: Transporter | null = null;
 
-function createTransporter(): Transporter | null {
-  if (cachedTransporter) {
-    return cachedTransporter;
-  }
-
-  const host = process.env.SMTP_HOST;
-  const portStr = process.env.SMTP_PORT;
+function buildTransportOptions(port: number, secure: boolean) {
+  const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
   const user = process.env.SMTP_USER;
   const rawPass = process.env.SMTP_PASS || '';
   const pass = rawPass.replace(/^["'](.*)["']$/, '$1').trim();
 
-  if (!host || !user || !pass) {
-    if (isDev) {
-      console.info('[Email] SMTP credentials not configured. Using console transport.');
-      return null;
-    }
-    throw new Error('SMTP credentials not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS.');
-  }
-
-  const port = Number(portStr || 465);
-  const secure = port === 465 || process.env.SMTP_SECURE === 'true';
-
-  const transporter = nodemailer.createTransport({
+  return {
     host,
     port,
     secure,
@@ -40,10 +24,44 @@ function createTransporter(): Transporter | null {
     socketTimeout: 20000,
     tls: {
       rejectUnauthorized: process.env.NODE_ENV === 'production',
-      minVersion: 'TLSv1.2',
+      minVersion: 'TLSv1.2' as const,
     },
-  });
+  };
+}
 
+function createTransporter(forceFallback = false): Transporter | null {
+  if (cachedTransporter && !forceFallback) {
+    return cachedTransporter;
+  }
+
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const rawPass = process.env.SMTP_PASS || '';
+  const pass = rawPass.replace(/^["'](.*)["']$/, '$1').trim();
+
+  if (!host || !user || !pass) {
+    if (isDev) {
+      console.info('[Email] SMTP credentials not configured. Using console transport.');
+      return null;
+    }
+    throw new Error('SMTP credentials not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS.');
+  }
+
+  const configuredPort = Number(process.env.SMTP_PORT || 465);
+
+  let port = configuredPort;
+  // Port 465 is STRICT SSL/TLS (secure: true).
+  // Port 587 / 25 is STARTTLS (secure: false). Never set secure: true on port 587 as it causes "wrong version number" SSL error.
+  let secure = port === 465;
+
+  if (forceFallback) {
+    // If port 465 failed, fall back to port 587 STARTTLS. If 587 failed, fall back to 465 SSL.
+    port = configuredPort === 465 ? 587 : 465;
+    secure = port === 465;
+    console.info(`[Email] Switching to alternate SMTP port ${port} (secure: ${secure})...`);
+  }
+
+  const transporter = nodemailer.createTransport(buildTransportOptions(port, secure));
   cachedTransporter = transporter;
   return transporter;
 }
@@ -60,7 +78,7 @@ export interface SendEmailParams {
 
 export async function sendEmail(params: SendEmailParams): Promise<void> {
   const { to, subject, html, text } = params;
-  let transporter = createTransporter();
+  let transporter = createTransporter(false);
 
   if (!transporter) {
     console.info(`\n📧 [DEV EMAIL CONSOLE]\nTo: ${to}\nSubject: ${subject}\n---\n${text || 'HTML content'}\n---\n`);
@@ -80,11 +98,11 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
     console.info(`[Email Sent] MessageId: ${info.messageId} To: ${to}`);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Email Attempt 1 Failed]: ${errorMsg}. Retrying immediately with fresh connection...`);
+    console.warn(`[Email Attempt 1 Failed]: ${errorMsg}. Retrying with alternate secure port fallback...`);
 
-    // Invalidate cached transport and retry once with a fresh direct connection
+    // Invalidate cached transport and retry with fallback port configuration
     cachedTransporter = null;
-    const retryTransporter = createTransporter();
+    const retryTransporter = createTransporter(true);
 
     if (retryTransporter) {
       try {
