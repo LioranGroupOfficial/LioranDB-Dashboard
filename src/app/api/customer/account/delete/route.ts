@@ -1,6 +1,19 @@
 import { NextRequest } from 'next/server';
 import { requireVerifiedUser } from '@/lib/auth/guards';
-import { connectToDatabase, User, Payment, Subscription, ManagedDatabase } from '@/lib/db';
+import {
+  connectToDatabase,
+  User,
+  Payment,
+  Subscription,
+  ManagedDatabase,
+  HostingApplication,
+  PolicyAcceptance,
+  SupportTicket,
+  TicketMessage,
+  Notification,
+  EmailVerification,
+  PasswordReset,
+} from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
 import { clearSession } from '@/lib/auth/session';
 import { createApiError } from '@/lib/errors';
@@ -29,37 +42,56 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Terminate associated managed databases and active subscriptions
-    await ManagedDatabase.updateMany(
-      { userId: sessionUser.userId },
-      { status: 'TERMINATED', state: 'STOPPED' }
-    );
-
-    await Subscription.updateMany(
-      { userId: sessionUser.userId },
-      { status: 'CANCELLED' }
-    );
-
-    // Deactivate user record
-    await User.findByIdAndUpdate(sessionUser.userId, {
-      isActive: false,
-      onboardingStage: 'SUSPENDED',
-    });
-
+    // 1. Audit log the deletion before removing records
     await createAuditLog({
       actorId: sessionUser.userId,
       actorRole: sessionUser.role,
       action: 'ACCOUNT_DELETED',
       entityType: 'User',
       entityId: sessionUser.userId,
-      metadata: { email: sessionUser.email },
+      metadata: {
+        email: sessionUser.email,
+        reason: 'User requested permanent account deletion',
+      },
     });
 
+    // 2. Cascade delete all support tickets and messages
+    const userTickets = await SupportTicket.find({ userId: sessionUser.userId }).select('_id').lean();
+    const ticketIds = userTickets.map((t) => t._id);
+    if (ticketIds.length > 0) {
+      await TicketMessage.deleteMany({ ticketId: { $in: ticketIds } });
+    }
+    await SupportTicket.deleteMany({ userId: sessionUser.userId });
+
+    // 3. Delete managed database records
+    await ManagedDatabase.deleteMany({
+      $or: [{ userId: sessionUser.userId }, { customerId: sessionUser.userId }],
+    });
+
+    // 4. Delete subscriptions, applications, and payments
+    await Subscription.deleteMany({ userId: sessionUser.userId });
+    await HostingApplication.deleteMany({ userId: sessionUser.userId });
+    await Payment.deleteMany({ userId: sessionUser.userId });
+
+    // 5. Delete legal agreements and policy acceptances
+    await PolicyAcceptance.deleteMany({ userId: sessionUser.userId });
+
+    // 6. Delete notifications, email verifications, and password reset tokens
+    await Notification.deleteMany({ userId: sessionUser.userId });
+    await EmailVerification.deleteMany({ userId: sessionUser.userId });
+    await PasswordReset.deleteMany({ userId: sessionUser.userId });
+
+    // 7. Permanently delete the User document from the database
+    await User.findByIdAndDelete(sessionUser.userId);
+
+    // 8. Destroy active session cookie
     await clearSession();
 
-    return Response.json({ success: true, message: 'Account deleted successfully.' });
+    return Response.json({
+      success: true,
+      message: 'Account and associated data have been permanently removed from the database.',
+    });
   } catch (error) {
     return createApiError(error);
   }
 }
-

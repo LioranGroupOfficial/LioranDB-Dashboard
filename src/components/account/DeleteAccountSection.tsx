@@ -58,7 +58,7 @@ export default function DeleteAccountSection({
             Delete Account
           </h2>
           <p className="mt-1 text-xs text-[var(--text-secondary)] leading-relaxed">
-            Permanently deactivate your account and terminate your provisioned database clusters.
+            Permanently remove your account and all associated data from the database.
             Account deletion is only permitted after settling all monthly hosting invoices.
           </p>
         </div>
