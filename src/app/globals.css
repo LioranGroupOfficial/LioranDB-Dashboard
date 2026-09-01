@@ -42,7 +42,7 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow: hidden;
+    min-height: 100dvh;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -78,7 +78,7 @@
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors cursor-pointer;
+    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors cursor-pointer min-h-[36px];
     background-color: var(--accent);
     color: #090B0E;
   }
@@ -91,7 +91,7 @@
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors border cursor-pointer;
+    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors border cursor-pointer min-h-[36px];
     background-color: var(--surface-2);
     border-color: var(--border);
     color: var(--text-secondary);
@@ -107,7 +107,7 @@
   }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors cursor-pointer;
+    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors cursor-pointer min-h-[36px];
     background-color: #DC2626;
     color: #FFFFFF;
   }
@@ -120,7 +120,7 @@
   }
 
   .btn-success {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors cursor-pointer;
+    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors cursor-pointer min-h-[36px];
     background-color: #16A34A;
     color: #FFFFFF;
   }
@@ -136,7 +136,7 @@
     background-color: var(--surface);
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 18px;
+    padding: 16px;
   }
 
   .input-field {

@@ -101,13 +101,13 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="card border-[var(--border)] bg-[var(--surface)] max-w-lg w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="card border-[var(--border)] bg-[var(--surface)] max-w-lg w-full max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div className="flex items-center gap-2 text-[var(--accent)]">
                 <Link2 className="w-5 h-5" />
-                <h3 className="text-base font-semibold text-[var(--text-primary)]">
-                  Attach Razorpay Monthly Payment Link
+                <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
+                  Attach Razorpay Monthly Link
                 </h3>
               </div>
               <button
@@ -150,7 +150,7 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Billing Month / Period</label>
                   <input
@@ -174,7 +174,7 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Amount (INR)</label>
                   <input

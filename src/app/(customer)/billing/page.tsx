@@ -140,7 +140,7 @@ export default async function BillingPage() {
               <CreditCard className="w-3.5 h-3.5 text-[var(--accent)]" />
               Active Subscription Details
             </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
               <div>
                 <p className="text-[var(--text-muted)]">Plan Tier</p>
                 <p className="text-sm font-semibold text-[var(--text-primary)] mt-0.5">
@@ -189,8 +189,8 @@ export default async function BillingPage() {
               Payment &amp; Invoice History ({payments.length})
             </h2>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full text-left text-xs min-w-[540px]">
                 <thead>
                   <tr className="border-b border-[var(--border)] text-[var(--text-muted)] uppercase">
                     <th className="pb-3 font-semibold">Date</th>

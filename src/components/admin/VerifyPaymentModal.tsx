@@ -72,12 +72,12 @@ export default function VerifyPaymentModal({ payment }: { payment: PaymentItem }
       </button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="card border-[var(--border)] bg-[var(--surface)] max-w-lg w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="card border-[var(--border)] bg-[var(--surface)] max-w-lg w-full max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div className="flex items-center gap-2 text-[var(--accent)]">
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-base font-semibold text-[var(--text-primary)]">
+                <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
                   Verify Razorpay Payment
                 </h3>
               </div>

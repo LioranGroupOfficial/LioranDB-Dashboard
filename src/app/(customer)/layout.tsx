@@ -1,6 +1,5 @@
 import { requireUser } from '@/lib/auth/guards';
-import CustomerSidebar from '@/components/layout/CustomerSidebar';
-import CustomerHeader from '@/components/layout/CustomerHeader';
+import CustomerShell from '@/components/layout/CustomerShell';
 import { connectToDatabase, User } from '@/lib/db';
 
 export default async function CustomerLayout({
@@ -15,21 +14,15 @@ export default async function CustomerLayout({
   const user = await User.findById(sessionUser.userId).select('-passwordHash').lean();
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-row bg-[var(--background)]">
-      <CustomerSidebar
-        stage={user?.onboardingStage || 'EMAIL_VERIFICATION'}
-        role={sessionUser.role}
-      />
-      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
-        <CustomerHeader
-          email={sessionUser.email}
-          userId={sessionUser.userId}
-        />
-        <main className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full">
-          {children}
-        </main>
-      </div>
-    </div>
+    <CustomerShell
+      email={sessionUser.email}
+      userId={sessionUser.userId}
+      stage={user?.onboardingStage || 'EMAIL_VERIFICATION'}
+      role={sessionUser.role}
+    >
+      {children}
+    </CustomerShell>
   );
 }
+
 

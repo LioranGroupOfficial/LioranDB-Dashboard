@@ -23,8 +23,8 @@ export default async function AdminCustomersPage() {
         </div>
       </div>
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-left text-sm">
+      <div className="card overflow-x-auto w-full">
+        <table className="w-full text-left text-xs min-w-[600px]">
           <thead>
             <tr className="border-b border-[var(--border)] text-xs text-[var(--text-muted)] uppercase">
               <th className="pb-3 font-medium">Customer</th>
