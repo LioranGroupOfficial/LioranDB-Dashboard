@@ -1,5 +1,14 @@
+import type { Metadata } from 'next';
 import { Database, ShieldCheck, Zap } from 'lucide-react';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: {
+    default: 'Authentication',
+    template: '%s — LioranDB Console',
+  },
+  description: 'Sign in or create an account for LioranDB Managed Cloud Database Platform.',
+};
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -18,7 +27,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </Link>
         <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Enterprise End-to-End Security</span>
+          <span className="hidden sm:inline">Enterprise End-to-End Security</span>
         </div>
       </header>
 
@@ -42,4 +51,3 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     </div>
   );
 }
-

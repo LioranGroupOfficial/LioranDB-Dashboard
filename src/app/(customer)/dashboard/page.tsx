@@ -3,6 +3,11 @@ import { connectToDatabase, User, HostingApplication, ManagedDatabase, Subscript
 import Link from 'next/link';
 import StatusTimeline from '@/components/dashboard/StatusTimeline';
 import type { OnboardingStage } from '@/lib/db/models/User';
+
+export const metadata = {
+  title: 'Overview & Dashboard',
+  description: 'Overview of your managed LioranDB clusters, onboarding stage, and deployment status.',
+};
 import {
   UserCheck,
   FileText,
@@ -16,8 +21,6 @@ import {
   FileEdit,
   LifeBuoy,
 } from 'lucide-react';
-
-export const metadata = { title: 'Overview — LioranDB' };
 
 export default async function DashboardPage() {
   const sessionUser = await requireVerifiedUser();

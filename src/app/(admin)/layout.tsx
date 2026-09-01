@@ -1,5 +1,15 @@
+import type { Metadata } from 'next';
 import { requireRole } from '@/lib/auth/guards';
 import AdminShell from '@/components/layout/AdminShell';
+
+export const metadata: Metadata = {
+  title: {
+    default: 'Admin Control Center',
+    template: '%s — Admin | LioranDB',
+  },
+  description: 'LioranDB Infrastructure Administration & Provisioning Center',
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminLayout({
   children,
@@ -14,5 +24,3 @@ export default async function AdminLayout({
     </AdminShell>
   );
 }
-
-
