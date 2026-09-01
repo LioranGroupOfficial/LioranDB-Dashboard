@@ -1,17 +1,17 @@
-import { requireRole } from '@/lib/auth/guards';
+import { requireAnyRole } from '@/lib/auth/guards';
 import { connectToDatabase, HostingApplication, User } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import ApplicationReviewForm from '@/components/admin/ApplicationReviewForm';
 
-export const metadata = { title: 'Review Application — Admin' };
+export const metadata = { title: 'Review Application — Admin & Support' };
 
 export default async function AdminApplicationDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole('admin');
+  await requireAnyRole(['admin', 'support']);
   const { id } = await params;
 
   await connectToDatabase();

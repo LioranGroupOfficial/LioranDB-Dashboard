@@ -3,15 +3,16 @@ import { connectToDatabase, User, ManagedDatabase } from '@/lib/db';
 import { redirect } from 'next/navigation';
 import { decrypt } from '@/lib/crypto';
 import DatabaseCredentials from '@/components/database/DatabaseCredentials';
+import { Database, Server, Cpu, HardDrive, ShieldCheck, ExternalLink, Activity } from 'lucide-react';
 
-export const metadata = { title: 'Managed Database' };
+export const metadata = { title: 'Managed Database — LioranDB' };
 
 const PLAN_RESOURCES = {
-  vCPU: '2 vCPU',
-  ram: '4 GB',
-  storage: 'Up to 10 GB',
-  backups: 'Daily backups',
-  iops: '~3,000 IOPS',
+  vCPU: '2 Dedicated vCPU',
+  ram: '4 GB High-Speed RAM',
+  storage: 'Up to 10 GB NVMe',
+  backups: 'Automated Daily Snapshots',
+  iops: '~3,000 IOPS Guaranteed',
 };
 
 export default async function DatabasePage() {
@@ -32,10 +33,14 @@ export default async function DatabasePage() {
   if (!database) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Managed Database</h1>
+        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Managed Database</h1>
         <div className="card">
-          <p className="text-sm text-[var(--text-secondary)]">
-            Your managed LioranDB deployment is being prepared. You&apos;ll receive an email and see the details here once it&apos;s ready.
+          <div className="flex items-center gap-2 text-[var(--accent)] mb-2">
+            <Server className="w-4 h-4 animate-pulse" />
+            <span className="font-semibold text-xs">Node Provisioning in Progress</span>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)]">
+            Your managed LioranDB deployment is being prepared. You&apos;ll receive an email and see the connection credentials here once the cluster is online.
           </p>
         </div>
       </div>
@@ -72,7 +77,12 @@ export default async function DatabasePage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Managed Database</h1>
+        <div>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Managed Database Cluster</h1>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+            High-performance ACID compliant multi-model instance with dedicated TLS termination
+          </p>
+        </div>
         <span
           className={`badge ${
             database.status === 'ACTIVE'
@@ -87,24 +97,25 @@ export default async function DatabasePage() {
       </div>
 
       {database.status === 'SUSPENDED' && database.suspensionReason && (
-        <div className="alert-banner alert-banner-error">
+        <div className="alert-banner alert-banner-error text-xs">
           <div>
-            <strong>Service suspended</strong>
-            <p className="text-sm mt-1">{database.suspensionReason}</p>
+            <strong>Service Suspended:</strong>
+            <p className="mt-1">{database.suspensionReason}</p>
           </div>
         </div>
       )}
 
       {/* Resource allocation */}
-      <div className="card">
-        <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-4 uppercase tracking-wider">
-          Resource Allocation
+      <div className="card space-y-4">
+        <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+          <Activity className="w-3.5 h-3.5 text-[var(--accent)]" />
+          Hardware &amp; Engine Allocation
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
           {Object.entries(PLAN_RESOURCES).map(([key, value]) => (
             <div key={key}>
-              <p className="text-xs text-[var(--text-muted)] capitalize">{key}</p>
-              <p className="text-sm text-[var(--text-primary)] font-medium mt-0.5">{value}</p>
+              <p className="text-[var(--text-muted)] uppercase tracking-wider text-[10px]">{key}</p>
+              <p className="text-xs text-[var(--text-primary)] font-medium mt-0.5">{value}</p>
             </div>
           ))}
         </div>
@@ -114,25 +125,30 @@ export default async function DatabasePage() {
       <DatabaseCredentials db={dbData} />
 
       {/* Studio link */}
-      <div className="card">
-        <h2 className="text-sm font-medium text-[var(--text-secondary)] mb-3 uppercase tracking-wider">
-          LioranDB Studio
+      <div className="card space-y-3">
+        <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+          <ExternalLink className="w-3.5 h-3.5 text-[var(--accent)]" />
+          LioranDB Studio &amp; Query Console
         </h2>
-        <p className="text-sm text-[var(--text-secondary)] mb-3">
-          Connect to your database using LioranDB Studio. Use your connection URI to connect.
+        <p className="text-xs text-[var(--text-secondary)]">
+          Connect to your multi-model database using LioranDB Studio visual query workspace.
         </p>
-        <a
-          href="https://studio.liorandb.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary inline-flex items-center gap-2"
-        >
-          Open LioranDB Studio ↗
-        </a>
-        <p className="text-xs text-[var(--text-muted)] mt-2">
-          Do not share your connection URI. Never paste it into URLs or public channels.
+        <div>
+          <a
+            href="https://studio.liorandb.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary text-xs inline-flex items-center gap-1.5"
+          >
+            <span>Launch LioranDB Studio</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+        <p className="text-[11px] text-[var(--text-muted)]">
+          Never share your database master credentials in public repositories or unencrypted channels.
         </p>
       </div>
     </div>
   );
 }
+

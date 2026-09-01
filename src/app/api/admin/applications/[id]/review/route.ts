@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { requireRoleAPI } from '@/lib/auth/guards';
+import { requireAnyRoleAPI } from '@/lib/auth/guards';
 import { connectToDatabase, HostingApplication, User } from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
@@ -19,7 +19,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const adminUser = await requireRoleAPI('admin');
+    const reviewerUser = await requireAnyRoleAPI(['admin', 'support']);
     const { id } = await params;
     const body = await req.json();
     const parsed = ReviewSchema.safeParse(body);
@@ -44,7 +44,7 @@ export async function POST(
       reviewNotes,
       rejectionReason: status === 'REJECTED' ? rejectionReason : undefined,
       reviewedAt: new Date(),
-      reviewedBy: adminUser.userId,
+      reviewedBy: reviewerUser.userId,
     });
 
     // Update user onboarding stage
@@ -68,8 +68,8 @@ export async function POST(
       });
 
       await createAuditLog({
-        actorId: adminUser.userId,
-        actorRole: 'admin',
+        actorId: reviewerUser.userId,
+        actorRole: reviewerUser.role,
         action: 'APPLICATION_APPROVED',
         entityType: 'HostingApplication',
         entityId: id,
@@ -98,8 +98,8 @@ export async function POST(
       });
 
       await createAuditLog({
-        actorId: adminUser.userId,
-        actorRole: 'admin',
+        actorId: reviewerUser.userId,
+        actorRole: reviewerUser.role,
         action: 'APPLICATION_REJECTED',
         entityType: 'HostingApplication',
         entityId: id,
@@ -107,8 +107,8 @@ export async function POST(
       });
     } else {
       await createAuditLog({
-        actorId: adminUser.userId,
-        actorRole: 'admin',
+        actorId: reviewerUser.userId,
+        actorRole: reviewerUser.role,
         action: 'APPLICATION_REVIEWED',
         entityType: 'HostingApplication',
         entityId: id,

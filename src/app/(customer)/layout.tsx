@@ -15,20 +15,21 @@ export default async function CustomerLayout({
   const user = await User.findById(sessionUser.userId).select('-passwordHash').lean();
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--background)' }}>
+    <div className="h-screen w-screen overflow-hidden flex flex-row bg-[var(--background)]">
       <CustomerSidebar
         stage={user?.onboardingStage || 'EMAIL_VERIFICATION'}
         role={sessionUser.role}
       />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
         <CustomerHeader
           email={sessionUser.email}
           userId={sessionUser.userId}
         />
-        <main className="flex-1 p-6 max-w-5xl mx-auto w-full">
+        <main className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full">
           {children}
         </main>
       </div>
     </div>
   );
 }
+

@@ -40,4 +40,10 @@ export async function getCurrentUser(): Promise<SessionData | null> {
   }
 }
 
+export async function clearSession(): Promise<void> {
+  const session = await getSession();
+  session.destroy();
+}
+
 export { SESSION_OPTIONS };
+

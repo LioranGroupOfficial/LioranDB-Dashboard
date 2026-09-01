@@ -12,5 +12,14 @@ export default async function HomePage() {
     redirect('/verify-email');
   }
 
+  if (user.role === 'admin') {
+    redirect('/admin');
+  }
+
+  if (user.role === 'support') {
+    redirect('/support-console');
+  }
+
   redirect('/dashboard');
 }
+

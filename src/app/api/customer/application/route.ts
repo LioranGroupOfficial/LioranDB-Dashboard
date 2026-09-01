@@ -16,15 +16,16 @@ export async function POST(req: NextRequest) {
 
     await connectToDatabase();
 
-    // Verify user is in the right onboarding stage
+    // Verify user is in an allowed onboarding stage
     const user = await User.findById(sessionUser.userId);
     if (!user) {
       return Response.json({ error: 'User not found.' }, { status: 404 });
     }
 
-    if (!['APPLICATION_REQUIRED', 'APPLICATION_REJECTED'].includes(user.onboardingStage)) {
+    const allowedStages = ['APPLICATION_REQUIRED', 'APPLICATION_REJECTED', 'APPLICATION_PENDING', 'APPLICATION_APPROVED'];
+    if (!allowedStages.includes(user.onboardingStage)) {
       return Response.json(
-        { error: 'You cannot submit a new application at this time.' },
+        { error: 'You cannot submit an application at this time.' },
         { status: 400 }
       );
     }

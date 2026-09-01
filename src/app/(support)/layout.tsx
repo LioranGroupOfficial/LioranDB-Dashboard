@@ -10,13 +10,16 @@ export default async function SupportLayout({
   const user = await requireAnyRole(['admin', 'support']);
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--background)' }}>
+    <div className="h-screen w-screen overflow-hidden flex flex-row bg-[var(--background)]">
       <SupportSidebar email={user.email} />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
         <AdminHeader email={user.email} />
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+          {children}
+        </main>
       </div>
     </div>
   );
 }
+
 

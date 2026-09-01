@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { MailCheck, RefreshCw, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -73,7 +74,7 @@ export default function VerifyEmailPage() {
         return;
       }
 
-      router.push('/dashboard');
+      router.push('/');
       router.refresh();
     } catch {
       setError('An unexpected error occurred. Please try again.');
@@ -111,28 +112,33 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <div>
+    <div className="card border-[var(--border)] shadow-xl bg-[var(--surface)] p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Verify your email</h1>
-        <p className="mt-2 text-sm text-[var(--text-secondary)]">
-          We sent a 6-digit verification code to your email address. Enter it below to verify your account.
+        <div className="w-10 h-10 rounded-sm bg-[var(--surface-2)] border border-[var(--border)] text-[var(--accent)] flex items-center justify-center mb-3">
+          <MailCheck className="w-5 h-5" />
+        </div>
+        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Verify Your Email</h1>
+        <p className="mt-1 text-xs text-[var(--text-secondary)]">
+          We sent a 6-digit verification code to your email address. Enter it below to activate your account.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
-          <div className="alert-banner alert-banner-error text-sm" role="alert">
-            {error}
+          <div className="alert-banner alert-banner-error text-xs" role="alert">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <span>{error}</span>
           </div>
         )}
         {success && (
-          <div className="alert-banner alert-banner-success text-sm" role="status">
-            {success}
+          <div className="alert-banner alert-banner-success text-xs" role="status">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span>{success}</span>
           </div>
         )}
 
         <div>
-          <label className="label mb-3 block">Verification code</label>
+          <label className="label mb-3 block text-center">Enter 6-Digit Code</label>
           <div className="flex gap-2 justify-center" onPaste={handlePaste}>
             {otp.map((digit, index) => (
               <input
@@ -144,9 +150,9 @@ export default function VerifyEmailPage() {
                 value={digit}
                 onChange={(e) => handleInput(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
-                className="w-12 h-14 text-center text-xl font-mono font-semibold rounded-md border focus:outline-none focus:border-[var(--accent)] transition-colors"
+                className="w-11 h-13 text-center text-xl font-mono font-bold rounded-sm border focus:outline-none focus:border-[var(--accent)] transition-colors"
                 style={{
-                  background: 'var(--surface)',
+                  background: 'var(--surface-2)',
                   borderColor: digit ? 'var(--accent)' : 'var(--border)',
                   color: 'var(--text-primary)',
                 }}
@@ -159,31 +165,41 @@ export default function VerifyEmailPage() {
         <button
           type="submit"
           disabled={loading || otp.join('').length !== 6}
-          className="btn-primary w-full"
+          className="btn-primary w-full py-2"
         >
-          {loading ? 'Verifying...' : 'Verify email'}
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Verifying...</span>
+            </>
+          ) : (
+            <>
+              <span>Verify &amp; Continue</span>
+              <ArrowRight className="w-4 h-4" />
+            </>
+          )}
         </button>
       </form>
 
-      <div className="mt-6 text-center">
-        <p className="text-sm text-[var(--text-secondary)]">
+      <div className="mt-6 pt-4 border-t border-[var(--border)] text-center">
+        <p className="text-xs text-[var(--text-secondary)]">
           Didn&apos;t receive the code?{' '}
           <button
             onClick={handleResend}
             disabled={resendLoading || resendCooldown > 0}
-            className="text-[var(--accent)] hover:text-[var(--accent-dark)] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-[var(--accent)] hover:underline font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 ml-1"
           >
+            {resendLoading && <RefreshCw className="w-3 h-3 animate-spin" />}
             {resendCooldown > 0
               ? `Resend in ${resendCooldown}s`
-              : resendLoading
-              ? 'Sending...'
-              : 'Resend code'}
+              : 'Resend Code'}
           </button>
         </p>
-        <p className="mt-2 text-xs text-[var(--text-muted)]">
-          The code expires in 10 minutes.
+        <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+          Code expires in 10 minutes.
         </p>
       </div>
     </div>
   );
 }
+

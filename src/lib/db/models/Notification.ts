@@ -8,6 +8,7 @@ export type NotificationType =
   | 'TERMS_REQUIRED'
   | 'DATABASE_READY'
   | 'PAYMENT_DUE'
+  | 'PAYMENT_RECEIVED'
   | 'PAYMENT_OVERDUE'
   | 'SERVICE_SUSPENDED'
   | 'SERVICE_RESUMED'

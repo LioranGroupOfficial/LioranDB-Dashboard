@@ -26,37 +26,38 @@ interface Props {
   defaultEmail?: string;
   defaultName?: string;
   nextVersion: number;
+  initialValues?: Record<string, unknown>;
 }
 
-export default function ApplicationForm({ defaultEmail, defaultName, nextVersion }: Props) {
+export default function ApplicationForm({ defaultEmail, defaultName, nextVersion, initialValues }: Props) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const [formData, setFormData] = useState({
-    fullName: defaultName || '',
-    workEmail: defaultEmail || '',
-    phone: '',
-    country: '',
-    companyName: '',
-    website: '',
-    description: '',
-    stage: '',
-    githubUrl: '',
-    linkedinUrl: '',
-    twitterUrl: '',
-    productUrl: '',
-    demoUrl: '',
-    whyLioranDB: '',
-    appDescription: '',
-    expectedDocumentCount: '',
-    expectedMonthlyUsers: '',
-    readTrafficLevel: '',
-    writeTrafficLevel: '',
-    estimatedStorage: '',
-    isProduction: 'true',
-    pricingResponse: '',
+    fullName: (initialValues?.fullName as string) || defaultName || '',
+    workEmail: (initialValues?.workEmail as string) || defaultEmail || '',
+    phone: (initialValues?.phone as string) || '',
+    country: (initialValues?.country as string) || '',
+    companyName: (initialValues?.companyName as string) || '',
+    website: (initialValues?.website as string) || '',
+    description: (initialValues?.description as string) || '',
+    stage: (initialValues?.stage as string) || '',
+    githubUrl: (initialValues?.githubUrl as string) || '',
+    linkedinUrl: (initialValues?.linkedinUrl as string) || '',
+    twitterUrl: (initialValues?.twitterUrl as string) || '',
+    productUrl: (initialValues?.productUrl as string) || '',
+    demoUrl: (initialValues?.demoUrl as string) || '',
+    whyLioranDB: (initialValues?.whyLioranDB as string) || '',
+    appDescription: (initialValues?.appDescription as string) || '',
+    expectedDocumentCount: (initialValues?.expectedDocumentCount as string) || '',
+    expectedMonthlyUsers: (initialValues?.expectedMonthlyUsers as string) || '',
+    readTrafficLevel: (initialValues?.readTrafficLevel as string) || '',
+    writeTrafficLevel: (initialValues?.writeTrafficLevel as string) || '',
+    estimatedStorage: (initialValues?.estimatedStorage as string) || '',
+    isProduction: (initialValues?.isProduction as string) || 'true',
+    pricingResponse: (initialValues?.pricingResponse as string) || '',
     acknowledgedDisclaimer: false,
   });
 
