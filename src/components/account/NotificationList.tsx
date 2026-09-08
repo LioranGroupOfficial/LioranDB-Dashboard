@@ -46,7 +46,7 @@ export default function NotificationList({ notifications: initial }: Props) {
           <button
             onClick={handleMarkAllRead}
             disabled={marking}
-            className="text-xs text-[var(--accent)] hover:text-[var(--accent-dark)] transition-colors"
+            className="text-xs text-[var(--brand-green)] hover:underline transition-colors font-medium"
           >
             {marking ? 'Marking...' : 'Mark all as read'}
           </button>
@@ -57,15 +57,15 @@ export default function NotificationList({ notifications: initial }: Props) {
         {notifications.map((n) => (
           <div
             key={n.id}
-            className={`p-3 rounded-md border text-sm transition-colors ${
+            className={`p-3.5 rounded-lg border text-sm transition-colors ${
               n.read
-                ? 'border-[var(--border)] bg-[var(--surface-2)] opacity-75'
-                : 'border-[var(--accent)]/30 bg-[var(--surface)]'
+                ? 'border-[var(--border)] bg-[var(--surface-2)]/60 opacity-80'
+                : 'border-[var(--brand-green)]/40 bg-[var(--surface)]'
             }`}
           >
             <div className="flex justify-between items-start gap-2">
-              <span className="font-medium text-[var(--text-primary)]">{n.title}</span>
-              <span className="text-xs text-[var(--text-muted)] shrink-0">
+              <span className="font-semibold text-white text-xs">{n.title}</span>
+              <span className="text-xs text-[var(--text-muted)] shrink-0 font-mono">
                 {new Date(n.createdAt).toLocaleDateString('en-IN', {
                   month: 'short',
                   day: 'numeric',
@@ -76,7 +76,7 @@ export default function NotificationList({ notifications: initial }: Props) {
             </div>
             <p className="text-xs text-[var(--text-secondary)] mt-1">{n.body}</p>
             {n.link && (
-              <Link href={n.link} className="text-xs text-[var(--accent)] hover:underline mt-2 inline-block">
+              <Link href={n.link} className="text-xs text-[var(--brand-green)] hover:underline mt-2 inline-block font-medium">
                 View details →
               </Link>
             )}

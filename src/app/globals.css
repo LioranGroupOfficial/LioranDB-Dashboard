@@ -2,22 +2,52 @@
 
 @layer base {
   :root {
-    --background: #090B0E;
-    --surface: #12161D;
-    --surface-2: #181D26;
-    --surface-3: #202633;
-    --border: #232936;
-    --border-light: #2E3748;
-    --text-primary: #F3F4F6;
-    --text-secondary: #9CA3AF;
-    --text-muted: #6B7280;
-    --accent: #E2D9CC;
-    --accent-dark: #C9BFA9;
-    --accent-primary: #3B82F6;
-    --success: #22C55E;
-    --warning: #F59E0B;
-    --error: #EF4444;
-    --info: #3B82F6;
+    /* Brand Colors from DESIGN.md */
+    --primary: #00ed64;
+    --primary-deep: #00b545;
+    --primary-pressed: #008c34;
+    --on-primary: #001e2b;
+    --brand-green: #00ed64;
+    --brand-green-dark: #00684a;
+    --brand-green-mid: #00a35c;
+    --brand-green-soft: #c3f0d2;
+    --brand-teal-deep: #001e2b;
+    --brand-teal: #003d4f;
+    --brand-teal-mid: #00684a;
+    --accent-purple: #7b3ff2;
+    --accent-orange: #fa6e39;
+    --accent-pink: #f06bb8;
+    --accent-blue: #3d4f9f;
+
+    /* Theme Palette */
+    --background: #001e2b;
+    --canvas-dark: #001e2b;
+    --surface: #002838;
+    --surface-2: #063446;
+    --surface-3: #0d4054;
+    --surface-soft: #f4f7f6;
+    --surface-feature: #e3fcef;
+    --border: #1c3b4a;
+    --border-light: #2d5162;
+    --hairline-dark: #1c2d38;
+    --hairline-strong: #2d5162;
+
+    /* Text Colors */
+    --text-primary: #ffffff;
+    --text-secondary: #a8b3bc;
+    --text-muted: #7c8c9a;
+    --ink: #001e2b;
+    --slate: #3d4f5b;
+    --steel: #5c6c7a;
+
+    /* Accents & Status */
+    --accent: #00ed64;
+    --accent-dark: #00b545;
+    --accent-primary: #00ed64;
+    --success: #00ed64;
+    --warning: #fa6e39;
+    --error: #ef4444;
+    --info: #38bdf8;
   }
 
   * {
@@ -39,10 +69,14 @@
   body {
     background-color: var(--background);
     color: var(--text-primary);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-manrope), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100dvh;
+  }
+
+  code, kbd, samp, pre {
+    font-family: var(--font-mono), 'Source Code Pro', monospace;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -52,8 +86,8 @@
 
   /* Focus styles */
   :focus-visible {
-    outline: 1px solid var(--accent);
-    outline-offset: 1px;
+    outline: 2px solid var(--brand-green);
+    outline-offset: 2px;
   }
 
   /* Custom scrollbar */
@@ -67,39 +101,45 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: var(--border-light);
-    border-radius: 2px;
+    background: var(--border);
+    border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
+    background: var(--border-light);
   }
 }
 
 @layer components {
+  /* Pill Buttons according to DESIGN.md */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors cursor-pointer min-h-[36px];
-    background-color: var(--accent);
-    color: #090B0E;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-150 cursor-pointer select-none min-h-[38px] shadow-sm;
+    background-color: var(--brand-green);
+    color: var(--on-primary);
   }
   .btn-primary:hover {
-    background-color: var(--accent-dark);
+    background-color: var(--primary-deep);
+    box-shadow: 0 0 16px rgba(0, 237, 100, 0.25);
+  }
+  .btn-primary:active {
+    background-color: var(--primary-pressed);
   }
   .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    box-shadow: none;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors border cursor-pointer min-h-[36px];
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-150 border cursor-pointer select-none min-h-[38px];
     background-color: var(--surface-2);
     border-color: var(--border);
-    color: var(--text-secondary);
+    color: var(--text-primary);
   }
   .btn-secondary:hover {
     background-color: var(--surface-3);
     border-color: var(--border-light);
-    color: var(--text-primary);
+    color: #ffffff;
   }
   .btn-secondary:disabled {
     opacity: 0.5;
@@ -107,12 +147,12 @@
   }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors cursor-pointer min-h-[36px];
-    background-color: #DC2626;
-    color: #FFFFFF;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-150 cursor-pointer select-none min-h-[38px];
+    background-color: #dc2626;
+    color: #ffffff;
   }
   .btn-danger:hover {
-    background-color: #B91C1C;
+    background-color: #b91c1c;
   }
   .btn-danger:disabled {
     opacity: 0.5;
@@ -120,35 +160,47 @@
   }
 
   .btn-success {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-sm text-sm font-medium transition-colors cursor-pointer min-h-[36px];
-    background-color: #16A34A;
-    color: #FFFFFF;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-150 cursor-pointer select-none min-h-[38px];
+    background-color: var(--brand-green);
+    color: var(--on-primary);
   }
   .btn-success:hover {
-    background-color: #15803D;
+    background-color: var(--primary-deep);
   }
   .btn-success:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
+  /* 12px radius cards from DESIGN.md */
   .card {
     background-color: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 16px;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .code-mockup-card {
+    background-color: var(--canvas-dark);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    font-family: var(--font-mono), 'Source Code Pro', monospace;
+    color: var(--text-primary);
   }
 
   .input-field {
-    @apply w-full px-3 py-1.5 rounded-sm text-sm transition-colors;
+    @apply w-full px-3.5 py-2 rounded-lg text-sm transition-all duration-150;
     background-color: var(--surface);
     border: 1px solid var(--border);
     color: var(--text-primary);
   }
   .input-field:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--brand-green);
     background-color: var(--surface-2);
+    box-shadow: 0 0 0 1px var(--brand-green);
   }
   .input-field::placeholder {
     color: var(--text-muted);
@@ -159,31 +211,53 @@
   }
 
   .label {
-    @apply block text-xs font-medium uppercase tracking-wider mb-1;
+    @apply block text-xs font-semibold uppercase tracking-wider mb-1.5;
     color: var(--text-secondary);
   }
 
+  /* Badges with full rounded pills */
   .badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold;
   }
-  .badge-active { background-color: #0F381E; color: #4ADE80; border: 1px solid #166534; }
-  .badge-pending { background-color: #362505; color: #FBBF24; border: 1px solid #854D0E; }
-  .badge-suspended { background-color: #3B1212; color: #F87171; border: 1px solid #991B1B; }
-  .badge-default { background-color: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border); }
-  .badge-info { background-color: #102A45; color: #60A5FA; border: 1px solid #1E40AF; }
+  .badge-active {
+    background-color: #003822;
+    color: var(--brand-green);
+    border: 1px solid var(--brand-green-dark);
+  }
+  .badge-pending {
+    background-color: #2e1704;
+    color: var(--accent-orange);
+    border: 1px solid #7c3a10;
+  }
+  .badge-suspended {
+    background-color: #2e0c0c;
+    color: #f87171;
+    border: 1px solid #7f1d1d;
+  }
+  .badge-default {
+    background-color: var(--surface-2);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .badge-info {
+    background-color: #0c2538;
+    color: #38bdf8;
+    border: 1px solid #0369a1;
+  }
 
+  /* Navigation Sidebar Links */
   .sidebar-link {
-    @apply flex items-center gap-2.5 px-3 py-2 rounded-sm text-sm transition-colors cursor-pointer select-none;
+    @apply flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-all duration-150 cursor-pointer select-none;
     color: var(--text-secondary);
   }
   .sidebar-link:hover {
     background-color: var(--surface-2);
-    color: var(--text-primary);
+    color: #ffffff;
   }
   .sidebar-link.active {
-    background-color: var(--surface-2);
-    color: var(--text-primary);
-    font-weight: 500;
+    background-color: var(--brand-teal);
+    color: var(--brand-green);
+    font-weight: 600;
   }
 
   .divider {
@@ -191,32 +265,32 @@
   }
 
   .skeleton {
-    @apply animate-pulse rounded-sm;
+    @apply animate-pulse rounded-lg;
     background-color: var(--surface-2);
   }
 
   .alert-banner {
-    @apply flex items-start gap-2.5 p-3 rounded-sm text-sm;
+    @apply flex items-start gap-3 p-3.5 rounded-xl text-sm leading-relaxed;
   }
   .alert-banner-error {
-    background-color: #261010;
-    border: 1px solid #7F1D1D;
-    color: #FCA5A5;
+    background-color: #2a0e0e;
+    border: 1px solid #7f1d1d;
+    color: #fca5a5;
   }
   .alert-banner-success {
-    background-color: #0C2415;
-    border: 1px solid #14532D;
-    color: #86EFAC;
+    background-color: #042918;
+    border: 1px solid #00684a;
+    color: #86efac;
   }
   .alert-banner-warning {
-    background-color: #291B05;
-    border: 1px solid #78350F;
-    color: #FDE047;
+    background-color: #2e1704;
+    border: 1px solid #78350f;
+    color: #fde047;
   }
   .alert-banner-info {
-    background-color: #0B1E33;
-    border: 1px solid #1E3A8A;
-    color: #93C5FD;
+    background-color: #0b253a;
+    border: 1px solid #1e3a8a;
+    color: #93c5fd;
   }
 
   .main-scroll-area {

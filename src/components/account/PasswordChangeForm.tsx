@@ -85,9 +85,11 @@ export default function PasswordChangeForm() {
         />
       </div>
 
-      <button type="submit" disabled={loading} className="btn-primary">
-        {loading ? 'Updating...' : 'Update password'}
-      </button>
+      <div className="pt-2">
+        <button type="submit" disabled={loading} className="btn-primary text-xs py-2 px-5">
+          {loading ? 'Updating Password...' : 'Update Password'}
+        </button>
+      </div>
     </form>
   );
 }

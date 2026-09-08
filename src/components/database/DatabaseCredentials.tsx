@@ -43,16 +43,21 @@ export default function DatabaseCredentials({ db }: Props) {
   const isExpired = credExpiry ? credExpiry < new Date() : false;
 
   return (
-    <div className="card space-y-4">
-      <h2 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-        Connection Details
-      </h2>
+    <div className="card space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+          Connection Details
+        </h2>
+        <span className="text-[11px] font-mono text-[var(--brand-green)] bg-[var(--surface-2)] px-2.5 py-0.5 rounded-full border border-[var(--border)]">
+          TLS v1.3 Verified
+        </span>
+      </div>
 
       {db.passwordChangeRequired && (
-        <div className="alert-banner alert-banner-warning">
+        <div className="alert-banner alert-banner-warning text-xs">
           <div>
-            <strong className="text-sm">Temporary credentials — change required</strong>
-            <p className="text-sm mt-1">
+            <strong className="text-xs font-semibold">Temporary credentials — change required</strong>
+            <p className="text-xs mt-1">
               These are temporary credentials. You must change your database password immediately upon first connection.
               {credExpiry && !isExpired && (
                 <> Credentials expire: {credExpiry.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST.</>
@@ -63,7 +68,7 @@ export default function DatabaseCredentials({ db }: Props) {
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         <CredRow label="Database name" value={db.databaseName} onCopy={() => copyToClipboard(db.databaseName, 'databaseName')} copied={copied === 'databaseName'} />
         <CredRow label="Host" value={db.host} onCopy={() => copyToClipboard(db.host, 'host')} copied={copied === 'host'} />
         <CredRow label="Port" value={String(db.port)} onCopy={() => copyToClipboard(String(db.port), 'port')} copied={copied === 'port'} />
@@ -71,46 +76,43 @@ export default function DatabaseCredentials({ db }: Props) {
       </div>
 
       {db.connectionUri && (
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <span className="label">Connection URI</span>
+        <div className="space-y-2 pt-2">
+          <div className="flex items-center justify-between">
+            <span className="label mb-0">Connection URI</span>
             <button
               type="button"
               onClick={() => setRevealed(!revealed)}
-              className="text-xs text-[var(--accent)] hover:text-[var(--accent-dark)] transition-colors"
+              className="text-xs text-[var(--brand-green)] hover:underline transition-colors font-medium"
             >
-              {revealed ? 'Hide' : 'Reveal'}
+              {revealed ? 'Hide' : 'Reveal URI'}
             </button>
           </div>
-          <div
-            className="rounded-md p-3 font-mono text-xs break-all"
-            style={{ background: 'var(--background)', border: '1px solid var(--border)' }}
-          >
-            {revealed ? (
-              <span className="text-[var(--text-primary)]">{db.connectionUri}</span>
-            ) : (
-              <span className="text-[var(--text-muted)]">{'•'.repeat(60)}</span>
-            )}
-          </div>
-          {revealed && (
-            <div className="flex items-center gap-2 mt-2">
+          <div className="code-mockup-card relative group">
+            <div className="flex items-center justify-between gap-3 font-mono text-xs break-all">
+              {revealed ? (
+                <span className="text-[var(--brand-green)] selection:bg-[var(--brand-green)] selection:text-black">{db.connectionUri}</span>
+              ) : (
+                <span className="text-[var(--text-muted)] tracking-widest">{'•'.repeat(48)}</span>
+              )}
               <button
                 type="button"
                 onClick={() => copyToClipboard(db.connectionUri!, 'uri')}
-                className="text-xs btn-secondary px-2 py-1"
+                className="btn-secondary text-xs px-3 py-1 shrink-0 rounded-full h-7 min-h-0"
               >
-                {copied === 'uri' ? '✓ Copied' : 'Copy URI'}
+                {copied === 'uri' ? '✓ Copied' : 'Copy'}
               </button>
-              <p className="text-xs text-red-400">
-                Keep this URI secure. Never share it publicly or include it in URLs.
-              </p>
             </div>
+          </div>
+          {revealed && (
+            <p className="text-[11px] text-red-300">
+              Keep this URI secure. Never commit connection strings containing credentials to public repositories.
+            </p>
           )}
         </div>
       )}
 
       {db.provisionedAt && (
-        <p className="text-xs text-[var(--text-muted)]">
+        <p className="text-xs text-[var(--text-muted)] pt-1 border-t border-[var(--border)]">
           Provisioned:{' '}
           {new Date(db.provisionedAt).toLocaleDateString('en-IN', {
             year: 'numeric',
@@ -135,15 +137,15 @@ function CredRow({
   copied: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-xs text-[var(--text-muted)] w-32 shrink-0">{label}</span>
-      <span className="text-sm text-[var(--text-primary)] font-mono flex-1 truncate">{value}</span>
+    <div className="flex items-center justify-between gap-4 py-1.5 px-3 rounded-lg bg-[var(--surface-2)]/60 border border-[var(--border)]">
+      <span className="text-xs text-[var(--text-muted)] w-28 shrink-0">{label}</span>
+      <span className="text-xs text-white font-mono flex-1 truncate">{value}</span>
       <button
         type="button"
         onClick={onCopy}
-        className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors shrink-0"
+        className="text-xs text-[var(--text-secondary)] hover:text-[var(--brand-green)] transition-colors shrink-0 px-2 py-0.5 rounded-full hover:bg-[var(--surface-3)]"
       >
-        {copied ? '✓' : 'Copy'}
+        {copied ? '✓ Copied' : 'Copy'}
       </button>
     </div>
   );

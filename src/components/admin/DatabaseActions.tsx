@@ -59,17 +59,17 @@ export default function DatabaseActions({ db }: Props) {
         <button
           onClick={handleSuspend}
           disabled={loading}
-          className="text-red-400 hover:underline"
+          className="text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 rounded-full transition-colors"
         >
-          Suspend
+          {loading ? 'Processing...' : 'Suspend'}
         </button>
       ) : db.status === 'SUSPENDED' ? (
         <button
           onClick={handleResume}
           disabled={loading}
-          className="text-green-400 hover:underline"
+          className="text-xs font-semibold text-[var(--accent)] hover:text-white bg-[var(--accent)]/10 hover:bg-[var(--accent)]/20 border border-[var(--accent)]/30 px-2.5 py-1 rounded-full transition-colors"
         >
-          Resume
+          {loading ? 'Processing...' : 'Resume'}
         </button>
       ) : null}
     </div>

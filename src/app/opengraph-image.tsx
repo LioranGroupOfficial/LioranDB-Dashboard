@@ -19,10 +19,10 @@ export default async function Image() {
           flexDirection: 'column',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
-          backgroundColor: '#090B0E',
+          backgroundColor: '#001e2b',
           padding: '60px 80px',
           fontFamily: 'sans-serif',
-          border: '12px solid #13171F',
+          border: '12px solid #002838',
         }}
       >
         {/* Top bar */}
@@ -47,14 +47,14 @@ export default async function Image() {
               style={{
                 width: '48px',
                 height: '48px',
-                borderRadius: '8px',
-                backgroundColor: '#DFD0B8',
+                borderRadius: '9999px',
+                backgroundColor: '#00ed64',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: '28px',
                 fontWeight: '900',
-                color: '#090B0E',
+                color: '#001e2b',
               }}
             >
               L
@@ -70,7 +70,7 @@ export default async function Image() {
               }}
             >
               <span>Lioran</span>
-              <span style={{ color: '#DFD0B8' }}>DB</span>
+              <span style={{ color: '#00ed64' }}>DB</span>
             </div>
           </div>
 
@@ -81,10 +81,10 @@ export default async function Image() {
               alignItems: 'center',
               gap: '10px',
               padding: '8px 18px',
-              borderRadius: '4px',
-              backgroundColor: '#13171F',
-              border: '1px solid #242A36',
-              color: '#4ADE80',
+              borderRadius: '9999px',
+              backgroundColor: '#002838',
+              border: '1px solid #1c3b4a',
+              color: '#00ed64',
               fontSize: '16px',
               fontWeight: '600',
               fontFamily: 'monospace',
@@ -95,7 +95,7 @@ export default async function Image() {
                 width: '10px',
                 height: '10px',
                 borderRadius: '5px',
-                backgroundColor: '#4ADE80',
+                backgroundColor: '#00ed64',
                 display: 'flex',
               }}
             />
@@ -124,10 +124,10 @@ export default async function Image() {
               style={{
                 display: 'flex',
                 padding: '6px 14px',
-                borderRadius: '4px',
-                backgroundColor: '#1C222E',
-                border: '1px solid #2E3748',
-                color: '#DFD0B8',
+                borderRadius: '9999px',
+                backgroundColor: '#063446',
+                border: '1px solid #1c3b4a',
+                color: '#00ed64',
                 fontSize: '14px',
                 fontWeight: '700',
                 fontFamily: 'monospace',
@@ -140,7 +140,7 @@ export default async function Image() {
             <span
               style={{
                 display: 'flex',
-                color: '#64748B',
+                color: '#93a1a1',
                 fontSize: '16px',
               }}
             >
@@ -165,7 +165,7 @@ export default async function Image() {
             style={{
               display: 'flex',
               fontSize: '22px',
-              color: '#94A3B8',
+              color: '#93a1a1',
               lineHeight: 1.5,
               maxWidth: '820px',
             }}
@@ -183,7 +183,7 @@ export default async function Image() {
             justifyContent: 'space-between',
             width: '100%',
             paddingTop: '24px',
-            borderTop: '1px solid #232A38',
+            borderTop: '1px solid #1c3b4a',
           }}
         >
           <div
@@ -194,15 +194,15 @@ export default async function Image() {
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '13px', color: '#64748B', textTransform: 'uppercase' }}>Throughput</span>
-              <span style={{ fontSize: '20px', fontWeight: '700', color: '#DFD0B8', fontFamily: 'monospace' }}>~45,000 ops/s</span>
+              <span style={{ fontSize: '13px', color: '#93a1a1', textTransform: 'uppercase' }}>Throughput</span>
+              <span style={{ fontSize: '20px', fontWeight: '700', color: '#00ed64', fontFamily: 'monospace' }}>~45,000 ops/s</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '13px', color: '#64748B', textTransform: 'uppercase' }}>Persistence</span>
+              <span style={{ fontSize: '13px', color: '#93a1a1', textTransform: 'uppercase' }}>Persistence</span>
               <span style={{ fontSize: '20px', fontWeight: '700', color: '#FFFFFF', fontFamily: 'monospace' }}>WAL + NVMe Tier</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '13px', color: '#64748B', textTransform: 'uppercase' }}>Security</span>
+              <span style={{ fontSize: '13px', color: '#93a1a1', textTransform: 'uppercase' }}>Security</span>
               <span style={{ fontSize: '20px', fontWeight: '700', color: '#FFFFFF', fontFamily: 'monospace' }}>AES-256 + TLS 1.3</span>
             </div>
           </div>
@@ -212,7 +212,7 @@ export default async function Image() {
               display: 'flex',
               fontSize: '18px',
               fontWeight: '700',
-              color: '#DFD0B8',
+              color: '#00ed64',
               fontFamily: 'monospace',
             }}
           >

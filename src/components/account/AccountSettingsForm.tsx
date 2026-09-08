@@ -97,9 +97,11 @@ export default function AccountSettingsForm({ initialData }: Props) {
         </div>
       </div>
 
-      <button type="submit" disabled={loading} className="btn-primary">
-        {loading ? 'Saving...' : 'Save changes'}
-      </button>
+      <div className="pt-2">
+        <button type="submit" disabled={loading} className="btn-primary text-xs py-2 px-5">
+          {loading ? 'Saving Changes...' : 'Save Profile Changes'}
+        </button>
+      </div>
     </form>
   );
 }

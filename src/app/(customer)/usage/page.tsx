@@ -44,17 +44,17 @@ export default async function UsagePage() {
       {/* Health status */}
       <div className="card space-y-2">
         <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5 text-emerald-400" />
+          <Activity className="w-3.5 h-3.5 text-[var(--brand-green)]" />
           Deployment Health &amp; Availability
         </h2>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="text-xs font-semibold text-[var(--text-primary)]">
+            <span className="w-2.5 h-2.5 rounded-full bg-[var(--brand-green)] animate-pulse shadow-sm shadow-[var(--brand-green)]"></span>
+            <span className="text-xs font-semibold text-white">
               Cluster Node {database.status === 'ACTIVE' ? 'Online & Healthy' : database.status}
             </span>
           </div>
-          <span className="text-xs font-mono text-[var(--text-muted)]">Endpoint: {database.host}:{database.port}</span>
+          <span className="text-xs font-mono text-[var(--text-secondary)]">Endpoint: {database.host}:{database.port}</span>
         </div>
       </div>
 
@@ -69,27 +69,27 @@ export default async function UsagePage() {
       {/* Benchmark characteristics */}
       <div className="card space-y-4">
         <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-          <Zap className="w-3.5 h-3.5 text-[var(--accent)]" />
+          <Zap className="w-3.5 h-3.5 text-[var(--brand-green)]" />
           Engine Benchmark Characteristics
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3 bg-[var(--surface-2)] rounded-sm border border-[var(--border)]">
-            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Benchmark Reads</span>
-            <p className="text-base font-bold text-[var(--text-primary)] font-mono mt-1">~35,000 ops/s</p>
-            <span className="text-[11px] text-[var(--text-muted)]">Single-node in-memory tier</span>
+          <div className="p-4 bg-[var(--surface-2)] rounded-lg border border-[var(--border)]">
+            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Benchmark Reads</span>
+            <p className="text-lg font-bold text-white font-mono mt-1">~35,000 ops/s</p>
+            <span className="text-[11px] text-[var(--text-secondary)]">Single-node in-memory tier</span>
           </div>
-          <div className="p-3 bg-[var(--surface-2)] rounded-sm border border-[var(--border)]">
-            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Benchmark Writes</span>
-            <p className="text-base font-bold text-[var(--text-primary)] font-mono mt-1">~10,000 ops/s</p>
-            <span className="text-[11px] text-[var(--text-muted)]">WAL-backed persistence</span>
+          <div className="p-4 bg-[var(--surface-2)] rounded-lg border border-[var(--border)]">
+            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Benchmark Writes</span>
+            <p className="text-lg font-bold text-white font-mono mt-1">~10,000 ops/s</p>
+            <span className="text-[11px] text-[var(--text-secondary)]">WAL-backed persistence</span>
           </div>
-          <div className="p-3 bg-[var(--surface-2)] rounded-sm border border-[var(--border)]">
-            <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Combined Peak</span>
-            <p className="text-base font-bold text-[var(--accent)] font-mono mt-1">~45,000 ops/s</p>
-            <span className="text-[11px] text-[var(--text-muted)]">Optimal concurrency profile</span>
+          <div className="p-4 bg-[var(--surface-2)] rounded-lg border border-[var(--brand-green)]/40 bg-[#002f20]/40">
+            <span className="text-[10px] text-[var(--brand-green)] uppercase tracking-wider font-semibold">Combined Peak</span>
+            <p className="text-lg font-bold text-[var(--brand-green)] font-mono mt-1">~45,000 ops/s</p>
+            <span className="text-[11px] text-[var(--text-secondary)]">Optimal concurrency profile</span>
           </div>
         </div>
-        <p className="text-[11px] text-[var(--text-muted)]">
+        <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
           * Benchmark metrics reflect theoretical hardware capabilities in laboratory benchmarks. Actual application throughput varies based on payload size, indexing schema, query complexity, and client network latency.
         </p>
       </div>
@@ -111,10 +111,10 @@ function MetricCard({
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{label}</span>
-        <Icon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+        <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-semibold">{label}</span>
+        <Icon className="w-4 h-4 text-[var(--text-muted)]" />
       </div>
-      <p className="text-xl font-bold text-[var(--text-primary)] font-mono">{value}</p>
+      <p className="text-xl font-bold text-white font-mono">{value}</p>
       <p className="text-[11px] text-[var(--text-secondary)] mt-1">{subtext}</p>
     </div>
   );

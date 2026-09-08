@@ -68,8 +68,8 @@ export default function RecordPaymentModal({ subscription }: { subscription: Sub
       </button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="card w-full max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-4" style={{ background: 'var(--surface)' }}>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-150">
+          <div className="card w-full max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-4 rounded-xl shadow-2xl border-[var(--border)] bg-[var(--surface)]">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div>
                 <h3 className="font-semibold text-[var(--text-primary)]">Record Offline Payment</h3>
@@ -77,7 +77,7 @@ export default function RecordPaymentModal({ subscription }: { subscription: Sub
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-full hover:bg-[var(--surface-2)] transition-colors"
               >
                 ✕
               </button>

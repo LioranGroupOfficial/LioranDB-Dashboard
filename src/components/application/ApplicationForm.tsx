@@ -112,14 +112,14 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
         {/* Mobile step bar */}
         <div className="sm:hidden space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-[var(--text-primary)] font-semibold">
-              Step {step + 1} of {steps.length}: <span className="text-[var(--accent)]">{steps[step]}</span>
+            <span className="text-white font-semibold">
+              Step {step + 1} of {steps.length}: <span className="text-[var(--brand-green)]">{steps[step]}</span>
             </span>
             <span className="text-[var(--text-muted)] font-mono">{Math.round(((step + 1) / steps.length) * 100)}%</span>
           </div>
           <div className="h-1.5 w-full bg-[var(--surface-2)] rounded-full overflow-hidden border border-[var(--border)]">
             <div
-              className="h-full bg-[var(--accent)] transition-all duration-300"
+              className="h-full bg-[var(--brand-green)] transition-all duration-300"
               style={{ width: `${((step + 1) / steps.length) * 100}%` }}
             />
           </div>
@@ -130,20 +130,20 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
           {steps.map((label, i) => (
             <div key={i} className="flex items-center gap-2">
               <div
-                className="flex items-center justify-center w-7 h-7 rounded-sm text-xs font-medium"
+                className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all"
                 style={{
-                  background: i === step ? 'var(--accent)' : i < step ? 'var(--surface-2)' : 'var(--surface)',
-                  color: i === step ? '#090B0E' : i < step ? '#4ADE80' : 'var(--text-muted)',
-                  border: `1px solid ${i === step ? 'var(--accent)' : 'var(--border)'}`,
+                  background: i === step ? 'var(--brand-green)' : i < step ? 'var(--surface-2)' : 'var(--surface)',
+                  color: i === step ? 'var(--on-primary)' : i < step ? 'var(--brand-green)' : 'var(--text-muted)',
+                  border: `1px solid ${i === step ? 'var(--brand-green)' : 'var(--border)'}`,
                 }}
               >
                 {i < step ? '✓' : i + 1}
               </div>
-              <span className={`text-xs ${i === step ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'}`}>
+              <span className={`text-xs ${i === step ? 'text-white font-semibold' : 'text-[var(--text-muted)]'}`}>
                 {label}
               </span>
               {i < steps.length - 1 && (
-                <div className="h-px w-4 lg:w-6" style={{ background: i < step ? 'var(--accent)' : 'var(--border)' }} />
+                <div className="h-px w-4 lg:w-6" style={{ background: i < step ? 'var(--brand-green)' : 'var(--border)' }} />
               )}
             </div>
           ))}

@@ -21,25 +21,25 @@ export default function CustomerHeader({ email, userId, onMenuToggle }: Props) {
   }, []);
 
   return (
-    <header className="h-14 shrink-0 border-b border-[var(--border)] bg-[var(--surface)] flex items-center justify-between px-3 sm:px-6 z-10">
-      <div className="flex items-center gap-2.5">
+    <header className="h-14 shrink-0 border-b border-[var(--border)] bg-[#001e2b] flex items-center justify-between px-4 sm:px-6 z-10">
+      <div className="flex items-center gap-3">
         {onMenuToggle && (
           <button
             type="button"
             onClick={onMenuToggle}
-            className="md:hidden p-1.5 rounded-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+            className="md:hidden p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-white hover:bg-[var(--surface-2)] transition-colors"
             aria-label="Open navigation menu"
           >
             <Menu className="w-5 h-5" />
           </button>
         )}
 
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span className="text-xs font-mono text-[var(--text-muted)] hidden sm:inline">
-            LioranDB Engine Online
+        <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-[var(--surface)] border border-[var(--border)]">
+          <span className="w-2 h-2 rounded-full bg-[var(--brand-green)] animate-pulse shadow-sm shadow-[var(--brand-green)]"></span>
+          <span className="text-xs font-mono text-[var(--text-secondary)] hidden sm:inline">
+            LioranDB Engine <span className="text-[var(--brand-green)] font-semibold">Online</span>
           </span>
-          <span className="text-xs font-mono text-[var(--text-muted)] sm:hidden">
+          <span className="text-xs font-mono text-[var(--brand-green)] sm:hidden font-semibold">
             Online
           </span>
         </div>
@@ -48,12 +48,12 @@ export default function CustomerHeader({ email, userId, onMenuToggle }: Props) {
       <div className="flex items-center gap-2 sm:gap-4">
         <Link
           href="/account"
-          className="relative p-1.5 rounded-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+          className="relative p-2 rounded-full text-[var(--text-secondary)] hover:text-white hover:bg-[var(--surface-2)] transition-colors"
           aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         >
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
-            <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full text-[9px] flex items-center justify-center font-bold bg-[var(--accent)] text-black">
+            <span className="absolute top-1 right-1 w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold bg-[var(--brand-green)] text-[var(--on-primary)] shadow-sm shadow-[var(--brand-green)]/40">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -61,12 +61,12 @@ export default function CustomerHeader({ email, userId, onMenuToggle }: Props) {
 
         <Link
           href="/account"
-          className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-sm border border-[var(--border)] bg-[var(--surface-2)] hover:border-[var(--border-light)] text-xs text-[var(--text-primary)] transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-light)] text-xs text-white transition-colors group"
         >
-          <div className="w-5 h-5 rounded-sm bg-[var(--accent)] text-black flex items-center justify-center font-bold text-[10px]">
+          <div className="w-5 h-5 rounded-full bg-[var(--brand-green)] text-[var(--on-primary)] flex items-center justify-center font-bold text-[10px]">
             {email.slice(0, 1).toUpperCase()}
           </div>
-          <span className="font-mono text-xs max-w-[100px] sm:max-w-[160px] truncate">{email}</span>
+          <span className="font-mono text-xs max-w-[100px] sm:max-w-[160px] truncate text-[var(--text-secondary)] group-hover:text-white">{email}</span>
         </Link>
       </div>
     </header>

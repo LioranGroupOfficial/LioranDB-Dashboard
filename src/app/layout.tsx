@@ -1,10 +1,25 @@
 import type { Metadata, Viewport } from 'next';
+import { Manrope, Source_Code_Pro } from 'next/font/google';
 import './globals.css';
+
+const manrope = Manrope({
+  subsets: ['latin'],
+  variable: '--font-manrope',
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
+});
+
+const sourceCodePro = Source_Code_Pro({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  display: 'swap',
+  weight: ['400', '500', '600'],
+});
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://app.liorandb.com';
 
 export const viewport: Viewport = {
-  themeColor: '#090B0E',
+  themeColor: '#001e2b',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
@@ -68,8 +83,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-[var(--background)] text-[var(--text-primary)] antialiased">
+    <html lang="en" className={`dark ${manrope.variable} ${sourceCodePro.variable}`}>
+      <body className="min-h-screen bg-[var(--background)] text-[var(--text-primary)] font-sans antialiased">
         {children}
       </body>
     </html>

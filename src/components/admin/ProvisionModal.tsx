@@ -66,21 +66,21 @@ export default function ProvisionModal({ customer }: { customer: Customer }) {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="btn-primary text-xs px-3 py-1.5">
+      <button onClick={() => setOpen(true)} className="btn-primary text-xs px-4 py-2">
         Provision Database →
       </button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-          <div className="card w-full max-w-lg space-y-4" style={{ background: 'var(--surface)' }}>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="card w-full max-w-lg space-y-4 p-5 sm:p-6" style={{ background: 'var(--surface)' }}>
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div>
-                <h3 className="font-semibold text-[var(--text-primary)]">Provision Managed Database</h3>
+                <h3 className="font-semibold text-white text-base">Provision Managed Database</h3>
                 <p className="text-xs text-[var(--text-secondary)]">For {customer.name} ({customer.email})</p>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                className="text-[var(--text-muted)] hover:text-white p-1"
               >
                 ✕
               </button>
@@ -104,13 +104,13 @@ export default function ProvisionModal({ customer }: { customer: Customer }) {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Host Domain</label>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <label className="label">Host</label>
                   <input
                     type="text"
                     required
-                    className="input-field"
+                    className="input-field font-mono"
                     value={form.host}
                     onChange={(e) => setForm({ ...form, host: e.target.value })}
                   />
@@ -120,20 +120,20 @@ export default function ProvisionModal({ customer }: { customer: Customer }) {
                   <input
                     type="number"
                     required
-                    className="input-field"
+                    className="input-field font-mono"
                     value={form.port}
                     onChange={(e) => setForm({ ...form, port: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="label">Database Name</label>
                   <input
                     type="text"
                     required
-                    className="input-field"
+                    className="input-field font-mono"
                     value={form.databaseName}
                     onChange={(e) => setForm({ ...form, databaseName: e.target.value })}
                   />
@@ -143,7 +143,7 @@ export default function ProvisionModal({ customer }: { customer: Customer }) {
                   <input
                     type="text"
                     required
-                    className="input-field"
+                    className="input-field font-mono"
                     value={form.username}
                     onChange={(e) => setForm({ ...form, username: e.target.value })}
                   />
@@ -151,47 +151,49 @@ export default function ProvisionModal({ customer }: { customer: Customer }) {
               </div>
 
               <div>
-                <label className="label">Custom Password (leave blank to auto-generate 24-char secure)</label>
+                <label className="label">Temporary Admin Password (optional — auto-generated if blank)</label>
                 <input
-                  type="password"
-                  className="input-field"
-                  placeholder="Auto-generated secure random string"
+                  type="text"
+                  className="input-field font-mono"
+                  placeholder="Leave blank to auto-generate secure password"
                   value={form.temporaryPassword}
                   onChange={(e) => setForm({ ...form, temporaryPassword: e.target.value })}
                 />
               </div>
 
               <div>
-                <label className="label">Temporary Credential Expiry (Days)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="30"
-                  required
+                <label className="label">Temporary Credential Expiration (days)</label>
+                <select
                   className="input-field"
                   value={form.expiresInDays}
                   onChange={(e) => setForm({ ...form, expiresInDays: e.target.value })}
-                />
+                >
+                  <option value="1">1 day</option>
+                  <option value="3">3 days</option>
+                  <option value="7">7 days (recommended)</option>
+                  <option value="14">14 days</option>
+                  <option value="30">30 days</option>
+                </select>
               </div>
 
               <div className="alert-banner alert-banner-info text-xs">
-                The connection URI will be AES-256-GCM encrypted in the database. Customer onboarding stage will transition to ACTIVE and an email with details will be sent.
+                Provisioning will create the database record, encrypt the connection URI, send the welcome email with credentials to the customer, and set their status to <strong>ACTIVE</strong>.
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
+              <div className="flex justify-end gap-2 pt-3 border-t border-[var(--border)]">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="btn-secondary"
+                  className="btn-secondary text-xs py-2 px-4"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="btn-primary"
+                  className="btn-primary text-xs py-2 px-4"
                 >
-                  {loading ? 'Provisioning...' : 'Confirm & Deploy'}
+                  {loading ? 'Deploying...' : 'Deploy & Activate Cluster'}
                 </button>
               </div>
             </form>

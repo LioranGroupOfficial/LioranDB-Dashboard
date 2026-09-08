@@ -72,11 +72,11 @@ export default function VerifyPaymentModal({ payment }: { payment: PaymentItem }
       </button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="card border-[var(--border)] bg-[var(--surface)] max-w-lg w-full max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-150">
+          <div className="card border-[var(--border)] bg-[var(--surface)] max-w-lg w-full max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-4 rounded-xl shadow-2xl">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div className="flex items-center gap-2 text-[var(--accent)]">
-                <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                <ShieldCheck className="w-5 h-5 text-[var(--accent)]" />
                 <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
                   Verify Razorpay Payment
                 </h3>
@@ -84,7 +84,7 @@ export default function VerifyPaymentModal({ payment }: { payment: PaymentItem }
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm p-1 rounded-full hover:bg-[var(--surface-2)] transition-colors"
               >
                 ✕
               </button>
@@ -97,7 +97,7 @@ export default function VerifyPaymentModal({ payment }: { payment: PaymentItem }
               </div>
             )}
 
-            <div className="p-3 bg-[var(--surface-2)] border border-[var(--border)] rounded-sm space-y-2 text-xs">
+            <div className="p-3.5 bg-[var(--surface-2)] border border-[var(--border)] rounded-xl space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-[var(--text-muted)]">Customer</span>
                 <span className="font-medium text-[var(--text-primary)]">{payment.customerName} ({payment.customerEmail})</span>
@@ -108,23 +108,23 @@ export default function VerifyPaymentModal({ payment }: { payment: PaymentItem }
               </div>
               <div className="flex justify-between">
                 <span className="text-[var(--text-muted)]">Amount</span>
-                <span className="font-mono text-emerald-400 font-bold">₹{payment.amount.toLocaleString('en-IN')}</span>
+                <span className="font-mono text-[var(--accent)] font-bold">₹{payment.amount.toLocaleString('en-IN')}</span>
               </div>
               {payment.submittedReference && (
-                <div className="flex justify-between items-center pt-1 border-t border-[var(--border)]">
+                <div className="flex justify-between items-center pt-2 border-t border-[var(--border)]">
                   <span className="text-[var(--text-muted)]">Customer Submitted UTR/Ref:</span>
-                  <span className="font-mono bg-[var(--surface)] px-2 py-0.5 rounded-xs border border-[var(--border)] text-amber-300 font-bold">
+                  <span className="font-mono bg-[var(--surface)] px-2.5 py-1 rounded-full border border-[var(--border)] text-amber-300 font-bold text-[11px]">
                     {payment.submittedReference}
                   </span>
                 </div>
               )}
               {payment.razorpayPaymentLink && (
-                <div className="pt-1">
+                <div className="pt-1.5 border-t border-[var(--border)]">
                   <a
                     href={payment.razorpayPaymentLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[var(--accent)] hover:underline inline-flex items-center gap-1 text-[11px]"
+                    className="text-[var(--accent)] hover:underline inline-flex items-center gap-1 text-[11px] font-medium"
                   >
                     <span>Inspect Razorpay Payment Link</span>
                     <ExternalLink className="w-3 h-3" />
@@ -144,9 +144,9 @@ export default function VerifyPaymentModal({ payment }: { payment: PaymentItem }
                       value="VERIFIED"
                       checked={decision === 'VERIFIED'}
                       onChange={() => setDecision('VERIFIED')}
-                      className="accent-emerald-500"
+                      className="accent-[var(--accent)]"
                     />
-                    <span className="text-emerald-400 font-medium">Verify &amp; Mark as Paid</span>
+                    <span className="text-[var(--accent)] font-medium">Verify &amp; Mark as Paid</span>
                   </label>
                   <label className="flex items-center gap-2 text-xs text-[var(--text-primary)] cursor-pointer">
                     <input

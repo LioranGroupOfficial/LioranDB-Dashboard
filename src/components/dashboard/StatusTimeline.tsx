@@ -28,23 +28,23 @@ interface Props {
 
 export default function StatusTimeline({ stage, rejectionReason }: Props) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3.5">
       {STEPS.map((step, idx) => {
         const isComplete = step.stage.includes(stage);
         const isRejected = step.rejectStage?.includes(stage);
         const isCurrent = !isComplete && !isRejected && idx > 0 && STEPS[idx - 1].stage.includes(stage);
 
         return (
-          <div key={idx} className="flex items-start gap-3">
+          <div key={idx} className="flex items-start gap-3 relative">
             <div className="mt-0.5 shrink-0">
               {isRejected ? (
                 <XCircle className="w-4 h-4 text-red-400" />
               ) : isComplete ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CheckCircle2 className="w-4 h-4 text-[var(--brand-green)]" />
               ) : isCurrent ? (
-                <Clock className="w-4 h-4 text-[var(--accent)] animate-pulse" />
+                <Clock className="w-4 h-4 text-[var(--brand-green)] animate-pulse" />
               ) : (
-                <Circle className="w-4 h-4 text-[var(--text-muted)] opacity-40" />
+                <Circle className="w-4 h-4 text-[var(--text-muted)] opacity-30" />
               )}
             </div>
             <div className="flex-1">
@@ -55,14 +55,14 @@ export default function StatusTimeline({ stage, rejectionReason }: Props) {
                     : isComplete
                     ? 'text-[var(--text-secondary)]'
                     : isCurrent
-                    ? 'text-[var(--text-primary)] font-semibold'
+                    ? 'text-white font-semibold'
                     : 'text-[var(--text-muted)]'
                 }`}
               >
                 {step.label}
               </p>
               {isRejected && rejectionReason && (
-                <p className="text-[11px] text-red-300 mt-0.5">
+                <p className="text-[11px] text-red-300 mt-0.5 font-medium">
                   Reason: {rejectionReason}
                 </p>
               )}

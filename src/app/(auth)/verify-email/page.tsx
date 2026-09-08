@@ -114,7 +114,7 @@ export default function VerifyEmailPage() {
   return (
     <div className="card border-[var(--border)] shadow-xl bg-[var(--surface)] p-6">
       <div className="mb-6">
-        <div className="w-10 h-10 rounded-sm bg-[var(--surface-2)] border border-[var(--border)] text-[var(--accent)] flex items-center justify-center mb-3">
+        <div className="w-10 h-10 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--brand-green)] flex items-center justify-center mb-3">
           <MailCheck className="w-5 h-5" />
         </div>
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">Verify Your Email</h1>
@@ -132,7 +132,7 @@ export default function VerifyEmailPage() {
         )}
         {success && (
           <div className="alert-banner alert-banner-success text-xs" role="status">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--brand-green)]" />
             <span>{success}</span>
           </div>
         )}
@@ -150,10 +150,10 @@ export default function VerifyEmailPage() {
                 value={digit}
                 onChange={(e) => handleInput(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
-                className="w-11 h-13 text-center text-xl font-mono font-bold rounded-sm border focus:outline-none focus:border-[var(--accent)] transition-colors"
+                className="w-11 h-13 text-center text-xl font-mono font-bold rounded-lg border focus:outline-none focus:border-[var(--brand-green)] focus:ring-1 focus:ring-[var(--brand-green)] transition-colors"
                 style={{
                   background: 'var(--surface-2)',
-                  borderColor: digit ? 'var(--accent)' : 'var(--border)',
+                  borderColor: digit ? 'var(--brand-green)' : 'var(--border)',
                   color: 'var(--text-primary)',
                 }}
                 aria-label={`Digit ${index + 1}`}
@@ -165,7 +165,7 @@ export default function VerifyEmailPage() {
         <button
           type="submit"
           disabled={loading || otp.join('').length !== 6}
-          className="btn-primary w-full py-2"
+          className="btn-primary w-full py-2.5"
         >
           {loading ? (
             <>

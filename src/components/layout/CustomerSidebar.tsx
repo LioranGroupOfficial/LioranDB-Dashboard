@@ -107,16 +107,16 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
             }}
             title={!isMobile && collapsed ? item.label : undefined}
             className={`sidebar-link ${active ? 'active' : ''} ${
-              !isMobile && collapsed ? 'justify-center px-0' : 'px-3'
+              !isMobile && collapsed ? 'justify-center px-0' : 'px-3.5'
             }`}
           >
             <Icon
-              className={`w-4 h-4 shrink-0 ${
-                active ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'
+              className={`w-4 h-4 shrink-0 transition-colors ${
+                active ? 'text-[var(--brand-green)]' : 'text-[var(--text-muted)] group-hover:text-white'
               }`}
             />
             {(isMobile || !collapsed) && (
-              <span className="text-xs font-medium truncate">{item.label}</span>
+              <span className="text-xs font-semibold truncate">{item.label}</span>
             )}
           </Link>
         );
@@ -128,24 +128,24 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
     <>
       {/* Desktop Sticky Sidebar */}
       <aside
-        className={`hidden md:flex h-screen sticky top-0 shrink-0 border-r border-[var(--border)] bg-[var(--surface)] flex-col z-20 transition-all duration-200 select-none ${
+        className={`hidden md:flex h-screen sticky top-0 shrink-0 border-r border-[var(--border)] bg-[#001824] flex-col z-20 transition-all duration-200 select-none ${
           collapsed ? 'w-16' : 'w-60'
         }`}
       >
         {/* Brand Header & Toggle */}
         <div className="h-14 shrink-0 flex items-center justify-between px-3.5 border-b border-[var(--border)]">
           {!collapsed ? (
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-sm bg-[var(--accent)] text-black font-bold flex items-center justify-center">
-                <Database className="w-4 h-4 text-black" />
+            <Link href="/dashboard" className="flex items-center gap-2.5 group">
+              <div className="w-7 h-7 rounded-lg bg-[var(--brand-green)] text-[var(--on-primary)] font-bold flex items-center justify-center shadow-sm shadow-[var(--brand-green)]/20">
+                <Database className="w-4 h-4 text-[var(--on-primary)]" />
               </div>
-              <span className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
-                Lioran<span className="text-[var(--accent)]">DB</span>
+              <span className="text-base font-bold tracking-tight text-white">
+                Lioran<span className="text-[var(--brand-green)]">DB</span>
               </span>
             </Link>
           ) : (
-            <div className="w-7 h-7 rounded-sm bg-[var(--accent)] text-black font-bold flex items-center justify-center mx-auto">
-              <Database className="w-4 h-4 text-black" />
+            <div className="w-7 h-7 rounded-lg bg-[var(--brand-green)] text-[var(--on-primary)] font-bold flex items-center justify-center mx-auto shadow-sm shadow-[var(--brand-green)]/20">
+              <Database className="w-4 h-4 text-[var(--on-primary)]" />
             </div>
           )}
 
@@ -153,7 +153,7 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
             type="button"
             onClick={toggleCollapsed}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors ${
+            className={`p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[var(--surface-2)] transition-colors ${
               collapsed ? 'hidden' : 'block'
             }`}
             aria-label="Toggle sidebar"
@@ -168,7 +168,7 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
               type="button"
               onClick={toggleCollapsed}
               title="Expand sidebar"
-              className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[var(--surface-2)] transition-colors"
             >
               <PanelLeftOpen className="w-4 h-4" />
             </button>
@@ -178,16 +178,16 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
         <NavLinks />
 
         {/* Sticky Bottom Actions */}
-        <div className="p-2 border-t border-[var(--border)] mt-auto bg-[var(--surface)]">
+        <div className="p-3 border-t border-[var(--border)] mt-auto bg-[#001824]">
           <button
             onClick={handleLogout}
             title={collapsed ? 'Sign out' : undefined}
-            className={`sidebar-link w-full text-left text-red-400/90 hover:text-red-300 hover:bg-red-950/30 ${
-              collapsed ? 'justify-center px-0' : 'px-3'
+            className={`sidebar-link w-full text-left text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded-full ${
+              collapsed ? 'justify-center px-0' : 'px-3.5'
             }`}
           >
             <LogOut className="w-4 h-4 shrink-0 text-red-400" />
-            {!collapsed && <span className="text-xs font-medium">Sign Out</span>}
+            {!collapsed && <span className="text-xs font-semibold">Sign Out</span>}
           </button>
         </div>
       </aside>
@@ -203,24 +203,24 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
           />
 
           {/* Drawer Panel */}
-          <aside className="relative w-64 max-w-[80vw] bg-[var(--surface)] border-r border-[var(--border)] flex flex-col h-full z-50 select-none shadow-2xl">
+          <aside className="relative w-64 max-w-[80vw] bg-[#001824] border-r border-[var(--border)] flex flex-col h-full z-50 select-none shadow-2xl">
             <div className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-[var(--border)]">
               <Link
                 href="/dashboard"
                 onClick={onMobileClose}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2.5"
               >
-                <div className="w-7 h-7 rounded-sm bg-[var(--accent)] text-black font-bold flex items-center justify-center">
-                  <Database className="w-4 h-4 text-black" />
+                <div className="w-7 h-7 rounded-lg bg-[var(--brand-green)] text-[var(--on-primary)] font-bold flex items-center justify-center">
+                  <Database className="w-4 h-4 text-[var(--on-primary)]" />
                 </div>
-                <span className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
-                  Lioran<span className="text-[var(--accent)]">DB</span>
+                <span className="text-base font-bold tracking-tight text-white">
+                  Lioran<span className="text-[var(--brand-green)]">DB</span>
                 </span>
               </Link>
               <button
                 type="button"
                 onClick={onMobileClose}
-                className="p-1.5 rounded-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[var(--surface-2)]"
                 aria-label="Close menu"
               >
                 <X className="w-5 h-5" />
@@ -229,13 +229,13 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
 
             <NavLinks isMobile />
 
-            <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--surface)]">
+            <div className="p-3 border-t border-[var(--border)] mt-auto bg-[#001824]">
               <button
                 onClick={handleLogout}
-                className="sidebar-link w-full text-left text-red-400/90 hover:text-red-300 hover:bg-red-950/30 px-3"
+                className="sidebar-link w-full text-left text-red-400 hover:text-red-300 hover:bg-red-950/40 px-3.5 rounded-full"
               >
                 <LogOut className="w-4 h-4 shrink-0 text-red-400" />
-                <span className="text-xs font-medium">Sign Out</span>
+                <span className="text-xs font-semibold">Sign Out</span>
               </button>
             </div>
           </aside>

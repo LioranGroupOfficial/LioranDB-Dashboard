@@ -67,7 +67,7 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
+        className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
       >
         <Send className="w-3.5 h-3.5" />
         <span>{payment.status === 'SUBMITTED' ? 'Update Submitted Proof' : 'Submit Payment Proof'}</span>
@@ -75,18 +75,18 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
 
       {open && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="card border-[var(--border)] bg-[var(--surface)] max-w-md w-full max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-4">
+          <div className="card border-[var(--border)] bg-[var(--surface)] max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-              <div className="flex items-center gap-2 text-[var(--accent)]">
+              <div className="flex items-center gap-2 text-[var(--brand-green)]">
                 <CreditCard className="w-5 h-5" />
-                <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
+                <h3 className="text-sm sm:text-base font-semibold text-white">
                   Submit Razorpay Payment Proof
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm"
+                className="text-[var(--text-muted)] hover:text-white text-sm p-1"
               >
                 ✕
               </button>
@@ -100,19 +100,19 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
             )}
             {success && (
               <div className="alert-banner alert-banner-success text-xs">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--brand-green)]" />
                 <span>{success}</span>
               </div>
             )}
 
-            <div className="p-3 bg-[var(--surface-2)] border border-[var(--border)] rounded-sm space-y-2 text-xs">
+            <div className="p-4 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-[var(--text-muted)]">Invoice</span>
-                <span className="text-[var(--text-primary)] font-medium">{payment.billingMonth || 'Monthly Hosting'}</span>
+                <span className="text-white font-medium">{payment.billingMonth || 'Monthly Hosting'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[var(--text-muted)]">Amount</span>
-                <span className="font-mono text-emerald-400 font-bold">₹{payment.amount.toLocaleString('en-IN')}</span>
+                <span className="font-mono text-[var(--brand-green)] font-bold">₹{payment.amount.toLocaleString('en-IN')}</span>
               </div>
               {payment.razorpayPaymentLink && (
                 <div className="pt-2 border-t border-[var(--border)]">
@@ -120,7 +120,7 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
                     href={payment.razorpayPaymentLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="btn-secondary w-full py-1.5 text-xs text-center flex items-center justify-center gap-1.5"
+                    className="btn-secondary w-full py-2 text-xs text-center flex items-center justify-center gap-1.5"
                   >
                     <span>Open Razorpay Payment Page</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -162,14 +162,14 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="btn-secondary text-xs"
+                  className="btn-secondary text-xs py-2 px-4"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="btn-primary text-xs"
+                  className="btn-primary text-xs py-2 px-4"
                 >
                   {loading ? (
                     <>

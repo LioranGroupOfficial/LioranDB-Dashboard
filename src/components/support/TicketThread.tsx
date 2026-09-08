@@ -157,34 +157,34 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
           return (
             <div
               key={m.id}
-              className={`p-4 rounded-lg border text-sm ${
+              className={`p-5 rounded-xl border text-sm ${
                 isInternal
-                  ? 'border-yellow-600/40 bg-yellow-950/20'
+                  ? 'border-yellow-600/40 bg-[#2b1e06]/30'
                   : isStaffAuthor
-                  ? 'border-[var(--accent)]/40 bg-[var(--surface)]'
-                  : 'border-[var(--border)] bg-[var(--surface-2)]'
+                  ? 'border-[var(--brand-green)]/40 bg-[#002f20]/30'
+                  : 'border-[var(--border)] bg-[var(--surface)]'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[var(--border)]/50">
+              <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[var(--border)]">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-[var(--text-primary)]">
-                    {isStaffAuthor ? 'LioranDB Support' : 'You (Customer)'}
+                  <span className="font-semibold text-white">
+                    {isStaffAuthor ? 'LioranDB Support Engineering' : 'You (Customer)'}
                   </span>
                   {isStaffAuthor && (
-                    <span className="badge badge-pending text-[10px]">Staff</span>
+                    <span className="badge badge-active text-[10px]">Staff</span>
                   )}
                   {isInternal && (
-                    <span className="badge badge-suspended text-[10px]">Internal Note</span>
+                    <span className="badge badge-pending text-[10px]">Internal Note</span>
                   )}
                 </div>
-                <span className="text-xs text-[var(--text-muted)]">
+                <span className="text-xs text-[var(--text-muted)] font-mono">
                   {new Date(m.createdAt).toLocaleString('en-IN', {
                     dateStyle: 'short',
                     timeStyle: 'short',
                   })}
                 </span>
               </div>
-              <p className="text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed">
+              <p className="text-[var(--text-secondary)] whitespace-pre-wrap leading-relaxed text-xs">
                 {m.body}
               </p>
             </div>
@@ -195,14 +195,14 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
       {/* Reply or Closed notice */}
       {isClosed ? (
         <div className="card text-center py-6">
-          <p className="text-sm text-[var(--text-muted)]">
+          <p className="text-xs text-[var(--text-muted)]">
             This ticket has been marked as closed.
           </p>
         </div>
       ) : (
         <form onSubmit={handleSendReply} className="card space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-[var(--text-primary)]">Reply to ticket</h3>
+            <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Reply to ticket</h3>
             {!isClosed && (
               <button
                 type="button"
@@ -224,7 +224,7 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
           <textarea
             required
             rows={4}
-            className="input-field text-sm"
+            className="input-field text-xs"
             placeholder={
               isInternalNote
                 ? 'Type an internal note (only visible to team members)...'
@@ -236,25 +236,25 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
 
           <div className="flex items-center justify-between">
             {isStaff ? (
-              <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
+              <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={isInternalNote}
                   onChange={(e) => setIsInternalNote(e.target.checked)}
-                  className="accent-[var(--accent)]"
+                  className="accent-[var(--brand-green)]"
                 />
                 Post as internal note
               </label>
             ) : (
               <span className="text-xs text-[var(--text-muted)]">
-                Evening support hours: 6:00 PM – 10:00 PM IST
+                Support hours: 6:00 PM – 10:00 PM IST
               </span>
             )}
 
             <button
               type="submit"
               disabled={loading || !reply.trim()}
-              className="btn-primary"
+              className="btn-primary text-xs py-2 px-5"
             >
               {loading ? 'Sending...' : isInternalNote ? 'Add internal note' : 'Send reply'}
             </button>

@@ -79,37 +79,37 @@ export default function LegalAcceptanceForm({ policies }: Props) {
         <div key={policy.id} className="card space-y-3">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-base font-medium text-[var(--text-primary)]">{policy.title}</h3>
+              <h3 className="text-base font-semibold text-white">{policy.title}</h3>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">Version: {policy.version}</p>
             </div>
             <button
               type="button"
               onClick={() => setExpandedId(expandedId === policy.id ? null : policy.id)}
-              className="text-xs text-[var(--accent)] hover:text-[var(--accent-dark)] transition-colors whitespace-nowrap"
+              className="text-xs text-[var(--brand-green)] hover:underline transition-colors whitespace-nowrap font-medium"
             >
-              {expandedId === policy.id ? 'Collapse ↑' : 'Read ↓'}
+              {expandedId === policy.id ? 'Collapse ↑' : 'Read Policy ↓'}
             </button>
           </div>
 
           {expandedId === policy.id && (
             <div
-              className="text-sm text-[var(--text-secondary)] leading-relaxed max-h-64 overflow-y-auto p-4 rounded"
+              className="text-xs text-[var(--text-secondary)] leading-relaxed max-h-64 overflow-y-auto p-4 rounded-lg"
               style={{ background: 'var(--background)', border: '1px solid var(--border)' }}
             >
-              <pre className="whitespace-pre-wrap font-sans">{policy.content}</pre>
+              <pre className="whitespace-pre-wrap font-sans leading-relaxed">{policy.content}</pre>
             </div>
           )}
 
-          <label className="flex items-start gap-3 cursor-pointer">
+          <label className="flex items-start gap-3 cursor-pointer select-none pt-1">
             <input
               type="checkbox"
               checked={acceptedIds.has(policy.id)}
               onChange={() => toggleAccept(policy.id)}
-              className="mt-0.5 accent-[var(--accent)]"
+              className="mt-0.5 accent-[var(--brand-green)] w-4 h-4 rounded cursor-pointer"
             />
-            <span className="text-sm text-[var(--text-secondary)]">
+            <span className="text-xs text-[var(--text-secondary)] leading-normal">
               I have read and agree to the{' '}
-              <strong className="text-[var(--text-primary)]">{policy.title}</strong>
+              <strong className="text-white">{policy.title}</strong>
               {' '}({policy.version})
             </span>
           </label>
@@ -117,27 +117,27 @@ export default function LegalAcceptanceForm({ policies }: Props) {
       ))}
 
       {error && (
-        <div className="alert-banner alert-banner-error text-sm" role="alert">
+        <div className="alert-banner alert-banner-error text-xs" role="alert">
           {error}
         </div>
       )}
 
-      <div className="alert-banner alert-banner-warning text-sm">
-        By clicking &quot;Accept all and continue&quot;, you confirm that you have read and understood each of the above agreements. Your acceptance is recorded with a timestamp and your IP address.
+      <div className="alert-banner alert-banner-warning text-xs">
+        By clicking &quot;Accept all and continue&quot;, you confirm that you have read and understood each of the above agreements. Your acceptance is recorded with a secure timestamp and IP verification.
       </div>
 
       <button
         type="button"
         onClick={handleSubmit}
         disabled={!allAccepted || loading}
-        className="btn-primary w-full"
+        className="btn-primary w-full py-2.5"
       >
-        {loading ? 'Recording acceptance...' : 'Accept all and continue →'}
+        {loading ? 'Recording acceptance...' : 'Accept All & Continue →'}
       </button>
 
       {!allAccepted && (
         <p className="text-xs text-center text-[var(--text-muted)]">
-          You must check all boxes before continuing.
+          You must check all policy boxes before continuing.
         </p>
       )}
     </div>
