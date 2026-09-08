@@ -75,12 +75,12 @@ export default function ProvisionModal({ customer }: { customer: Customer }) {
           <div className="card w-full max-w-lg space-y-4 p-5 sm:p-6" style={{ background: 'var(--surface)' }}>
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
               <div>
-                <h3 className="font-semibold text-white text-base">Provision Managed Database</h3>
+                <h3 className="font-semibold text-[var(--text-primary)] text-base">Provision Managed Database</h3>
                 <p className="text-xs text-[var(--text-secondary)]">For {customer.name} ({customer.email})</p>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-white p-1"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-full hover:bg-[var(--surface-2)]"
               >
                 ✕
               </button>

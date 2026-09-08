@@ -79,13 +79,13 @@ export default function LegalAcceptanceForm({ policies }: Props) {
         <div key={policy.id} className="card space-y-3">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-base font-semibold text-white">{policy.title}</h3>
+              <h3 className="text-base font-semibold text-[var(--text-primary)]">{policy.title}</h3>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">Version: {policy.version}</p>
             </div>
             <button
               type="button"
               onClick={() => setExpandedId(expandedId === policy.id ? null : policy.id)}
-              className="text-xs text-[var(--brand-green)] hover:underline transition-colors whitespace-nowrap font-medium"
+              className="text-xs text-[var(--accent)] hover:underline transition-colors whitespace-nowrap font-semibold"
             >
               {expandedId === policy.id ? 'Collapse ↑' : 'Read Policy ↓'}
             </button>
@@ -93,7 +93,7 @@ export default function LegalAcceptanceForm({ policies }: Props) {
 
           {expandedId === policy.id && (
             <div
-              className="text-xs text-[var(--text-secondary)] leading-relaxed max-h-64 overflow-y-auto p-4 rounded-lg"
+              className="text-xs text-[var(--text-secondary)] leading-relaxed max-h-64 overflow-y-auto p-4 rounded-xl"
               style={{ background: 'var(--background)', border: '1px solid var(--border)' }}
             >
               <pre className="whitespace-pre-wrap font-sans leading-relaxed">{policy.content}</pre>
@@ -105,11 +105,11 @@ export default function LegalAcceptanceForm({ policies }: Props) {
               type="checkbox"
               checked={acceptedIds.has(policy.id)}
               onChange={() => toggleAccept(policy.id)}
-              className="mt-0.5 accent-[var(--brand-green)] w-4 h-4 rounded cursor-pointer"
+              className="mt-0.5 accent-[var(--accent)] w-4 h-4 rounded-sm cursor-pointer"
             />
             <span className="text-xs text-[var(--text-secondary)] leading-normal">
               I have read and agree to the{' '}
-              <strong className="text-white">{policy.title}</strong>
+              <strong className="text-[var(--text-primary)]">{policy.title}</strong>
               {' '}({policy.version})
             </span>
           </label>

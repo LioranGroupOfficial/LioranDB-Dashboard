@@ -112,7 +112,7 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
           >
             <Icon
               className={`w-4 h-4 shrink-0 transition-colors ${
-                active ? 'text-[var(--brand-green)]' : 'text-[var(--text-muted)] group-hover:text-white'
+                active ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'
               }`}
             />
             {(isMobile || !collapsed) && (
@@ -128,7 +128,7 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
     <>
       {/* Desktop Sticky Sidebar */}
       <aside
-        className={`hidden md:flex h-screen sticky top-0 shrink-0 border-r border-[var(--border)] bg-[#001824] flex-col z-20 transition-all duration-200 select-none ${
+        className={`hidden md:flex h-screen sticky top-0 shrink-0 border-r border-[var(--border)] bg-[var(--sidebar-bg)] flex-col z-20 transition-all duration-200 select-none ${
           collapsed ? 'w-16' : 'w-60'
         }`}
       >
@@ -139,8 +139,8 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
               <div className="w-7 h-7 rounded-lg bg-[var(--brand-green)] text-[var(--on-primary)] font-bold flex items-center justify-center shadow-sm shadow-[var(--brand-green)]/20">
                 <Database className="w-4 h-4 text-[var(--on-primary)]" />
               </div>
-              <span className="text-base font-bold tracking-tight text-white">
-                Lioran<span className="text-[var(--brand-green)]">DB</span>
+              <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
+                Lioran<span className="text-[var(--accent)]">DB</span>
               </span>
             </Link>
           ) : (
@@ -153,7 +153,7 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
             type="button"
             onClick={toggleCollapsed}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[var(--surface-2)] transition-colors ${
+            className={`p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors ${
               collapsed ? 'hidden' : 'block'
             }`}
             aria-label="Toggle sidebar"
@@ -168,7 +168,7 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
               type="button"
               onClick={toggleCollapsed}
               title="Expand sidebar"
-              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[var(--surface-2)] transition-colors"
+              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
             >
               <PanelLeftOpen className="w-4 h-4" />
             </button>
@@ -178,15 +178,15 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
         <NavLinks />
 
         {/* Sticky Bottom Actions */}
-        <div className="p-3 border-t border-[var(--border)] mt-auto bg-[#001824]">
+        <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
           <button
             onClick={handleLogout}
             title={collapsed ? 'Sign out' : undefined}
-            className={`sidebar-link w-full text-left text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded-full ${
+            className={`sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-full ${
               collapsed ? 'justify-center px-0' : 'px-3.5'
             }`}
           >
-            <LogOut className="w-4 h-4 shrink-0 text-red-400" />
+            <LogOut className="w-4 h-4 shrink-0 text-red-500" />
             {!collapsed && <span className="text-xs font-semibold">Sign Out</span>}
           </button>
         </div>
@@ -197,13 +197,13 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
         <div className="fixed inset-0 z-50 md:hidden flex">
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/80 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={onMobileClose}
             aria-hidden="true"
           />
 
           {/* Drawer Panel */}
-          <aside className="relative w-64 max-w-[80vw] bg-[#001824] border-r border-[var(--border)] flex flex-col h-full z-50 select-none shadow-2xl">
+          <aside className="relative w-64 max-w-[80vw] bg-[var(--sidebar-bg)] border-r border-[var(--border)] flex flex-col h-full z-50 select-none shadow-2xl">
             <div className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-[var(--border)]">
               <Link
                 href="/dashboard"
@@ -213,14 +213,14 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
                 <div className="w-7 h-7 rounded-lg bg-[var(--brand-green)] text-[var(--on-primary)] font-bold flex items-center justify-center">
                   <Database className="w-4 h-4 text-[var(--on-primary)]" />
                 </div>
-                <span className="text-base font-bold tracking-tight text-white">
-                  Lioran<span className="text-[var(--brand-green)]">DB</span>
+                <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
+                  Lioran<span className="text-[var(--accent)]">DB</span>
                 </span>
               </Link>
               <button
                 type="button"
                 onClick={onMobileClose}
-                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[var(--surface-2)]"
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
                 aria-label="Close menu"
               >
                 <X className="w-5 h-5" />
@@ -229,12 +229,12 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
 
             <NavLinks isMobile />
 
-            <div className="p-3 border-t border-[var(--border)] mt-auto bg-[#001824]">
+            <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
               <button
                 onClick={handleLogout}
-                className="sidebar-link w-full text-left text-red-400 hover:text-red-300 hover:bg-red-950/40 px-3.5 rounded-full"
+                className="sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3.5 rounded-full"
               >
-                <LogOut className="w-4 h-4 shrink-0 text-red-400" />
+                <LogOut className="w-4 h-4 shrink-0 text-red-500" />
                 <span className="text-xs font-semibold">Sign Out</span>
               </button>
             </div>

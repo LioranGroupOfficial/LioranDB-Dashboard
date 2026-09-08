@@ -38,11 +38,11 @@ export default function StatusTimeline({ stage, rejectionReason }: Props) {
           <div key={idx} className="flex items-start gap-3 relative">
             <div className="mt-0.5 shrink-0">
               {isRejected ? (
-                <XCircle className="w-4 h-4 text-red-400" />
+                <XCircle className="w-4 h-4 text-red-500" />
               ) : isComplete ? (
-                <CheckCircle2 className="w-4 h-4 text-[var(--brand-green)]" />
+                <CheckCircle2 className="w-4 h-4 text-[var(--accent)]" />
               ) : isCurrent ? (
-                <Clock className="w-4 h-4 text-[var(--brand-green)] animate-pulse" />
+                <Clock className="w-4 h-4 text-[var(--accent)] animate-pulse" />
               ) : (
                 <Circle className="w-4 h-4 text-[var(--text-muted)] opacity-30" />
               )}
@@ -51,11 +51,11 @@ export default function StatusTimeline({ stage, rejectionReason }: Props) {
               <p
                 className={`text-xs ${
                   isRejected
-                    ? 'text-red-400 font-medium'
+                    ? 'text-red-500 font-medium'
                     : isComplete
                     ? 'text-[var(--text-secondary)]'
                     : isCurrent
-                    ? 'text-white font-semibold'
+                    ? 'text-[var(--text-primary)] font-bold'
                     : 'text-[var(--text-muted)]'
                 }`}
               >

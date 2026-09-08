@@ -104,16 +104,16 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
           <div className="card border-[var(--border)] bg-[var(--surface)] max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 rounded-xl">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-              <div className="flex items-center gap-2 text-[var(--brand-green)]">
+              <div className="flex items-center gap-2 text-[var(--accent)]">
                 <Link2 className="w-5 h-5" />
-                <h3 className="text-sm sm:text-base font-semibold text-white">
+                <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
                   Attach Razorpay Monthly Link
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-white text-sm p-1"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm p-1 rounded-full hover:bg-[var(--surface-2)]"
               >
                 ✕
               </button>
@@ -127,7 +127,7 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
             )}
             {success && (
               <div className="alert-banner alert-banner-success text-xs">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--brand-green)]" />
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--accent)]" />
                 <span>{success}</span>
               </div>
             )}

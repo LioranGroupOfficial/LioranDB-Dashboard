@@ -111,13 +111,13 @@ export default async function DashboardPage() {
 
       {/* Subscription info if active */}
       {subscription && stage === 'ACTIVE' && (
-        <div className="card space-y-4 border border-[var(--brand-green)]/30 bg-[var(--surface)]">
+        <div className="card space-y-4 border border-[var(--accent)]/30 bg-[var(--surface)]">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-[var(--brand-green)]" />
+              <CreditCard className="w-3.5 h-3.5 text-[var(--accent)]" />
               Active Subscription
             </h2>
-            <Link href="/billing" className="text-xs text-[var(--brand-green)] hover:underline flex items-center gap-1 font-medium">
+            <Link href="/billing" className="text-xs text-[var(--accent)] hover:underline flex items-center gap-1 font-semibold">
               <span>View Invoices &amp; Razorpay Payments</span>
               <ArrowRight className="w-3 h-3" />
             </Link>
@@ -125,13 +125,13 @@ export default async function DashboardPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
             <div>
               <p className="text-[var(--text-muted)]">Plan</p>
-              <p className="text-sm text-white font-semibold mt-0.5">
+              <p className="text-sm text-[var(--text-primary)] font-semibold mt-0.5">
                 {subscription.planName}
               </p>
             </div>
             <div>
               <p className="text-[var(--text-muted)]">Monthly</p>
-              <p className="text-sm font-mono text-[var(--brand-green)] font-semibold mt-0.5">
+              <p className="text-sm font-mono text-[var(--accent)] font-semibold mt-0.5">
                 ₹5,000/month
               </p>
             </div>
@@ -144,7 +144,7 @@ export default async function DashboardPage() {
             {subscription.nextPaymentDate && (
               <div>
                 <p className="text-[var(--text-muted)]">Next Payment Due</p>
-                <p className="text-sm text-white font-medium mt-0.5">
+                <p className="text-sm text-[var(--text-primary)] font-medium mt-0.5">
                   {new Date(subscription.nextPaymentDate).toLocaleDateString('en-IN', {
                     day: 'numeric',
                     month: 'short',
@@ -237,9 +237,9 @@ function StageActions({ stage, applicationId, rejectionReason, version }: {
   switch (stage) {
     case 'APPLICATION_REQUIRED':
       return (
-        <div className="card border-[var(--brand-green)]/30 bg-[var(--surface)] p-6 space-y-4">
+        <div className="card border-[var(--accent)]/30 bg-[var(--surface)] p-6 space-y-4">
           <div>
-            <h2 className="text-base font-semibold text-white">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
               Submit Managed Hosting Application
             </h2>
             <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
@@ -258,9 +258,9 @@ function StageActions({ stage, applicationId, rejectionReason, version }: {
     case 'APPLICATION_PENDING':
       return (
         <div className="card border-[var(--border)] bg-[var(--surface)] p-6 space-y-3">
-          <div className="flex items-center gap-2 text-[var(--accent-orange)]">
+          <div className="flex items-center gap-2 text-amber-500">
             <Clock className="w-4 h-4" />
-            <h2 className="text-base font-semibold">Application Under Review</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Application Under Review</h2>
           </div>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
             Your application (version #{version || 1}) has been submitted and is currently being verified by the LioranDB engineering and support team.
@@ -276,10 +276,10 @@ function StageActions({ stage, applicationId, rejectionReason, version }: {
 
     case 'APPLICATION_APPROVED':
       return (
-        <div className="card border-[var(--brand-green)] bg-[#002f20] p-6 space-y-3">
-          <div className="flex items-center gap-2 text-[var(--brand-green)]">
+        <div className="card border-[var(--accent)] bg-[var(--surface-feature)] p-6 space-y-3">
+          <div className="flex items-center gap-2 text-[var(--accent)]">
             <CheckCircle2 className="w-4 h-4" />
-            <h2 className="text-base font-semibold">Application Approved</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Application Approved</h2>
           </div>
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
             Your application has passed review. Please review and accept the Master Services Agreement &amp; Acceptable Use Policy to proceed to node provisioning.
@@ -295,10 +295,10 @@ function StageActions({ stage, applicationId, rejectionReason, version }: {
 
     case 'APPLICATION_REJECTED':
       return (
-        <div className="card border-red-900/60 bg-[#250d0d] p-6 space-y-3">
-          <div className="flex items-center gap-2 text-red-400">
+        <div className="card border-red-500/40 bg-red-500/10 p-6 space-y-3">
+          <div className="flex items-center gap-2 text-red-500">
             <AlertTriangle className="w-4 h-4" />
-            <h2 className="text-base font-semibold">Application Not Approved</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Application Not Approved</h2>
           </div>
           {rejectionReason && (
             <div className="alert-banner alert-banner-error text-xs">
@@ -319,8 +319,8 @@ function StageActions({ stage, applicationId, rejectionReason, version }: {
 
     case 'TERMS_REQUIRED':
       return (
-        <div className="card border-[var(--brand-green)]/40 p-6 space-y-3">
-          <h2 className="text-base font-semibold text-white">
+        <div className="card border-[var(--accent)]/40 p-6 space-y-3">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">
             Accept Legal Agreements
           </h2>
           <p className="text-xs text-[var(--text-secondary)]">
@@ -338,9 +338,9 @@ function StageActions({ stage, applicationId, rejectionReason, version }: {
     case 'PROVISIONING':
       return (
         <div className="card p-6 space-y-2">
-          <div className="flex items-center gap-2 text-[var(--brand-green)]">
+          <div className="flex items-center gap-2 text-[var(--accent)]">
             <Server className="w-4 h-4 animate-pulse" />
-            <h2 className="text-base font-semibold">Cluster Provisioning in Progress</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Cluster Provisioning in Progress</h2>
           </div>
           <p className="text-xs text-[var(--text-secondary)]">
             Your dedicated LioranDB node is being deployed and configured with TLS certs, firewall access, and credentials.
@@ -350,8 +350,8 @@ function StageActions({ stage, applicationId, rejectionReason, version }: {
 
     case 'SUSPENDED':
       return (
-        <div className="card border-red-900/60 bg-[#250d0d] p-6 space-y-3">
-          <h2 className="text-base font-semibold text-red-400">
+        <div className="card border-red-500/40 bg-red-500/10 p-6 space-y-3">
+          <h2 className="text-base font-semibold text-red-500">
             Cluster Service Suspended
           </h2>
           <p className="text-xs text-[var(--text-secondary)]">

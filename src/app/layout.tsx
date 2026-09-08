@@ -18,12 +18,17 @@ const sourceCodePro = Source_Code_Pro({
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://app.liorandb.com';
 
+import { ThemeProvider } from '@/components/theme/ThemeProvider';
+
 export const viewport: Viewport = {
-  themeColor: '#001e2b',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#001e2b' },
+  ],
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
-  colorScheme: 'dark',
+  colorScheme: 'light dark',
 };
 
 export const metadata: Metadata = {
@@ -83,9 +88,29 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${manrope.variable} ${sourceCodePro.variable}`}>
-      <body className="min-h-screen bg-[var(--background)] text-[var(--text-primary)] font-sans antialiased">
-        {children}
+    <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${sourceCodePro.variable}`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var t = localStorage.getItem('lioran_theme') || 'light';
+                if (t === 'dark') {
+                  document.documentElement.classList.add('dark');
+                  document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                  document.documentElement.setAttribute('data-theme', 'light');
+                }
+              } catch (_) {}
+            `,
+          }}
+        />
+      </head>
+      <body className="min-h-screen bg-[var(--background)] text-[var(--text-primary)] font-sans antialiased transition-colors duration-150">
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

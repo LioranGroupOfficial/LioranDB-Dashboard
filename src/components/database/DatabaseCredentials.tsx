@@ -48,7 +48,7 @@ export default function DatabaseCredentials({ db }: Props) {
         <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
           Connection Details
         </h2>
-        <span className="text-[11px] font-mono text-[var(--brand-green)] bg-[var(--surface-2)] px-2.5 py-0.5 rounded-full border border-[var(--border)]">
+        <span className="text-[11px] font-mono text-[var(--accent)] bg-[var(--surface-2)] px-2.5 py-0.5 rounded-full border border-[var(--border)]">
           TLS v1.3 Verified
         </span>
       </div>
@@ -62,7 +62,7 @@ export default function DatabaseCredentials({ db }: Props) {
               {credExpiry && !isExpired && (
                 <> Credentials expire: {credExpiry.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST.</>
               )}
-              {isExpired && <strong className="text-red-400"> Credentials have expired — contact support.</strong>}
+              {isExpired && <strong className="text-red-500 font-semibold"> Credentials have expired — contact support.</strong>}
             </p>
           </div>
         </div>
@@ -82,7 +82,7 @@ export default function DatabaseCredentials({ db }: Props) {
             <button
               type="button"
               onClick={() => setRevealed(!revealed)}
-              className="text-xs text-[var(--brand-green)] hover:underline transition-colors font-medium"
+              className="text-xs text-[var(--accent)] hover:underline transition-colors font-semibold"
             >
               {revealed ? 'Hide' : 'Reveal URI'}
             </button>
@@ -104,7 +104,7 @@ export default function DatabaseCredentials({ db }: Props) {
             </div>
           </div>
           {revealed && (
-            <p className="text-[11px] text-red-300">
+            <p className="text-[11px] text-amber-600 dark:text-red-300">
               Keep this URI secure. Never commit connection strings containing credentials to public repositories.
             </p>
           )}
@@ -137,13 +137,13 @@ function CredRow({
   copied: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-1.5 px-3 rounded-lg bg-[var(--surface-2)]/60 border border-[var(--border)]">
+    <div className="flex items-center justify-between gap-4 py-1.5 px-3 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--border)]">
       <span className="text-xs text-[var(--text-muted)] w-28 shrink-0">{label}</span>
-      <span className="text-xs text-white font-mono flex-1 truncate">{value}</span>
+      <span className="text-xs text-[var(--text-primary)] font-mono flex-1 truncate">{value}</span>
       <button
         type="button"
         onClick={onCopy}
-        className="text-xs text-[var(--text-secondary)] hover:text-[var(--brand-green)] transition-colors shrink-0 px-2 py-0.5 rounded-full hover:bg-[var(--surface-3)]"
+        className="text-xs text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors shrink-0 px-2.5 py-0.5 rounded-full hover:bg-[var(--surface-3)] font-medium"
       >
         {copied ? '✓ Copied' : 'Copy'}
       </button>

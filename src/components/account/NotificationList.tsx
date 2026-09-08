@@ -57,14 +57,14 @@ export default function NotificationList({ notifications: initial }: Props) {
         {notifications.map((n) => (
           <div
             key={n.id}
-            className={`p-3.5 rounded-lg border text-sm transition-colors ${
+            className={`p-3.5 rounded-xl border text-sm transition-colors ${
               n.read
                 ? 'border-[var(--border)] bg-[var(--surface-2)]/60 opacity-80'
-                : 'border-[var(--brand-green)]/40 bg-[var(--surface)]'
+                : 'border-[var(--accent)]/40 bg-[var(--surface)] shadow-xs'
             }`}
           >
             <div className="flex justify-between items-start gap-2">
-              <span className="font-semibold text-white text-xs">{n.title}</span>
+              <span className="font-semibold text-[var(--text-primary)] text-xs">{n.title}</span>
               <span className="text-xs text-[var(--text-muted)] shrink-0 font-mono">
                 {new Date(n.createdAt).toLocaleDateString('en-IN', {
                   month: 'short',
@@ -76,7 +76,7 @@ export default function NotificationList({ notifications: initial }: Props) {
             </div>
             <p className="text-xs text-[var(--text-secondary)] mt-1">{n.body}</p>
             {n.link && (
-              <Link href={n.link} className="text-xs text-[var(--brand-green)] hover:underline mt-2 inline-block font-medium">
+              <Link href={n.link} className="text-xs text-[var(--accent)] hover:underline mt-2 inline-block font-semibold">
                 View details →
               </Link>
             )}

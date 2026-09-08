@@ -77,16 +77,16 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
           <div className="card border-[var(--border)] bg-[var(--surface)] max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-              <div className="flex items-center gap-2 text-[var(--brand-green)]">
+              <div className="flex items-center gap-2 text-[var(--accent)]">
                 <CreditCard className="w-5 h-5" />
-                <h3 className="text-sm sm:text-base font-semibold text-white">
+                <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
                   Submit Razorpay Payment Proof
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-white text-sm p-1"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm p-1 rounded-full hover:bg-[var(--surface-2)]"
               >
                 ✕
               </button>
@@ -100,19 +100,19 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
             )}
             {success && (
               <div className="alert-banner alert-banner-success text-xs">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--brand-green)]" />
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--accent)]" />
                 <span>{success}</span>
               </div>
             )}
 
-            <div className="p-4 bg-[var(--surface-2)] border border-[var(--border)] rounded-lg space-y-2 text-xs">
+            <div className="p-4 bg-[var(--surface-2)] border border-[var(--border)] rounded-xl space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-[var(--text-muted)]">Invoice</span>
-                <span className="text-white font-medium">{payment.billingMonth || 'Monthly Hosting'}</span>
+                <span className="text-[var(--text-primary)] font-semibold">{payment.billingMonth || 'Monthly Hosting'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[var(--text-muted)]">Amount</span>
-                <span className="font-mono text-[var(--brand-green)] font-bold">₹{payment.amount.toLocaleString('en-IN')}</span>
+                <span className="font-mono text-[var(--accent)] font-bold">₹{payment.amount.toLocaleString('en-IN')}</span>
               </div>
               {payment.razorpayPaymentLink && (
                 <div className="pt-2 border-t border-[var(--border)]">

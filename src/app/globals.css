@@ -19,20 +19,58 @@
     --accent-pink: #f06bb8;
     --accent-blue: #3d4f9f;
 
-    /* Theme Palette */
+    /* Light Theme Palette (DEFAULT) from DESIGN.md */
+    --background: #ffffff;
+    --canvas-dark: #001e2b;
+    --surface: #ffffff;
+    --surface-2: #f4f7f6;
+    --surface-3: #e1e5e8;
+    --surface-soft: #f9fbfa;
+    --surface-feature: #e3fcef;
+    --sidebar-bg: #f9fbfa;
+    --header-bg: #ffffff;
+    --border: #e1e5e8;
+    --border-light: #eceff1;
+    --hairline-dark: #1c2d38;
+    --hairline-strong: #c1ccd6;
+
+    /* Text Colors - Light Mode */
+    --text-primary: #001e2b;
+    --text-secondary: #3d4f5b;
+    --text-muted: #7c8c9a;
+    --ink: #001e2b;
+    --slate: #3d4f5b;
+    --steel: #5c6c7a;
+
+    /* Accents & Status - Light Mode */
+    --accent: #00684a;
+    --accent-dark: #004d36;
+    --accent-primary: #00ed64;
+    --success: #00684a;
+    --warning: #fa6e39;
+    --error: #dc2626;
+    --info: #0284c7;
+
+    --card-shadow: 0 1px 4px rgba(0, 30, 43, 0.06), 0 1px 2px rgba(0, 30, 43, 0.04);
+  }
+
+  .dark {
+    /* Dark Theme Palette from DESIGN.md */
     --background: #001e2b;
     --canvas-dark: #001e2b;
     --surface: #002838;
     --surface-2: #063446;
     --surface-3: #0d4054;
-    --surface-soft: #f4f7f6;
-    --surface-feature: #e3fcef;
+    --surface-soft: #001824;
+    --surface-feature: #003822;
+    --sidebar-bg: #001824;
+    --header-bg: #001e2b;
     --border: #1c3b4a;
     --border-light: #2d5162;
     --hairline-dark: #1c2d38;
     --hairline-strong: #2d5162;
 
-    /* Text Colors */
+    /* Text Colors - Dark Mode */
     --text-primary: #ffffff;
     --text-secondary: #a8b3bc;
     --text-muted: #7c8c9a;
@@ -40,7 +78,7 @@
     --slate: #3d4f5b;
     --steel: #5c6c7a;
 
-    /* Accents & Status */
+    /* Accents & Status - Dark Mode */
     --accent: #00ed64;
     --accent-dark: #00b545;
     --accent-primary: #00ed64;
@@ -48,6 +86,8 @@
     --warning: #fa6e39;
     --error: #ef4444;
     --info: #38bdf8;
+
+    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   }
 
   * {
@@ -178,16 +218,17 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 20px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--card-shadow);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
   }
 
   .code-mockup-card {
     background-color: var(--canvas-dark);
-    border: 1px solid var(--border);
+    border: 1px solid #1c3b4a;
     border-radius: 12px;
     padding: 16px 20px;
     font-family: var(--font-mono), 'Source Code Pro', monospace;
-    color: var(--text-primary);
+    color: #ffffff;
   }
 
   .input-field {
@@ -198,8 +239,13 @@
   }
   .input-field:focus {
     outline: none;
-    border-color: var(--brand-green);
+    border-color: var(--brand-green-mid);
+    background-color: var(--surface);
+    box-shadow: 0 0 0 1px var(--brand-green-mid);
+  }
+  .dark .input-field:focus {
     background-color: var(--surface-2);
+    border-color: var(--brand-green);
     box-shadow: 0 0 0 1px var(--brand-green);
   }
   .input-field::placeholder {
@@ -217,19 +263,34 @@
 
   /* Badges with full rounded pills */
   .badge {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold transition-colors;
   }
   .badge-active {
+    background-color: #e3fcef;
+    color: #00684a;
+    border: 1px solid #c3f0d2;
+  }
+  .dark .badge-active {
     background-color: #003822;
     color: var(--brand-green);
     border: 1px solid var(--brand-green-dark);
   }
   .badge-pending {
+    background-color: #fff8e0;
+    color: #946f3f;
+    border: 1px solid #fed7aa;
+  }
+  .dark .badge-pending {
     background-color: #2e1704;
     color: var(--accent-orange);
     border: 1px solid #7c3a10;
   }
   .badge-suspended {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+  }
+  .dark .badge-suspended {
     background-color: #2e0c0c;
     color: #f87171;
     border: 1px solid #7f1d1d;
@@ -240,6 +301,11 @@
     border: 1px solid var(--border);
   }
   .badge-info {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+  }
+  .dark .badge-info {
     background-color: #0c2538;
     color: #38bdf8;
     border: 1px solid #0369a1;
@@ -252,9 +318,14 @@
   }
   .sidebar-link:hover {
     background-color: var(--surface-2);
-    color: #ffffff;
+    color: var(--text-primary);
   }
   .sidebar-link.active {
+    background-color: var(--surface-feature);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .dark .sidebar-link.active {
     background-color: var(--brand-teal);
     color: var(--brand-green);
     font-weight: 600;
@@ -273,21 +344,41 @@
     @apply flex items-start gap-3 p-3.5 rounded-xl text-sm leading-relaxed;
   }
   .alert-banner-error {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+  }
+  .dark .alert-banner-error {
     background-color: #2a0e0e;
     border: 1px solid #7f1d1d;
     color: #fca5a5;
   }
   .alert-banner-success {
+    background-color: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+  }
+  .dark .alert-banner-success {
     background-color: #042918;
     border: 1px solid #00684a;
     color: #86efac;
   }
   .alert-banner-warning {
+    background-color: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+  }
+  .dark .alert-banner-warning {
     background-color: #2e1704;
     border: 1px solid #78350f;
     color: #fde047;
   }
   .alert-banner-info {
+    background-color: #f0f9ff;
+    border: 1px solid #bae6fd;
+    color: #075985;
+  }
+  .dark .alert-banner-info {
     background-color: #0b253a;
     border: 1px solid #1e3a8a;
     color: #93c5fd;

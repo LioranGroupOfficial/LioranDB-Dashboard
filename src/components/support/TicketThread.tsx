@@ -157,17 +157,17 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
           return (
             <div
               key={m.id}
-              className={`p-5 rounded-xl border text-sm ${
+              className={`p-5 rounded-xl border text-sm transition-colors ${
                 isInternal
-                  ? 'border-yellow-600/40 bg-[#2b1e06]/30'
+                  ? 'border-yellow-600/40 bg-amber-500/10'
                   : isStaffAuthor
-                  ? 'border-[var(--brand-green)]/40 bg-[#002f20]/30'
-                  : 'border-[var(--border)] bg-[var(--surface)]'
+                  ? 'border-[var(--accent)]/30 bg-emerald-500/10'
+                  : 'border-[var(--border)] bg-[var(--surface)] shadow-xs'
               }`}
             >
               <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[var(--border)]">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-white">
+                  <span className="font-semibold text-[var(--text-primary)]">
                     {isStaffAuthor ? 'LioranDB Support Engineering' : 'You (Customer)'}
                   </span>
                   {isStaffAuthor && (
