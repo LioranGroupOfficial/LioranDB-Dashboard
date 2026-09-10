@@ -1,11 +1,13 @@
 import { requireRole } from '@/lib/auth/guards';
 import { connectToDatabase, PolicyDocument, PolicyAcceptance } from '@/lib/db';
+import { ensureDefaultPolicies } from '@/lib/policies';
 
 export const metadata = { title: 'Policy Documents — Admin' };
 
 export default async function AdminPoliciesPage() {
   await requireRole('admin');
   await connectToDatabase();
+  await ensureDefaultPolicies();
 
   const [policies, acceptanceCounts] = await Promise.all([
     PolicyDocument.find().sort({ slug: 1, version: -1 }).lean(),

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { CheckCircle2, ArrowRight } from 'lucide-react';
 
 interface Policy {
   id: string;
@@ -14,9 +16,10 @@ interface Policy {
 
 interface Props {
   policies: Policy[];
+  allPreviouslyAccepted?: boolean;
 }
 
-export default function LegalAcceptanceForm({ policies }: Props) {
+export default function LegalAcceptanceForm({ policies, allPreviouslyAccepted = false }: Props) {
   const router = useRouter();
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(
     new Set(policies.filter((p) => p.accepted).map((p) => p.id))
@@ -25,7 +28,7 @@ export default function LegalAcceptanceForm({ policies }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const allAccepted = policies.every((p) => acceptedIds.has(p.id));
+  const allAccepted = policies.length > 0 && policies.every((p) => acceptedIds.has(p.id));
 
   function toggleAccept(id: string) {
     setAcceptedIds((prev) => {
@@ -40,6 +43,11 @@ export default function LegalAcceptanceForm({ policies }: Props) {
   }
 
   async function handleSubmit() {
+    if (allPreviouslyAccepted) {
+      router.push('/dashboard');
+      return;
+    }
+
     if (!allAccepted) {
       setError('You must read and accept all agreements to continue.');
       return;
@@ -75,11 +83,32 @@ export default function LegalAcceptanceForm({ policies }: Props) {
 
   return (
     <div className="max-w-2xl space-y-4">
+      {allPreviouslyAccepted && (
+        <div className="alert-banner alert-banner-success text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-[var(--brand-green)] shrink-0" />
+            <span>You have signed all active agreements. Your acceptance record is securely logged.</span>
+          </div>
+          <Link
+            href="/dashboard"
+            className="btn-secondary py-1.5 px-3 text-xs font-semibold inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0"
+          >
+            <span>Dashboard</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
+
       {policies.map((policy) => (
         <div key={policy.id} className="card space-y-3">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-base font-semibold text-[var(--text-primary)]">{policy.title}</h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-semibold text-[var(--text-primary)]">{policy.title}</h3>
+                {policy.accepted && (
+                  <span className="badge badge-active text-[10px] font-semibold">Signed</span>
+                )}
+              </div>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">Version: {policy.version}</p>
             </div>
             <button
@@ -122,9 +151,11 @@ export default function LegalAcceptanceForm({ policies }: Props) {
         </div>
       )}
 
-      <div className="alert-banner alert-banner-warning text-xs">
-        By clicking &quot;Accept all and continue&quot;, you confirm that you have read and understood each of the above agreements. Your acceptance is recorded with a secure timestamp and IP verification.
-      </div>
+      {!allPreviouslyAccepted && (
+        <div className="alert-banner alert-banner-warning text-xs">
+          By clicking &quot;Accept all and continue&quot;, you confirm that you have read and understood each of the above agreements. Your acceptance is recorded with a secure timestamp and IP verification.
+        </div>
+      )}
 
       <button
         type="button"
@@ -132,7 +163,11 @@ export default function LegalAcceptanceForm({ policies }: Props) {
         disabled={!allAccepted || loading}
         className="btn-primary w-full py-2.5"
       >
-        {loading ? 'Recording acceptance...' : 'Accept All & Continue →'}
+        {loading
+          ? 'Recording acceptance...'
+          : allPreviouslyAccepted
+          ? 'Agreements Signed — Return to Dashboard →'
+          : 'Accept All & Continue →'}
       </button>
 
       {!allAccepted && (

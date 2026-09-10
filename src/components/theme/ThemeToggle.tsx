@@ -18,7 +18,7 @@ export default function ThemeToggle({ className = '' }: Props) {
 
   if (!mounted) {
     return (
-      <div className={`w-8 h-8 rounded-full border border-[var(--border)] bg-[var(--surface-2)] flex items-center justify-center opacity-70 ${className}`}>
+      <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-[var(--border)] bg-[var(--surface-2)] flex items-center justify-center opacity-70 shrink-0 ${className}`}>
         <Sun className="w-4 h-4 text-[var(--text-muted)]" />
       </div>
     );
@@ -30,7 +30,7 @@ export default function ThemeToggle({ className = '' }: Props) {
     <button
       type="button"
       onClick={toggleTheme}
-      className={`p-2 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer select-none ${className}`}
+      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors cursor-pointer select-none shrink-0 ${className}`}
       title={isDark ? 'Switch to Light mode' : 'Switch to Dark mode'}
       aria-label={isDark ? 'Switch to Light mode' : 'Switch to Dark mode'}
     >

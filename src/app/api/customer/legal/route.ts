@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { requireUserAPI } from '@/lib/auth/guards';
-import { connectToDatabase, User, PolicyDocument, PolicyAcceptance } from '@/lib/db';
+import { connectToDatabase, User, HostingApplication, PolicyDocument, PolicyAcceptance } from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { sendEmail, termsCompletedTemplate } from '@/lib/email';
@@ -14,11 +14,18 @@ export async function POST(req: NextRequest) {
 
     await connectToDatabase();
 
-    const user = await User.findById(sessionUser.userId);
+    const [user, latestApp] = await Promise.all([
+      User.findById(sessionUser.userId),
+      HostingApplication.findOne({ userId: sessionUser.userId }).sort({ createdAt: -1 }),
+    ]);
+
     if (!user) return Response.json({ error: 'User not found.' }, { status: 404 });
 
-    const allowedStages = ['APPLICATION_APPROVED', 'TERMS_REQUIRED'];
-    if (!allowedStages.includes(user.onboardingStage)) {
+    const isEligible =
+      ['APPLICATION_APPROVED', 'TERMS_REQUIRED', 'PROVISIONING', 'ACTIVE'].includes(user.onboardingStage) ||
+      latestApp?.status === 'APPROVED';
+
+    if (!isEligible) {
       return Response.json({ error: 'Cannot accept terms at this stage.' }, { status: 400 });
     }
 
@@ -59,10 +66,12 @@ export async function POST(req: NextRequest) {
       )
     );
 
-    // Update onboarding stage to TERMS_REQUIRED → PROVISIONING
-    await User.findByIdAndUpdate(user._id, {
-      onboardingStage: 'PROVISIONING',
-    });
+    // Update onboarding stage to PROVISIONING if currently in onboarding
+    if (!['PROVISIONING', 'ACTIVE', 'SUSPENDED'].includes(user.onboardingStage)) {
+      await User.findByIdAndUpdate(user._id, {
+        onboardingStage: 'PROVISIONING',
+      });
+    }
 
     // Audit log each acceptance
     await Promise.all(
