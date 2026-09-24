@@ -3,6 +3,8 @@ import mongoose, { Document, Model, Schema } from 'mongoose';
 export type SubscriptionStatus =
   | 'PENDING'
   | 'ACTIVE'
+  | 'PAYMENT_DUE'
+  | 'GRACE_PERIOD'
   | 'PAST_DUE'
   | 'SUSPENDED'
   | 'CANCELLED';
@@ -18,12 +20,17 @@ export interface ISubscription extends Document {
   backupAddon?: boolean;
   backupPricePaise?: number;
   totalPricePaise?: number;
+  monthlyPricePaise?: number;
   currency: string;
   status: SubscriptionStatus;
+  autoRenew: boolean;
   startedAt?: Date;
   currentPeriodStart?: Date;
   currentPeriodEnd?: Date;
   nextPaymentDate?: Date;
+  nextBillingAt?: Date;
+  lastChargedAt?: Date;
+  gracePeriodEndsAt?: Date;
   cancelAtPeriodEnd?: boolean;
   suspendedAt?: Date;
   suspensionReason?: string;
@@ -48,16 +55,29 @@ const SubscriptionSchema = new Schema<ISubscription>(
     backupAddon: { type: Boolean, default: false },
     backupPricePaise: { type: Number, default: 0 },
     totalPricePaise: { type: Number },
+    monthlyPricePaise: { type: Number },
     currency: { type: String, required: true, default: 'INR' },
     status: {
       type: String,
-      enum: ['PENDING', 'ACTIVE', 'PAST_DUE', 'SUSPENDED', 'CANCELLED'],
+      enum: [
+        'PENDING',
+        'ACTIVE',
+        'PAYMENT_DUE',
+        'GRACE_PERIOD',
+        'PAST_DUE',
+        'SUSPENDED',
+        'CANCELLED',
+      ],
       default: 'PENDING',
     },
+    autoRenew: { type: Boolean, default: true },
     startedAt: { type: Date },
     currentPeriodStart: { type: Date },
     currentPeriodEnd: { type: Date },
     nextPaymentDate: { type: Date },
+    nextBillingAt: { type: Date },
+    lastChargedAt: { type: Date },
+    gracePeriodEndsAt: { type: Date },
     cancelAtPeriodEnd: { type: Boolean, default: false },
     suspendedAt: { type: Date },
     suspensionReason: { type: String },
@@ -72,6 +92,8 @@ const SubscriptionSchema = new Schema<ISubscription>(
 
 SubscriptionSchema.index({ userId: 1, status: 1 });
 SubscriptionSchema.index({ status: 1, nextPaymentDate: 1 });
+SubscriptionSchema.index({ status: 1, nextBillingAt: 1 });
+SubscriptionSchema.index({ status: 1, gracePeriodEndsAt: 1 });
 
 const Subscription: Model<ISubscription> =
   mongoose.models.Subscription ||

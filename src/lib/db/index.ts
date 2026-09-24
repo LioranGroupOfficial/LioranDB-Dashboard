@@ -13,6 +13,8 @@ export { default as SupportTicket } from './models/SupportTicket';
 export { default as TicketMessage } from './models/TicketMessage';
 export { default as AuditLog } from './models/AuditLog';
 export { default as Notification } from './models/Notification';
+export { default as Wallet } from './models/Wallet';
+export { default as WalletTransaction } from './models/WalletTransaction';
 
 export type { IUser, UserRole, OnboardingStage, IUserProfile } from './models/User';
 export type { IEmailVerification } from './models/EmailVerification';
@@ -36,3 +38,10 @@ export type {
 export type { ITicketMessage } from './models/TicketMessage';
 export type { IAuditLog, AuditAction } from './models/AuditLog';
 export type { INotification, NotificationType } from './models/Notification';
+export type { IWallet } from './models/Wallet';
+export type {
+  IWalletTransaction,
+  WalletTransactionType,
+  WalletTransactionCategory,
+} from './models/WalletTransaction';
+
