@@ -6,6 +6,7 @@ export interface SessionData {
   email: string;
   role: 'customer' | 'admin' | 'support';
   emailVerified: boolean;
+  accountRegistrationPaid?: boolean;
 }
 
 const SESSION_OPTIONS = {
@@ -34,6 +35,7 @@ export async function getCurrentUser(): Promise<SessionData | null> {
       email: session.email,
       role: session.role,
       emailVerified: session.emailVerified,
+      accountRegistrationPaid: session.accountRegistrationPaid,
     };
   } catch {
     return null;
@@ -46,4 +48,3 @@ export async function clearSession(): Promise<void> {
 }
 
 export { SESSION_OPTIONS };
-

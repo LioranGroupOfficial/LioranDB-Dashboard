@@ -1,371 +1,304 @@
-import { requireVerifiedUser } from '@/lib/auth/guards';
-import { connectToDatabase, User, HostingApplication, ManagedDatabase, Subscription } from '@/lib/db';
+import { requireRegisteredUser } from '@/lib/auth/guards';
+import { connectToDatabase, User, ManagedDatabase, Subscription, Payment } from '@/lib/db';
 import Link from 'next/link';
-import StatusTimeline from '@/components/dashboard/StatusTimeline';
-import type { OnboardingStage } from '@/lib/db/models/User';
+import {
+  Server,
+  Database,
+  CreditCard,
+  Plus,
+  ArrowRight,
+  ShieldCheck,
+  Cpu,
+  Layers,
+  Activity,
+  ExternalLink,
+  Sparkles,
+} from 'lucide-react';
+import { getPlan, formatPaiseToRupees } from '@/lib/plans';
 
 export const metadata = {
-  title: 'Overview & Dashboard',
-  description: 'Overview of your managed LioranDB clusters, onboarding stage, and deployment status.',
+  title: 'Dashboard Overview — LioranDB',
+  description: 'Manage LioranDB database instances, subscriptions, and compute metrics.',
 };
-import {
-  UserCheck,
-  FileText,
-  Server,
-  CreditCard,
-  ArrowRight,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  FileEdit,
-  LifeBuoy,
-} from 'lucide-react';
 
 export default async function DashboardPage() {
-  const sessionUser = await requireVerifiedUser();
+  const sessionUser = await requireRegisteredUser();
 
   await connectToDatabase();
 
-  const [user, latestApp, database, subscription] = await Promise.all([
+  const [user, instances, subscriptions, recentPayments] = await Promise.all([
     User.findById(sessionUser.userId).select('-passwordHash').lean(),
-    HostingApplication.findOne({ userId: sessionUser.userId })
+    ManagedDatabase.find({
+      $or: [{ customerId: sessionUser.userId }, { userId: sessionUser.userId }],
+      status: { $nin: ['DELETED', 'TERMINATED'] },
+    })
       .sort({ createdAt: -1 })
       .lean(),
-    ManagedDatabase.findOne({ customerId: sessionUser.userId }).lean(),
-    Subscription.findOne({ userId: sessionUser.userId })
-      .sort({ createdAt: -1 })
+    Subscription.find({ userId: sessionUser.userId, status: 'ACTIVE' }).lean(),
+    Payment.find({ userId: sessionUser.userId, status: 'PAID' })
+      .sort({ paidAt: -1 })
+      .limit(3)
       .lean(),
   ]);
 
-  const stage = user?.onboardingStage || 'EMAIL_VERIFICATION';
+  // Aggregate Metrics
+  const activeInstancesCount = instances.filter(
+    (i) => i.status === 'ACTIVE' || i.status === 'RUNNING'
+  ).length;
+
+  const backupEnabledCount = instances.filter((i) => i.backupEnabled).length;
+
+  const totalMonthlySpendPaise = instances.reduce((acc, inst) => {
+    if (inst.status === 'ACTIVE' || inst.status === 'RUNNING' || inst.status === 'PROVISIONING') {
+      const plan = getPlan(inst.planId);
+      const instPricePaise = inst.monthlyPricePaise || (plan?.pricePaise || 149900);
+      return acc + instPricePaise;
+    }
+    return acc;
+  }, 0);
+
+  const totalDocCapacity = instances.reduce((acc, inst) => {
+    const plan = getPlan(inst.planId);
+    return acc + (inst.documentLimit || plan?.documentLimit || 100000);
+  }, 0);
+
+  const formattedDocCapacity =
+    totalDocCapacity >= 1000000
+      ? `${(totalDocCapacity / 1000000).toFixed(1)}M docs`
+      : totalDocCapacity > 0
+      ? `${(totalDocCapacity / 1000).toFixed(0)}K docs`
+      : '0 docs';
 
   return (
-    <div className="space-y-6">
-      {/* Welcome */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="space-y-8 max-w-6xl mx-auto pb-16">
+      {/* Top Welcome Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">
-            {user?.profile?.fullName ? `Welcome, ${user.profile.fullName.split(' ')[0]}` : 'Dashboard Overview'}
+          <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-[11px] font-mono mb-2 border border-[var(--color-primary)]/20">
+            <Sparkles className="w-3 h-3" /> Account Active • Registration Verified
+          </div>
+          <h1 className="font-serif text-3xl font-normal text-[var(--color-text-primary)] tracking-tight">
+            {user?.profile?.fullName ? `Welcome back, ${user.profile.fullName.split(' ')[0]}` : 'Dashboard Overview'}
           </h1>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">
-            LioranDB Managed Multi-Model Database Hosting &amp; Developer Infrastructure
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            High-performance ACID compliant MongoDB-compatible managed clusters.
           </p>
         </div>
 
-        {latestApp && (
-          <Link
-            href="/application"
-            className="btn-secondary text-xs inline-flex items-center gap-2 self-start sm:self-auto py-2"
-          >
-            <FileEdit className="w-3.5 h-3.5 text-[var(--primary)]" />
-            <span>Edit / Reapply Form Settings</span>
-          </Link>
+        <Link
+          href="/database/create"
+          className="inline-flex items-center gap-2 py-2.5 px-4 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white text-xs font-medium transition-all shadow-xs shrink-0 self-start sm:self-auto"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Create Database Instance</span>
+        </Link>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-5 shadow-xs">
+          <div className="flex items-center justify-between text-[var(--color-text-tertiary)] text-xs font-mono uppercase tracking-wider mb-2">
+            <span>Active Instances</span>
+            <Server className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div className="font-serif text-3xl font-normal text-[var(--color-text-primary)]">
+            {activeInstancesCount}
+          </div>
+          <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
+            {instances.length} total provisioned
+          </p>
+        </div>
+
+        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-5 shadow-xs">
+          <div className="flex items-center justify-between text-[var(--color-text-tertiary)] text-xs font-mono uppercase tracking-wider mb-2">
+            <span>Monthly Spend</span>
+            <CreditCard className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div className="font-serif text-3xl font-normal text-[var(--color-text-primary)]">
+            {formatPaiseToRupees(totalMonthlySpendPaise)}
+          </div>
+          <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
+            Billed monthly via Razorpay
+          </p>
+        </div>
+
+        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-5 shadow-xs">
+          <div className="flex items-center justify-between text-[var(--color-text-tertiary)] text-xs font-mono uppercase tracking-wider mb-2">
+            <span>Document Capacity</span>
+            <Database className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div className="font-serif text-3xl font-normal text-[var(--color-text-primary)]">
+            {formattedDocCapacity}
+          </div>
+          <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
+            Combined guideline limit
+          </p>
+        </div>
+
+        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-5 shadow-xs">
+          <div className="flex items-center justify-between text-[var(--color-text-tertiary)] text-xs font-mono uppercase tracking-wider mb-2">
+            <span>Daily Backups</span>
+            <ShieldCheck className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div className="font-serif text-3xl font-normal text-[var(--color-text-primary)]">
+            {backupEnabledCount}
+          </div>
+          <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
+            Instances with snapshot retention
+          </p>
+        </div>
+      </div>
+
+      {/* Recent Instances Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-serif text-xl font-normal text-[var(--color-text-primary)]">
+              Managed Database Instances
+            </h2>
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              Your active clusters and connection endpoints.
+            </p>
+          </div>
+          {instances.length > 0 && (
+            <Link
+              href="/database"
+              className="text-xs text-[var(--color-primary)] hover:underline flex items-center gap-1 font-medium"
+            >
+              <span>View all instances</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
+        </div>
+
+        {instances.length === 0 ? (
+          <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-8 text-center space-y-3">
+            <Database className="w-8 h-8 text-[var(--color-text-tertiary)] mx-auto" />
+            <h3 className="text-sm font-medium text-[var(--color-text-primary)]">
+              No active instances deployed
+            </h3>
+            <p className="text-xs text-[var(--color-text-secondary)] max-w-sm mx-auto">
+              Ready to build? Choose a plan and deploy a dedicated or shared LioranDB cluster in seconds.
+            </p>
+            <div className="pt-2">
+              <Link
+                href="/database/create"
+                className="inline-flex items-center gap-2 py-2 px-4 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white text-xs font-medium transition-all shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create Database</span>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {instances.slice(0, 4).map((inst) => {
+              const plan = getPlan(inst.planId);
+              return (
+                <div
+                  key={inst._id.toString()}
+                  className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] hover:border-[var(--color-text-tertiary)] rounded-xl p-5 transition-all shadow-xs flex flex-col justify-between space-y-4"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <h3 className="font-serif text-lg font-medium text-[var(--color-text-primary)] truncate">
+                          {inst.name}
+                        </h3>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider ${
+                        inst.status === 'ACTIVE' || inst.status === 'RUNNING'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                          : inst.status === 'PROVISIONING'
+                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse'
+                          : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+                      }`}>
+                        {inst.status}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)] mb-4">
+                      <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)]">
+                        {inst.type || plan?.type || 'dedicated'}
+                      </span>
+                      <span>•</span>
+                      <span>{plan?.name || 'Managed Instance'}</span>
+                      <span>•</span>
+                      <span>{inst.region || 'ap-south-1'}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-text-secondary)] border-t border-[var(--color-border-subtle)] pt-3">
+                      <div className="flex items-center gap-1.5">
+                        <Cpu className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                        <span>{inst.cpu || plan?.cpu || '1 vCPU'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Server className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                        <span>{plan?.memory || '1 GB RAM'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-3 text-xs">
+                    <span className="font-serif font-bold text-[var(--color-text-primary)]">
+                      {inst.monthlyPricePaise ? formatPaiseToRupees(inst.monthlyPricePaise) : (plan ? `₹${plan.priceRupees.toLocaleString('en-IN')}/mo` : '₹1,499/mo')}
+                    </span>
+                    <Link
+                      href={`/database/${inst._id.toString()}`}
+                      className="py-1.5 px-3 rounded-lg bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-primary)] font-medium border border-[var(--color-border-subtle)] transition-colors inline-flex items-center gap-1.5"
+                    >
+                      <span>Manage</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
-      {/* Status Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatusCard
-          label="Account Status"
-          value="Verified Active"
-          status="active"
-          icon={UserCheck}
-          detail={sessionUser.email}
-        />
-        <StatusCard
-          label="Hosting Application"
-          value={getApplicationLabel(stage, latestApp?.status)}
-          status={getApplicationStatus(stage)}
-          icon={FileText}
-          detail={
-            latestApp?.submittedAt
-              ? `Version #${latestApp.version || 1} • ${new Date(latestApp.submittedAt).toLocaleDateString('en-IN')}`
-              : undefined
-          }
-        />
-        <StatusCard
-          label="Cluster Deployment"
-          value={getDeploymentLabel(database?.status)}
-          status={getDeploymentStatusBadge(database?.status)}
-          icon={Server}
-          detail={database?.name || 'Awaiting application approval'}
-        />
-      </div>
-
-      {/* Onboarding Timeline */}
-      <div className="card space-y-4">
-        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">
-          Onboarding &amp; Provisioning Pipeline
-        </h2>
-        <StatusTimeline stage={stage as OnboardingStage} rejectionReason={latestApp?.rejectionReason} />
-      </div>
-
-      {/* Stage-specific Actions */}
-      <StageActions
-        stage={stage as OnboardingStage}
-        applicationId={latestApp?._id?.toString()}
-        rejectionReason={latestApp?.rejectionReason}
-        version={latestApp?.version}
-      />
-
-      {/* Subscription info if active */}
-      {subscription && stage === 'ACTIVE' && (
-        <div className="card space-y-4 border border-[var(--primary)]/30 bg-[var(--surface)]">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-[var(--primary)]" />
-              Active Subscription
-            </h2>
-            <Link href="/billing" className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1 font-medium">
-              <span>View Invoices &amp; Razorpay Payments</span>
-              <ArrowRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-            <div>
-              <p className="text-[var(--muted)]">Plan</p>
-              <p className="text-sm text-[var(--text-primary)] font-medium mt-0.5">
-                {subscription.planName}
-              </p>
-            </div>
-            <div>
-              <p className="text-[var(--muted)]">Monthly</p>
-              <p className="text-sm font-serif text-[var(--primary)] font-normal text-base mt-0.5">
-                ₹5,000/month
-              </p>
-            </div>
-            <div>
-              <p className="text-[var(--muted)]">Status</p>
-              <span className={`badge badge-${subscription.status === 'ACTIVE' ? 'active' : 'pending'} mt-1`}>
-                {subscription.status}
-              </span>
-            </div>
-            {subscription.nextPaymentDate && (
-              <div>
-                <p className="text-[var(--muted)]">Next Payment Due</p>
-                <p className="text-sm text-[var(--text-primary)] font-medium mt-0.5">
-                  {new Date(subscription.nextPaymentDate).toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatusCard({
-  label,
-  value,
-  status,
-  icon: Icon,
-  detail,
-}: {
-  label: string;
-  value: string;
-  status: 'active' | 'pending' | 'suspended' | 'default';
-  icon: React.ComponentType<{ className?: string }>;
-  detail?: string;
-}) {
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-[var(--muted)] uppercase tracking-wider font-medium">{label}</span>
-        <Icon className="w-4 h-4 text-[var(--muted)]" />
-      </div>
-      <div className="flex items-center gap-2">
-        <span className={`badge badge-${status}`}>{value}</span>
-      </div>
-      {detail && (
-        <p className="text-xs text-[var(--text-secondary)] mt-2 font-mono truncate">{detail}</p>
-      )}
-    </div>
-  );
-}
-
-function getApplicationLabel(stage: string, appStatus?: string): string {
-  switch (stage) {
-    case 'APPLICATION_REQUIRED': return 'Not Submitted';
-    case 'APPLICATION_PENDING': return 'Under Review';
-    case 'APPLICATION_APPROVED': return 'Approved';
-    case 'APPLICATION_REJECTED': return 'Rejected';
-    case 'TERMS_REQUIRED': return 'Approved';
-    case 'PROVISIONING': return 'Approved';
-    case 'ACTIVE': return 'Approved';
-    case 'SUSPENDED': return 'Approved';
-    default: return 'N/A';
-  }
-}
-
-function getApplicationStatus(stage: string): 'active' | 'pending' | 'suspended' | 'default' {
-  if (['ACTIVE', 'PROVISIONING', 'TERMS_REQUIRED', 'APPLICATION_APPROVED'].includes(stage)) return 'active';
-  if (['APPLICATION_PENDING'].includes(stage)) return 'pending';
-  if (['APPLICATION_REJECTED'].includes(stage)) return 'suspended';
-  return 'default';
-}
-
-function getDeploymentLabel(status?: string): string {
-  switch (status) {
-    case 'ACTIVE': return 'Active Running';
-    case 'PROVISIONING': return 'Provisioning Node';
-    case 'PENDING': return 'Pending Provision';
-    case 'SUSPENDED': return 'Suspended';
-    case 'FAILED': return 'Provision Failed';
-    default: return 'Not Provisioned';
-  }
-}
-
-function getDeploymentStatusBadge(status?: string): 'active' | 'pending' | 'suspended' | 'default' {
-  if (status === 'ACTIVE') return 'active';
-  if (['PROVISIONING', 'PENDING'].includes(status || '')) return 'pending';
-  if (['SUSPENDED', 'FAILED'].includes(status || '')) return 'suspended';
-  return 'default';
-}
-
-function StageActions({ stage, applicationId, rejectionReason, version }: {
-  stage: OnboardingStage;
-  applicationId?: string;
-  rejectionReason?: string;
-  version?: number;
-}) {
-  switch (stage) {
-    case 'APPLICATION_REQUIRED':
-      return (
-        <div className="card border-[var(--hairline)] bg-[var(--surface-card)] p-6 space-y-4">
+      {/* Quick Links & Studio */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-5 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-normal font-serif text-[var(--text-primary)] tracking-tight">
-              Submit Managed Hosting Application
-            </h2>
-            <p className="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-              Provide your workload specs and project description to apply for a dedicated LioranDB cluster.
+            <h3 className="text-sm font-medium text-[var(--color-text-primary)]">
+              Billing &amp; Invoices
+            </h3>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+              Review active subscriptions, Razorpay transactions, and payment methods.
             </p>
           </div>
+          <Link
+            href="/billing"
+            className="py-2 px-3.5 rounded-lg bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-xs font-medium text-[var(--color-text-primary)] border border-[var(--color-border-subtle)] transition-colors inline-flex items-center gap-1 shrink-0 ml-3"
+          >
+            <span>Billing</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-5 flex items-center justify-between">
           <div>
-            <Link href="/application" className="btn-primary text-xs inline-flex items-center gap-2 py-2">
-              <span>Start Application Form</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            <h3 className="text-sm font-medium text-[var(--color-text-primary)]">
+              LioranDB Studio
+            </h3>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+              Connect to your live collections using the visual query console.
+            </p>
           </div>
+          <a
+            href="https://studio.liorandb.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="py-2 px-3.5 rounded-lg bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-xs font-medium text-[var(--color-text-primary)] border border-[var(--color-border-subtle)] transition-colors inline-flex items-center gap-1 shrink-0 ml-3"
+          >
+            <span>Launch</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
         </div>
-      );
-
-    case 'APPLICATION_PENDING':
-      return (
-        <div className="card border-[var(--border)] bg-[var(--surface)] p-6 space-y-3">
-          <div className="flex items-center gap-2 text-[var(--warning)]">
-            <Clock className="w-4 h-4" />
-            <h2 className="text-lg font-normal font-serif text-[var(--text-primary)]">Application Under Review</h2>
-          </div>
-          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Your application (version #{version || 1}) has been submitted and is currently being verified by the LioranDB engineering and support team.
-          </p>
-          <div className="pt-2">
-            <Link href="/application" className="btn-secondary text-xs inline-flex items-center gap-2 py-2">
-              <FileEdit className="w-3.5 h-3.5 text-[var(--primary)]" />
-              <span>Update / Edit Application Form</span>
-            </Link>
-          </div>
-        </div>
-      );
-
-    case 'APPLICATION_APPROVED':
-      return (
-        <div className="card border-[var(--hairline)] bg-[var(--surface-card)] p-6 space-y-3">
-          <div className="flex items-center gap-2 text-[var(--success)]">
-            <CheckCircle2 className="w-4 h-4" />
-            <h2 className="text-lg font-normal font-serif text-[var(--text-primary)]">Application Approved</h2>
-          </div>
-          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            Your application has passed review. Please review and accept the Master Services Agreement &amp; Acceptable Use Policy to proceed to node provisioning.
-          </p>
-          <div className="pt-2">
-            <Link href="/onboarding/legal" className="btn-primary text-xs inline-flex items-center gap-2 py-2">
-              <span>Review Agreements &amp; Continue</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-      );
-
-    case 'APPLICATION_REJECTED':
-      return (
-        <div className="card border-[var(--error)]/30 bg-[var(--surface-card)] p-6 space-y-3">
-          <div className="flex items-center gap-2 text-[var(--error)]">
-            <AlertTriangle className="w-4 h-4" />
-            <h2 className="text-lg font-normal font-serif text-[var(--text-primary)]">Application Not Approved</h2>
-          </div>
-          {rejectionReason && (
-            <div className="alert-banner alert-banner-error text-xs">
-              <strong>Review Team Feedback:</strong> {rejectionReason}
-            </div>
-          )}
-          <p className="text-xs text-[var(--text-secondary)]">
-            You can modify your project details or provide additional workload clarification and reapply.
-          </p>
-          <div className="pt-2">
-            <Link href="/application" className="btn-primary text-xs inline-flex items-center gap-2 py-2">
-              <FileEdit className="w-3.5 h-3.5" />
-              <span>Edit &amp; Reapply Application Form</span>
-            </Link>
-          </div>
-        </div>
-      );
-
-    case 'TERMS_REQUIRED':
-      return (
-        <div className="card border-[var(--hairline)] bg-[var(--surface-card)] p-6 space-y-3">
-          <h2 className="text-lg font-normal font-serif text-[var(--text-primary)]">
-            Accept Legal Agreements
-          </h2>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Please sign the mandatory policies to trigger automatic provisioning of your dedicated cluster.
-          </p>
-          <div className="pt-2">
-            <Link href="/onboarding/legal" className="btn-primary text-xs inline-flex items-center gap-2 py-2">
-              <span>Review &amp; Sign</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-      );
-
-    case 'PROVISIONING':
-      return (
-        <div className="card p-6 space-y-2">
-          <div className="flex items-center gap-2 text-[var(--primary)]">
-            <Server className="w-4 h-4 animate-pulse" />
-            <h2 className="text-lg font-normal font-serif text-[var(--text-primary)]">Cluster Provisioning in Progress</h2>
-          </div>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Your dedicated LioranDB node is being deployed and configured with TLS certs, firewall access, and credentials.
-          </p>
-        </div>
-      );
-
-    case 'SUSPENDED':
-      return (
-        <div className="card border-[var(--error)]/30 bg-[var(--surface-card)] p-6 space-y-3">
-          <h2 className="text-lg font-normal font-serif text-[var(--error)]">
-            Cluster Service Suspended
-          </h2>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Your cluster access is temporarily suspended due to pending invoice verification or policy enforcement.
-          </p>
-          <div className="pt-2">
-            <Link href="/support" className="btn-danger text-xs inline-flex items-center gap-2 py-2">
-              <LifeBuoy className="w-3.5 h-3.5" />
-              <span>Contact Developer Support</span>
-            </Link>
-          </div>
-        </div>
-      );
-
-    default:
-      return null;
-  }
+      </div>
+    </div>
+  );
 }

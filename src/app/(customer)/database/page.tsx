@@ -1,152 +1,185 @@
-import { requireVerifiedUser } from '@/lib/auth/guards';
-import { connectToDatabase, User, ManagedDatabase } from '@/lib/db';
-import { redirect } from 'next/navigation';
-import { decrypt } from '@/lib/crypto';
-import DatabaseCredentials from '@/components/database/DatabaseCredentials';
-import { Server, ExternalLink, Activity } from 'lucide-react';
+import { requireRegisteredUser } from '@/lib/auth/guards';
+import { connectToDatabase, ManagedDatabase } from '@/lib/db';
+import Link from 'next/link';
+import { Plus, Database, Server, Cpu, ShieldCheck, ArrowRight, Activity, ExternalLink, HardDrive } from 'lucide-react';
+import { getPlan, formatPaiseToRupees } from '@/lib/plans';
 
-export const metadata = { title: 'Managed Database — LioranDB' };
-
-const PLAN_RESOURCES = {
-  vCPU: '2 Dedicated vCPU',
-  ram: '4 GB High-Speed RAM',
-  storage: 'Up to 10 GB NVMe',
-  backups: 'Automated Daily Snapshots',
-  iops: '~3,000 IOPS Guaranteed',
-};
+export const metadata = { title: 'Managed Databases — LioranDB' };
 
 export default async function DatabasePage() {
-  const sessionUser = await requireVerifiedUser();
+  const sessionUser = await requireRegisteredUser();
 
   await connectToDatabase();
-  const user = await User.findById(sessionUser.userId).lean();
+  const rawInstances = await ManagedDatabase.find({
+    $or: [{ customerId: sessionUser.userId }, { userId: sessionUser.userId }],
+    status: { $nin: ['DELETED', 'TERMINATED'] },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
 
-  if (!user) redirect('/login');
-
-  const allowedStages = ['PROVISIONING', 'ACTIVE', 'SUSPENDED'];
-  if (!allowedStages.includes(user.onboardingStage)) {
-    redirect('/dashboard');
-  }
-
-  const database = await ManagedDatabase.findOne({ customerId: user._id }).lean();
-
-  if (!database) {
-    return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Managed Database</h1>
-        <div className="card">
-          <div className="flex items-center gap-2 text-[var(--primary)] mb-2">
-            <Server className="w-4 h-4 animate-pulse" />
-            <span className="font-semibold text-xs">Node Provisioning in Progress</span>
-          </div>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Your managed LioranDB deployment is being prepared. You&apos;ll receive an email and see the connection credentials here once the cluster is online.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Decrypt connection URI server-side only — never send raw encrypted value to client
-  let connectionUri: string | null = null;
-  if (database.encryptedConnectionUri) {
-    try {
-      connectionUri = decrypt(database.encryptedConnectionUri);
-    } catch {
-      connectionUri = null;
-    }
-  }
-
-  const dbData = {
-    id: database._id.toString(),
-    name: database.name,
-    status: database.status,
-    host: database.host,
-    port: database.port,
-    databaseName: database.databaseName,
-    username: database.username,
-    connectionUri,
-    planId: database.planId,
-    passwordChangeRequired: database.passwordChangeRequired,
-    temporaryCredentialExpiresAt: database.temporaryCredentialExpiresAt?.toISOString(),
-    provisionedAt: database.provisionedAt?.toISOString(),
-    suspendedAt: database.suspendedAt?.toISOString(),
-    suspensionReason: database.suspensionReason,
-  };
+  const instances = rawInstances.map((inst) => {
+    const plan = getPlan(inst.planId);
+    return {
+      id: inst._id.toString(),
+      name: inst.name,
+      slug: inst.slug,
+      status: inst.status,
+      type: inst.type || plan?.type || 'dedicated',
+      planName: plan?.name || 'Managed Instance',
+      region: inst.region || 'ap-south-1 (Mumbai)',
+      cpu: inst.cpu || plan?.cpu || '1 vCPU',
+      memory: plan?.memory || `${(inst.memoryMb || 1024) / 1024} GB RAM`,
+      documentGuideline: plan?.documentGuideline || 'Up to 100,000 documents',
+      backupEnabled: inst.backupEnabled ?? false,
+      monthlyPrice: inst.monthlyPricePaise ? formatPaiseToRupees(inst.monthlyPricePaise) : (plan ? `₹${plan.priceRupees.toLocaleString('en-IN')}/mo` : '₹1,499/mo'),
+      createdAt: inst.createdAt ? new Date(inst.createdAt).toLocaleDateString('en-IN') : '',
+    };
+  });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Managed Database Cluster</h1>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">
-            High-performance ACID compliant multi-model instance with dedicated TLS termination
+          <h1 className="font-serif text-3xl font-normal text-[var(--color-text-primary)] tracking-tight">
+            Managed Database Instances
+          </h1>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            High-performance ACID compliant MongoDB-compatible managed clusters.
           </p>
         </div>
-        <span
-          className={`badge ${
-            database.status === 'ACTIVE'
-              ? 'badge-active'
-              : database.status === 'SUSPENDED'
-              ? 'badge-suspended'
-              : 'badge-pending'
-          }`}
+        <Link
+          href="/database/create"
+          className="inline-flex items-center gap-2 py-2.5 px-4 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white text-xs font-medium transition-all shadow-xs shrink-0 self-start sm:self-auto"
         >
-          {database.status}
-        </span>
+          <Plus className="w-4 h-4" />
+          <span>Create Database Instance</span>
+        </Link>
       </div>
 
-      {database.status === 'SUSPENDED' && database.suspensionReason && (
-        <div className="alert-banner alert-banner-error text-xs">
+      {/* Instance List or Empty State */}
+      {instances.length === 0 ? (
+        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-8 sm:p-12 text-center max-w-xl mx-auto space-y-4">
+          <div className="w-14 h-14 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] mx-auto flex items-center justify-center border border-[var(--color-primary)]/20">
+            <Database className="w-7 h-7" />
+          </div>
           <div>
-            <strong>Service Suspended:</strong>
-            <p className="mt-1">{database.suspensionReason}</p>
+            <h2 className="font-serif text-xl font-normal text-[var(--color-text-primary)]">
+              No database instances yet
+            </h2>
+            <p className="text-xs text-[var(--color-text-secondary)] mt-1.5 max-w-sm mx-auto">
+              Deploy your first LioranDB managed cluster with automated backups, high availability, and SSL encryption.
+            </p>
+          </div>
+          <div className="pt-2">
+            <Link
+              href="/database/create"
+              className="inline-flex items-center gap-2 py-2.5 px-5 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white text-xs font-medium transition-all shadow-xs"
+            >
+              <span>Deploy First Instance</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </div>
-      )}
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {instances.map((inst) => (
+            <div
+              key={inst.id}
+              className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] hover:border-[var(--color-text-tertiary)] rounded-xl p-5 transition-all shadow-xs flex flex-col justify-between space-y-4"
+            >
+              <div>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <h2 className="font-serif text-lg font-medium text-[var(--color-text-primary)] truncate">
+                      {inst.name}
+                    </h2>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider ${
+                    inst.status === 'ACTIVE' || inst.status === 'RUNNING'
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                      : inst.status === 'PROVISIONING'
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 animate-pulse'
+                      : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+                  }`}>
+                    {inst.status}
+                  </span>
+                </div>
 
-      {/* Resource allocation */}
-      <div className="card space-y-4">
-        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5 text-[var(--primary)]" />
-          Hardware &amp; Engine Allocation
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-          {Object.entries(PLAN_RESOURCES).map(([key, value]) => (
-            <div key={key}>
-              <p className="text-[var(--muted)] uppercase tracking-wider text-[10px] font-semibold">{key}</p>
-              <p className="text-xs text-[var(--text-primary)] font-medium mt-0.5">{value}</p>
+                <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)] mb-4">
+                  <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)]">
+                    {inst.type}
+                  </span>
+                  <span>•</span>
+                  <span>{inst.planName}</span>
+                  <span>•</span>
+                  <span>{inst.region}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs text-[var(--color-text-secondary)] border-t border-[var(--color-border-subtle)] pt-3">
+                  <div className="flex items-center gap-1.5">
+                    <Cpu className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                    <span>{inst.cpu}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Server className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                    <span>{inst.memory}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                    <span>{inst.documentGuideline}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                    <span>{inst.backupEnabled ? 'Daily Backup Active' : 'No Backup'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-3 text-xs">
+                <div>
+                  <span className="text-[10px] text-[var(--color-text-tertiary)] block">Monthly Rate</span>
+                  <span className="font-serif font-bold text-[var(--color-text-primary)]">
+                    {inst.monthlyPrice}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/database/${inst.id}`}
+                    className="py-1.5 px-3 rounded-lg bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-primary)] font-medium border border-[var(--color-border-subtle)] transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <span>Manage</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
             </div>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* Connection details */}
-      <DatabaseCredentials db={dbData} />
-
-      {/* Studio link */}
-      <div className="card space-y-3">
-        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
-          <ExternalLink className="w-3.5 h-3.5 text-[var(--primary)]" />
-          LioranDB Studio &amp; Query Console
-        </h2>
-        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Connect to your multi-model database using LioranDB Studio visual query workspace.
-        </p>
-        <div className="pt-1">
-          <a
-            href="https://studio.liorandb.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-secondary text-xs inline-flex items-center gap-2 py-2"
-          >
-            <span>Launch LioranDB Studio</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
+      {/* Quick Access Card */}
+      <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-medium text-[var(--color-text-primary)] flex items-center gap-2">
+            <ExternalLink className="w-4 h-4 text-[var(--color-primary)]" />
+            LioranDB Studio &amp; Query Console
+          </h3>
+          <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+            Connect to your multi-model database using the visual query workspace.
+          </p>
         </div>
-        <p className="text-[11px] text-[var(--muted)]">
-          Never share your database master credentials in public repositories or unencrypted channels.
-        </p>
+        <a
+          href="https://studio.liorandb.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="py-2 px-4 rounded-lg bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-xs font-medium text-[var(--color-text-primary)] border border-[var(--color-border-subtle)] transition-colors inline-flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+        >
+          <span>Launch Studio</span>
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
       </div>
     </div>
   );

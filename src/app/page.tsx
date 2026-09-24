@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/session';
+import { connectToDatabase, User } from '@/lib/db';
 
 export default async function HomePage() {
   const user = await getCurrentUser();
@@ -20,6 +21,12 @@ export default async function HomePage() {
     redirect('/support-console');
   }
 
+  // Customer role check
+  await connectToDatabase();
+  const dbUser = await User.findById(user.userId).select('accountRegistrationPaid');
+  if (!dbUser?.accountRegistrationPaid) {
+    redirect('/onboarding/registration');
+  }
+
   redirect('/dashboard');
 }
-

@@ -104,6 +104,7 @@ export async function loginUser(
     email: user.email,
     role: user.role,
     emailVerified: user.emailVerified,
+    accountRegistrationPaid: user.accountRegistrationPaid || false,
   };
 
   // Persist session
@@ -112,6 +113,7 @@ export async function loginUser(
   session.email = sessionData.email;
   session.role = sessionData.role;
   session.emailVerified = sessionData.emailVerified;
+  session.accountRegistrationPaid = sessionData.accountRegistrationPaid;
   await session.save();
 
   await createAuditLog({

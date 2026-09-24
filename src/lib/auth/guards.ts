@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
-import { getCurrentUser, SessionData } from './session';
+import { getCurrentUser, getSession, SessionData } from './session';
 import type { UserRole } from '../db/models/User';
+import { connectToDatabase, User } from '../db';
 
 export class AuthorizationError extends Error {
   constructor(message = 'Unauthorized') {
@@ -30,6 +31,36 @@ export async function requireVerifiedUser(): Promise<SessionData> {
     redirect('/verify-email');
   }
   return user;
+}
+
+/**
+ * Requires a user who has verified email AND paid the ₹100 account registration fee.
+ * Admin and support bypass registration fee.
+ */
+export async function requireRegisteredUser(): Promise<SessionData> {
+  const user = await requireVerifiedUser();
+
+  if (user.role === 'admin' || user.role === 'support') {
+    return user;
+  }
+
+  // If session says paid, proceed
+  if (user.accountRegistrationPaid) {
+    return user;
+  }
+
+  // Fallback to database check in case session is slightly stale
+  await connectToDatabase();
+  const dbUser = await User.findById(user.userId).select('accountRegistrationPaid');
+  if (dbUser?.accountRegistrationPaid) {
+    // Update session cache
+    const session = await getSession();
+    session.accountRegistrationPaid = true;
+    await session.save();
+    return { ...user, accountRegistrationPaid: true };
+  }
+
+  redirect('/onboarding/registration');
 }
 
 /**
@@ -63,6 +94,29 @@ export async function requireUserAPI(): Promise<SessionData> {
     throw new AuthorizationError('Authentication required');
   }
   return user;
+}
+
+export async function requireRegisteredUserAPI(): Promise<SessionData> {
+  const user = await requireUserAPI();
+  if (!user.emailVerified) {
+    throw new AuthorizationError('Email verification required');
+  }
+
+  if (user.role === 'admin' || user.role === 'support') {
+    return user;
+  }
+
+  if (user.accountRegistrationPaid) {
+    return user;
+  }
+
+  await connectToDatabase();
+  const dbUser = await User.findById(user.userId).select('accountRegistrationPaid');
+  if (!dbUser?.accountRegistrationPaid) {
+    throw new AuthorizationError('Account registration fee (₹100) payment required');
+  }
+
+  return { ...user, accountRegistrationPaid: true };
 }
 
 export async function requireRoleAPI(role: UserRole): Promise<SessionData> {

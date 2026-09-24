@@ -29,6 +29,9 @@ export interface IUser extends Document {
   emailVerifiedAt?: Date;
   profile: IUserProfile;
   onboardingStage: OnboardingStage;
+  accountRegistrationPaid: boolean;
+  accountRegistrationPaidAt?: Date;
+  razorpayCustomerId?: string;
   isActive: boolean;
   lastLoginAt?: Date;
   createdAt: Date;
@@ -64,6 +67,9 @@ const UserSchema = new Schema<IUser>(
     emailVerified: { type: Boolean, default: false },
     emailVerifiedAt: { type: Date },
     profile: { type: UserProfileSchema, default: () => ({}) },
+    accountRegistrationPaid: { type: Boolean, default: false },
+    accountRegistrationPaidAt: { type: Date },
+    razorpayCustomerId: { type: String },
     onboardingStage: {
       type: String,
       enum: [
