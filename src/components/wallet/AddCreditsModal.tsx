@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Script from 'next/script';
+import { loadRazorpaySDK } from '@/lib/razorpay-client';
 import {
   CreditCard,
   Plus,
@@ -83,7 +84,13 @@ export default function AddCreditsModal({
       setLoading(true);
       setErrorMessage('');
 
-      // Step 1: Create Order on backend
+      // Step 1: Ensure Razorpay SDK is loaded
+      const sdkLoaded = await loadRazorpaySDK();
+      if (!sdkLoaded || !window.Razorpay) {
+        throw new Error('Razorpay SDK failed to load. Please check your internet connection or disable ad blockers.');
+      }
+
+      // Step 2: Create Order on backend
       const res = await fetch('/api/wallet/topup/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,11 +106,7 @@ export default function AddCreditsModal({
 
       const { orderId, amountPaise, currency, keyId, user } = data;
 
-      if (!window.Razorpay) {
-        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
-      }
-
-      // Step 2: Open Razorpay modal
+      // Step 3: Open Razorpay modal
       const options = {
         key: keyId,
         amount: amountPaise,
@@ -176,7 +179,7 @@ export default function AddCreditsModal({
 
   return (
     <>
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
 
       <button
         type="button"

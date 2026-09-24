@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, ArrowRight, Loader2, Sparkles, Lock, CreditCard } from 'lucide-react';
 import Script from 'next/script';
+import { loadRazorpaySDK } from '@/lib/razorpay-client';
 
 declare global {
   interface Window {
@@ -36,7 +37,13 @@ export default function InitialTopupOnboardingPage() {
       setLoading(true);
       setErrorMessage('');
 
-      // Step 1: Create Topup Order
+      // Step 1: Ensure Razorpay SDK is loaded
+      const sdkLoaded = await loadRazorpaySDK();
+      if (!sdkLoaded || !window.Razorpay) {
+        throw new Error('Razorpay SDK failed to load. Please check your internet connection or disable ad blockers.');
+      }
+
+      // Step 2: Create Topup Order
       const res = await fetch('/api/wallet/topup/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -49,10 +56,6 @@ export default function InitialTopupOnboardingPage() {
       }
 
       const { orderId, amountPaise, currency, keyId, user } = data;
-
-      if (!window.Razorpay) {
-        throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
-      }
 
       // Step 2: Open Razorpay Checkout Modal
       const options = {
@@ -121,7 +124,7 @@ export default function InitialTopupOnboardingPage() {
 
   return (
     <>
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
 
       <div className="min-h-screen bg-[var(--background)] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
