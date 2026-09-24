@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, CheckCircle2, ArrowRight, Loader2, Sparkles, Database, Lock, Zap, CreditCard, Coins } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Loader2, Sparkles, Lock, CreditCard } from 'lucide-react';
 import Script from 'next/script';
 
 declare global {
@@ -123,30 +123,30 @@ export default function InitialTopupOnboardingPage() {
     <>
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
 
-      <div className="min-h-screen bg-[var(--color-surface-sunken)] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-xl">
+      <div className="min-h-screen bg-[var(--background)] flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
           {/* Brand Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-xs font-mono uppercase tracking-wider mb-4 border border-[var(--color-primary)]/20">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] text-xs font-mono uppercase tracking-wider mb-3 border border-[var(--primary)]/20">
               <Sparkles className="w-3.5 h-3.5" /> Account Activation
             </div>
-            <h1 className="font-serif text-3xl sm:text-4xl font-normal text-[var(--color-text-primary)] tracking-tight">
+            <h1 className="font-serif text-3xl sm:text-4xl font-normal text-[var(--text-primary)] tracking-tight">
               Add your first credits
             </h1>
-            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-              Add a minimum of ₹100 to activate your LioranDB account. Your full balance remains available to use for LioranDB services.
+            <p className="mt-2 text-xs sm:text-sm text-[var(--text-secondary)] max-w-sm mx-auto">
+              Add at least ₹100 to activate your LioranDB account. Your entire balance can be used for LioranDB services.
             </p>
           </div>
 
           {/* Card */}
-          <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl shadow-xs overflow-hidden">
+          <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-2xl shadow-sm p-6 sm:p-8 space-y-6">
             {/* Amount Selection */}
-            <div className="p-6 sm:p-8 border-b border-[var(--color-border-subtle)] space-y-4">
-              <label className="block text-xs font-mono uppercase tracking-wider text-[var(--color-text-tertiary)]">
-                Select Initial Credit Amount (Min ₹100)
+            <div className="space-y-3">
+              <label className="block text-xs font-mono uppercase tracking-wider text-[var(--muted)]">
+                Select Credit Amount
               </label>
 
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {PRESET_TOPUPS.map((amt) => {
                   const isCurrent = !isCustom && selectedAmount === amt;
                   return (
@@ -158,10 +158,10 @@ export default function InitialTopupOnboardingPage() {
                         setIsCustom(false);
                         setErrorMessage('');
                       }}
-                      className={`py-2.5 px-3 rounded-lg text-xs font-mono font-medium border transition-all cursor-pointer ${
+                      className={`py-2.5 px-3 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
                         isCurrent
-                          ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-xs'
-                          : 'bg-[var(--color-surface-sunken)] border-[var(--color-border-subtle)] text-[var(--color-text-primary)] hover:border-[var(--color-text-tertiary)]'
+                          ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs ring-2 ring-[var(--primary)]/20'
+                          : 'bg-[var(--surface)] text-[var(--text-primary)] border-[var(--border)] hover:border-[var(--primary)] hover:bg-[var(--surface-hover)]'
                       }`}
                     >
                       ₹{amt.toLocaleString('en-IN')}
@@ -174,7 +174,7 @@ export default function InitialTopupOnboardingPage() {
                 <button
                   type="button"
                   onClick={() => setIsCustom(!isCustom)}
-                  className="text-xs text-[var(--color-primary)] hover:underline font-mono"
+                  className="text-xs text-[var(--primary)] hover:underline font-mono cursor-pointer"
                 >
                   {isCustom ? '← Choose preset amount' : '+ Enter custom amount'}
                 </button>
@@ -182,7 +182,7 @@ export default function InitialTopupOnboardingPage() {
                 {isCustom && (
                   <div className="pt-2">
                     <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-mono text-[var(--color-text-tertiary)]">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-mono text-[var(--muted)]">
                         ₹
                       </span>
                       <input
@@ -196,96 +196,67 @@ export default function InitialTopupOnboardingPage() {
                         }}
                         placeholder="Enter amount (min 100)"
                         autoFocus
-                        className="w-full pl-8 pr-3.5 py-2.5 rounded-lg bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] font-mono focus:outline-hidden focus:border-[var(--color-primary)]"
+                        className="w-full pl-8 pr-3.5 py-2.5 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-sm text-[var(--text-primary)] font-mono focus:outline-hidden focus:border-[var(--primary)]"
                       />
                     </div>
                   </div>
                 )}
               </div>
-
-              <div className="p-3.5 rounded-lg bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)] flex items-center justify-between">
-                <span className="text-xs text-[var(--color-text-secondary)]">Initial Account Balance:</span>
-                <span className="font-serif text-2xl font-bold text-[var(--color-text-primary)]">
-                  ₹{effectiveAmount.toLocaleString('en-IN')}
-                </span>
-              </div>
             </div>
 
-            {/* Feature Highlights */}
-            <div className="p-6 sm:p-8 space-y-4">
-              <h3 className="text-xs font-mono uppercase tracking-wider text-[var(--color-text-tertiary)]">
-                What’s unlocked with your credit balance
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)] flex items-center justify-center shrink-0 text-[var(--color-primary)]">
-                    <Database className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-[var(--color-text-primary)]">Zero-Checkout Deployments</h4>
-                    <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-                      Launch instances instantly using your credits with no repetitive card checkouts.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)] flex items-center justify-center shrink-0 text-[var(--color-primary)]">
-                    <Zap className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-[var(--color-text-primary)]">Full Balance Preserved</h4>
-                    <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-                      Every single rupee you deposit stays in your wallet for database compute &amp; backups.
-                    </p>
-                  </div>
-                </div>
+            {/* Price Preview */}
+            <div className="p-4 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-between">
+              <div>
+                <span className="text-xs text-[var(--text-secondary)] block">You&apos;ll receive:</span>
+                <span className="text-[11px] text-[var(--muted)]">100% spendable credit</span>
               </div>
+              <span className="font-serif text-2xl font-bold text-[var(--text-primary)]">
+                ₹{effectiveAmount.toLocaleString('en-IN')} Credits
+              </span>
+            </div>
 
-              {errorMessage && (
-                <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs">
-                  {errorMessage}
-                </div>
-              )}
-
-              {success && (
-                <div className="mt-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-sm flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                  <span>Credits verified &amp; added! Redirecting to your dashboard...</span>
-                </div>
-              )}
-
-              {/* Action Button */}
-              <div className="pt-4">
-                <button
-                  type="button"
-                  onClick={handlePayInitialCredit}
-                  disabled={loading || success || effectiveAmount < 100}
-                  className="w-full py-3.5 px-4 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white font-medium text-sm transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Processing Payment...</span>
-                    </>
-                  ) : success ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Credits Added</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Add ₹{effectiveAmount.toLocaleString('en-IN')} Credit</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
+            {errorMessage && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs">
+                {errorMessage}
               </div>
+            )}
 
-              <div className="flex items-center justify-center gap-2 pt-2 text-[11px] text-[var(--color-text-tertiary)] font-mono">
+            {success && (
+              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Credits added! Redirecting to your dashboard...</span>
+              </div>
+            )}
+
+            {/* Action Button */}
+            <div className="space-y-3 pt-2">
+              <button
+                type="button"
+                onClick={handlePayInitialCredit}
+                disabled={loading || success || effectiveAmount < 100}
+                className="w-full py-3.5 px-4 rounded-xl bg-[var(--primary)] hover:opacity-95 text-white font-medium text-sm transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing Payment...</span>
+                  </>
+                ) : success ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Credits Added</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Add ₹{effectiveAmount.toLocaleString('en-IN')} Credits</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-[var(--muted)] font-mono">
                 <Lock className="w-3 h-3" />
-                <span>Secured via Razorpay • 100% Usable Account Balance</span>
+                <span>Secured by Razorpay • Developer Console</span>
               </div>
             </div>
           </div>

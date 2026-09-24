@@ -230,10 +230,10 @@ export default function AddCreditsModal({
                       key={amt}
                       type="button"
                       onClick={() => handleSelectPreset(amt)}
-                      className={`py-2 px-3 rounded-lg text-xs font-mono font-medium border transition-all cursor-pointer ${
+                      className={`py-2 px-3 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
                         isCurrent
-                          ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-xs'
-                          : 'bg-[var(--color-surface-sunken)] border-[var(--color-border-subtle)] text-[var(--color-text-primary)] hover:border-[var(--color-text-tertiary)]'
+                          ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs ring-2 ring-[var(--primary)]/20'
+                          : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--primary)] hover:bg-[var(--surface-hover)]'
                       }`}
                     >
                       ₹{amt.toLocaleString('en-IN')}
@@ -244,10 +244,10 @@ export default function AddCreditsModal({
                 <button
                   type="button"
                   onClick={() => setIsCustom(true)}
-                  className={`py-2 px-3 rounded-lg text-xs font-mono font-medium border transition-all cursor-pointer ${
+                  className={`py-2 px-3 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
                     isCustom
-                      ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-xs'
-                      : 'bg-[var(--color-surface-sunken)] border-[var(--color-border-subtle)] text-[var(--color-text-primary)] hover:border-[var(--color-text-tertiary)]'
+                      ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-xs ring-2 ring-[var(--primary)]/20'
+                      : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--primary)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   Custom

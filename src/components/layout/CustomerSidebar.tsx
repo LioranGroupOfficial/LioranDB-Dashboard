@@ -5,9 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  FileText,
   Database,
-  BarChart3,
   CreditCard,
   LifeBuoy,
   Settings,
@@ -15,74 +13,60 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  Wallet as WalletIcon,
+  Plus,
 } from 'lucide-react';
 import type { OnboardingStage, UserRole } from '@/lib/db/models/User';
+import AddCreditsModal from '@/components/wallet/AddCreditsModal';
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  requireStage?: OnboardingStage[];
 }
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
-  {
-    label: 'Application & Form',
-    href: '/application',
-    icon: FileText,
-    requireStage: ['APPLICATION_REQUIRED', 'APPLICATION_PENDING', 'APPLICATION_REJECTED', 'APPLICATION_APPROVED'],
-  },
-  {
-    label: 'Managed Database',
-    href: '/database',
-    icon: Database,
-    requireStage: ['PROVISIONING', 'ACTIVE', 'SUSPENDED'],
-  },
-  {
-    label: 'Metrics & Usage',
-    href: '/usage',
-    icon: BarChart3,
-    requireStage: ['ACTIVE'],
-  },
-  {
-    label: 'Billing & Invoices',
-    href: '/billing',
-    icon: CreditCard,
-    requireStage: ['PROVISIONING', 'ACTIVE', 'SUSPENDED'],
-  },
+  { label: 'Databases', href: '/database', icon: Database },
+  { label: 'Billing & Credits', href: '/billing', icon: CreditCard },
   { label: 'Developer Support', href: '/support', icon: LifeBuoy },
   { label: 'Account Settings', href: '/account', icon: Settings },
 ];
 
 interface Props {
-  stage: OnboardingStage;
-  role: UserRole;
+  stage?: OnboardingStage;
+  role?: UserRole;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
 
-export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose }: Props) {
+export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [balancePaise, setBalancePaise] = useState<number | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('lioran_sidebar_collapsed');
     if (saved !== null) {
       setCollapsed(saved === 'true');
     }
-  }, []);
+
+    // Fetch live wallet balance
+    fetch('/api/wallet')
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d.balancePaise === 'number') {
+          setBalancePaise(d.balancePaise);
+        }
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   function toggleCollapsed() {
     const next = !collapsed;
     setCollapsed(next);
     localStorage.setItem('lioran_sidebar_collapsed', String(next));
   }
-
-  const visibleItems = NAV_ITEMS.filter((item) => {
-    if (!item.requireStage) return true;
-    return item.requireStage.includes(stage);
-  });
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -91,7 +75,7 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
 
   const NavLinks = ({ isMobile = false }: { isMobile?: boolean }) => (
     <nav className="flex-1 overflow-y-auto p-2 space-y-1">
-      {visibleItems.map((item) => {
+      {NAV_ITEMS.map((item) => {
         const active =
           item.href === '/dashboard'
             ? pathname === '/dashboard'
@@ -177,12 +161,42 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
 
         <NavLinks />
 
+        {/* Compact Wallet Credits Section */}
+        {!collapsed ? (
+          <div className="p-3 mx-2 mb-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border)] shadow-2xs">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1">
+                <WalletIcon className="w-3 h-3 text-[var(--primary)]" />
+                Credits
+              </span>
+              <AddCreditsModal
+                buttonText="+ Add"
+                className="text-[11px] font-mono text-[var(--primary)] hover:underline cursor-pointer bg-transparent border-0 p-0 shadow-none font-semibold"
+                onSuccess={(newBal) => setBalancePaise(newBal)}
+              />
+            </div>
+            <p className="font-serif text-base font-bold text-[var(--text-primary)]">
+              {balancePaise !== null
+                ? `₹${(balancePaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                : '...'}
+            </p>
+          </div>
+        ) : (
+          <div className="py-2 flex justify-center border-t border-[var(--border)]">
+            <AddCreditsModal
+              buttonText=""
+              className="p-2 rounded-lg text-[var(--primary)] hover:bg-[var(--surface-card)] transition-colors cursor-pointer bg-transparent border-0 shadow-none"
+              onSuccess={(newBal) => setBalancePaise(newBal)}
+            />
+          </div>
+        )}
+
         {/* Sticky Bottom Actions */}
         <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
           <button
             onClick={handleLogout}
             title={collapsed ? 'Sign out' : undefined}
-            className={`sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-lg ${
+            className={`sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-lg cursor-pointer ${
               collapsed ? 'justify-center px-0' : 'px-3.5'
             }`}
           >
@@ -229,10 +243,29 @@ export default function CustomerSidebar({ stage, role, mobileOpen, onMobileClose
 
             <NavLinks isMobile />
 
+            <div className="p-3 mx-3 mb-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border)]">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1">
+                  <WalletIcon className="w-3 h-3 text-[var(--primary)]" />
+                  Credits
+                </span>
+                <AddCreditsModal
+                  buttonText="+ Add"
+                  className="text-[11px] font-mono text-[var(--primary)] hover:underline cursor-pointer bg-transparent border-0 p-0 shadow-none font-semibold"
+                  onSuccess={(newBal) => setBalancePaise(newBal)}
+                />
+              </div>
+              <p className="font-serif text-base font-bold text-[var(--text-primary)]">
+                {balancePaise !== null
+                  ? `₹${(balancePaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                  : '...'}
+              </p>
+            </div>
+
             <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
               <button
                 onClick={handleLogout}
-                className="sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3.5 rounded-lg"
+                className="sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3.5 rounded-lg cursor-pointer"
               >
                 <LogOut className="w-4 h-4 shrink-0 text-red-500" />
                 <span className="text-xs font-medium">Sign Out</span>
