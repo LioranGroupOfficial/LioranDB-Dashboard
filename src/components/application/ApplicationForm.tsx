@@ -112,14 +112,14 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
         {/* Mobile step bar */}
         <div className="sm:hidden space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-white font-semibold">
-              Step {step + 1} of {steps.length}: <span className="text-[var(--brand-green)]">{steps[step]}</span>
+            <span className="text-[var(--text-primary)] font-semibold">
+              Step {step + 1} of {steps.length}: <span className="text-[var(--primary)]">{steps[step]}</span>
             </span>
-            <span className="text-[var(--text-muted)] font-mono">{Math.round(((step + 1) / steps.length) * 100)}%</span>
+            <span className="text-[var(--muted)] font-mono">{Math.round(((step + 1) / steps.length) * 100)}%</span>
           </div>
-          <div className="h-1.5 w-full bg-[var(--surface-2)] rounded-full overflow-hidden border border-[var(--border)]">
+          <div className="h-1.5 w-full bg-[var(--surface-card)] rounded-full overflow-hidden border border-[var(--border)]">
             <div
-              className="h-full bg-[var(--brand-green)] transition-all duration-300"
+              className="h-full bg-[var(--primary)] transition-all duration-300"
               style={{ width: `${((step + 1) / steps.length) * 100}%` }}
             />
           </div>
@@ -130,20 +130,20 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
           {steps.map((label, i) => (
             <div key={i} className="flex items-center gap-2">
               <div
-                className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all"
+                className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium transition-all"
                 style={{
-                  background: i === step ? 'var(--brand-green)' : i < step ? 'var(--surface-2)' : 'var(--surface)',
-                  color: i === step ? 'var(--on-primary)' : i < step ? 'var(--brand-green)' : 'var(--text-muted)',
-                  border: `1px solid ${i === step ? 'var(--brand-green)' : 'var(--border)'}`,
+                  background: i === step ? 'var(--primary)' : i < step ? 'var(--surface-card)' : 'var(--surface)',
+                  color: i === step ? 'var(--on-primary)' : i < step ? 'var(--primary)' : 'var(--muted)',
+                  border: `1px solid ${i === step ? 'var(--primary)' : 'var(--border)'}`,
                 }}
               >
                 {i < step ? '✓' : i + 1}
               </div>
-              <span className={`text-xs ${i === step ? 'text-white font-semibold' : 'text-[var(--text-muted)]'}`}>
+              <span className={`text-xs ${i === step ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--muted)]'}`}>
                 {label}
               </span>
               {i < steps.length - 1 && (
-                <div className="h-px w-4 lg:w-6" style={{ background: i < step ? 'var(--brand-green)' : 'var(--border)' }} />
+                <div className="h-px w-4 lg:w-6" style={{ background: i < step ? 'var(--primary)' : 'var(--border)' }} />
               )}
             </div>
           ))}
@@ -159,7 +159,7 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
       {/* Step 0: Contact & Company */}
       {step === 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-medium text-[var(--text-primary)]">Contact & Company</h2>
+          <h2 className="text-xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Contact & Company</h2>
 
           <FormField label="Full name *" required>
             <input
@@ -266,8 +266,8 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
       {/* Step 1: Social & Links */}
       {step === 1 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-medium text-[var(--text-primary)]">Social & Technical Links</h2>
-          <p className="text-sm text-[var(--text-secondary)]">All fields are optional.</p>
+          <h2 className="text-xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Social & Technical Links</h2>
+          <p className="text-xs text-[var(--text-secondary)]">All fields are optional.</p>
 
           {[
             { label: 'GitHub', field: 'githubUrl', placeholder: 'https://github.com/yourorg' },
@@ -297,7 +297,7 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
       {/* Step 2: Use Case */}
       {step === 2 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-medium text-[var(--text-primary)]">Use Case</h2>
+          <h2 className="text-xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Use Case</h2>
 
           <FormField label="Why do you want to use LioranDB? *" required>
             <textarea
@@ -407,21 +407,21 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
       {/* Step 3: Plan & Pricing */}
       {step === 3 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-medium text-[var(--text-primary)]">Plan & Pricing</h2>
+          <h2 className="text-xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Plan & Pricing</h2>
 
-          <div className="card border-[var(--accent)]/20">
+          <div className="card border-[var(--hairline)] bg-[var(--surface-card)]">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-base font-medium text-[var(--text-primary)]">LioranDB Managed Hosting</h3>
-                <p className="text-sm text-[var(--text-secondary)] mt-0.5">Everything you need to run LioranDB at scale</p>
+                <h3 className="text-lg font-normal font-serif text-[var(--text-primary)]">LioranDB Managed Hosting</h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">Everything you need to run LioranDB at scale</p>
               </div>
               <div className="text-right">
-                <span className="text-2xl font-bold text-[var(--accent)]">₹5,000</span>
-                <span className="text-sm text-[var(--text-secondary)]">/month</span>
+                <span className="text-2xl font-normal font-serif text-[var(--primary)]">₹5,000</span>
+                <span className="text-xs text-[var(--text-secondary)]">/month</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-y-2 text-sm">
+            <div className="grid grid-cols-2 gap-y-2 text-xs">
               {[
                 ['vCPU', '2 vCPU'],
                 ['RAM', '4 GB'],
@@ -433,7 +433,7 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
                 ['Support', 'Managed'],
               ].map(([label, value]) => (
                 <div key={label} className="flex gap-2 py-1">
-                  <span className="text-[var(--text-muted)]">{label}</span>
+                  <span className="text-[var(--muted)]">{label}</span>
                   <span className="text-[var(--text-secondary)] font-medium">{value}</span>
                 </div>
               ))}
@@ -441,21 +441,21 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
           </div>
 
           <div className="card">
-            <h4 className="text-sm font-medium text-[var(--text-secondary)] mb-2">
+            <h4 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">
               LioranDB Benchmark Characteristics
             </h4>
-            <div className="space-y-1 text-sm">
+            <div className="space-y-1.5 text-xs">
               <div className="flex justify-between">
-                <span className="text-[var(--text-muted)]">Writes/sec</span>
-                <span className="text-[var(--text-secondary)]">~10,000</span>
+                <span className="text-[var(--muted)]">Writes/sec</span>
+                <span className="text-[var(--text-secondary)] font-mono">~10,000</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--text-muted)]">Reads/sec</span>
-                <span className="text-[var(--text-secondary)]">~35,000</span>
+                <span className="text-[var(--muted)]">Reads/sec</span>
+                <span className="text-[var(--text-secondary)] font-mono">~35,000</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--text-muted)]">Combined ops/sec</span>
-                <span className="text-[var(--text-secondary)]">~45,000</span>
+                <span className="text-[var(--muted)]">Combined ops/sec</span>
+                <span className="text-[var(--text-secondary)] font-mono font-medium">~45,000</span>
               </div>
             </div>
             <div className="alert-banner alert-banner-warning mt-3 text-xs">
@@ -477,15 +477,15 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
                     value={value}
                     checked={formData.pricingResponse === value}
                     onChange={(e) => update('pricingResponse', e.target.value)}
-                    className="accent-[var(--accent)]"
+                    className="accent-[var(--primary)]"
                   />
-                  <span className="text-sm text-[var(--text-secondary)]">{label}</span>
+                  <span className="text-xs text-[var(--text-secondary)]">{label}</span>
                 </label>
               ))}
             </div>
           </FormField>
 
-          <div className="alert-banner alert-banner-info text-sm">
+          <div className="alert-banner alert-banner-info text-xs">
             Submitting this application does <strong>not</strong> automatically activate hosting or charge your payment method. Every application is reviewed manually.
           </div>
 
@@ -512,9 +512,9 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
       {/* Step 4: Review & Submit */}
       {step === 4 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-medium text-[var(--text-primary)]">Review & Submit</h2>
+          <h2 className="text-xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Review & Submit</h2>
 
-          <div className="card space-y-3 text-sm">
+          <div className="card space-y-3 text-xs">
             <ReviewRow label="Name" value={formData.fullName} />
             <ReviewRow label="Email" value={formData.workEmail} />
             <ReviewRow label="Country" value={formData.country} />
@@ -525,12 +525,12 @@ export default function ApplicationForm({ defaultEmail, defaultName, nextVersion
             <ReviewRow label="Estimated storage" value={formData.estimatedStorage} />
           </div>
 
-          <div className="alert-banner alert-banner-info text-sm">
+          <div className="alert-banner alert-banner-info text-xs">
             By submitting this application, you confirm that the information provided is accurate. Submitting an application does not guarantee approval or immediate provisioning.
           </div>
 
           {error && (
-            <div className="alert-banner alert-banner-error text-sm" role="alert">
+            <div className="alert-banner alert-banner-error text-xs" role="alert">
               {error}
             </div>
           )}
@@ -575,7 +575,7 @@ function FormField({
 function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between">
-      <span className="text-[var(--text-muted)]">{label}</span>
+      <span className="text-[var(--muted)]">{label}</span>
       <span className="text-[var(--text-secondary)] font-medium">{value || '—'}</span>
     </div>
   );

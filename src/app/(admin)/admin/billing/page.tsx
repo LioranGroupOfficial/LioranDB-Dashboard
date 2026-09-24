@@ -4,7 +4,7 @@ import { formatCurrency, formatDateIST } from '@/lib/billing';
 import RecordPaymentModal from '@/components/admin/RecordPaymentModal';
 import AttachPaymentLinkModal from '@/components/admin/AttachPaymentLinkModal';
 import VerifyPaymentModal from '@/components/admin/VerifyPaymentModal';
-import { CreditCard, DollarSign, Users, CheckCircle2, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
+import { CreditCard, DollarSign, Users, Clock, ExternalLink } from 'lucide-react';
 
 export const metadata = { title: 'Billing & Payments — Admin' };
 
@@ -86,7 +86,7 @@ export default async function AdminBillingPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Billing &amp; Payments</h1>
+          <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Billing &amp; Payments</h1>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
             Attach monthly Razorpay links, monitor customer transactions, and verify payment settlements
           </p>
@@ -100,26 +100,26 @@ export default async function AdminBillingPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Active Deployments</span>
-            <Users className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs text-[var(--muted)] uppercase tracking-wider font-medium">Active Deployments</span>
+            <Users className="w-4 h-4 text-[var(--success)]" />
           </div>
-          <p className="text-2xl font-bold text-emerald-400 mt-2">{activeSubCount}</p>
+          <p className="text-3xl font-normal font-serif text-[var(--success)] mt-2">{activeSubCount}</p>
           <span className="text-[11px] text-[var(--text-secondary)] mt-1 block">₹5,000/mo per cluster</span>
         </div>
         <div className="card">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">MRR Run-Rate</span>
-            <DollarSign className="w-4 h-4 text-[var(--accent)]" />
+            <span className="text-xs text-[var(--muted)] uppercase tracking-wider font-medium">MRR Run-Rate</span>
+            <DollarSign className="w-4 h-4 text-[var(--primary)]" />
           </div>
-          <p className="text-2xl font-bold text-[var(--accent)] mt-2">{formatCurrency(mrr, 'INR')}</p>
+          <p className="text-3xl font-normal font-serif text-[var(--primary)] mt-2">{formatCurrency(mrr, 'INR')}</p>
           <span className="text-[11px] text-[var(--text-secondary)] mt-1 block">Monthly recurring revenue</span>
         </div>
         <div className="card">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Awaiting Verification</span>
-            <Clock className="w-4 h-4 text-amber-400" />
+            <span className="text-xs text-[var(--muted)] uppercase tracking-wider font-medium">Awaiting Verification</span>
+            <Clock className="w-4 h-4 text-[var(--warning)]" />
           </div>
-          <p className="text-2xl font-bold text-amber-400 mt-2">{pendingVerificationCount}</p>
+          <p className="text-3xl font-normal font-serif text-[var(--warning)] mt-2">{pendingVerificationCount}</p>
           <span className="text-[11px] text-[var(--text-secondary)] mt-1 block">Submitted customer payments</span>
         </div>
       </div>
@@ -127,8 +127,8 @@ export default async function AdminBillingPage() {
       {/* Payment Ledger & Verification Queue */}
       <div className="card space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-            <CreditCard className="w-3.5 h-3.5 text-[var(--accent)]" />
+          <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
+            <CreditCard className="w-3.5 h-3.5 text-[var(--primary)]" />
             Payment Invoices &amp; Verification Queue ({serializedPayments.length})
           </h2>
         </div>
@@ -136,7 +136,7 @@ export default async function AdminBillingPage() {
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left text-xs min-w-[640px]">
             <thead>
-              <tr className="border-b border-[var(--border)] text-[var(--text-muted)] uppercase">
+              <tr className="border-b border-[var(--hairline)] text-[var(--muted)] uppercase">
                 <th className="pb-3 font-semibold">Customer</th>
                 <th className="pb-3 font-semibold">Month</th>
                 <th className="pb-3 font-semibold">Amount</th>
@@ -146,12 +146,12 @@ export default async function AdminBillingPage() {
                 <th className="pb-3 font-semibold text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--border)]">
+            <tbody className="divide-y divide-[var(--hairline)]">
               {serializedPayments.map((p) => (
-                <tr key={p.id} className="hover:bg-[var(--surface-2)]/50 transition-colors">
+                <tr key={p.id} className="hover:bg-[var(--surface-card)]/50 transition-colors">
                   <td className="py-3">
                     <div className="font-medium text-[var(--text-primary)]">{p.customerName}</div>
-                    <div className="text-[11px] text-[var(--text-muted)] font-mono">{p.customerEmail}</div>
+                    <div className="text-[11px] text-[var(--muted)] font-mono">{p.customerEmail}</div>
                   </td>
                   <td className="py-3 text-[var(--text-primary)] font-medium">
                     {p.billingMonth || '—'}
@@ -165,23 +165,23 @@ export default async function AdminBillingPage() {
                         href={p.razorpayPaymentLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[var(--accent)] hover:underline inline-flex items-center gap-1 font-mono text-[11px]"
+                        className="text-[var(--primary)] hover:underline inline-flex items-center gap-1 font-mono text-[11px]"
                       >
                         <span>Razorpay Link</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     ) : (
-                      <span className="text-[var(--text-muted)]">—</span>
+                      <span className="text-[var(--muted)]">—</span>
                     )}
                   </td>
                   <td className="py-3">
                     {p.submittedReference ? (
                       <div>
-                        <span className="font-mono bg-[var(--surface-2)] px-1.5 py-0.5 rounded-xs border border-[var(--border)] text-amber-300 font-bold">
+                        <span className="font-mono bg-[var(--surface-card)] px-2 py-0.5 rounded-md border border-[var(--border)] text-[var(--warning)] font-bold">
                           {p.submittedReference}
                         </span>
                         {p.submittedAt && (
-                          <span className="text-[10px] text-[var(--text-muted)] block mt-0.5">
+                          <span className="text-[10px] text-[var(--muted)] block mt-0.5">
                             Submitted: {new Date(p.submittedAt).toLocaleDateString('en-IN')}
                           </span>
                         )}
@@ -189,7 +189,7 @@ export default async function AdminBillingPage() {
                     ) : p.transactionReference ? (
                       <span className="font-mono text-[var(--text-secondary)]">{p.transactionReference}</span>
                     ) : (
-                      <span className="text-[var(--text-muted)] italic">Awaiting customer payment</span>
+                      <span className="text-[var(--muted)] italic">Awaiting customer payment</span>
                     )}
                   </td>
                   <td className="py-3">
@@ -226,15 +226,15 @@ export default async function AdminBillingPage() {
 
       {/* Subscriptions List */}
       <div className="card space-y-4">
-        <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-          <Users className="w-3.5 h-3.5 text-[var(--accent)]" />
+        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
+          <Users className="w-3.5 h-3.5 text-[var(--primary)]" />
           Active Subscriptions ({serializedSubs.length})
         </h2>
 
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left text-xs min-w-[640px]">
             <thead>
-              <tr className="border-b border-[var(--border)] text-[var(--text-muted)] uppercase">
+              <tr className="border-b border-[var(--hairline)] text-[var(--muted)] uppercase">
                 <th className="pb-3 font-semibold">Customer</th>
                 <th className="pb-3 font-semibold">Cluster / Database</th>
                 <th className="pb-3 font-semibold">Rate</th>
@@ -243,12 +243,12 @@ export default async function AdminBillingPage() {
                 <th className="pb-3 font-semibold text-right">Manual Record</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--border)]">
+            <tbody className="divide-y divide-[var(--hairline)]">
               {serializedSubs.map((sub) => (
-                <tr key={sub.id} className="hover:bg-[var(--surface-2)]/50 transition-colors">
+                <tr key={sub.id} className="hover:bg-[var(--surface-card)]/50 transition-colors">
                   <td className="py-3">
                     <div className="font-medium text-[var(--text-primary)]">{sub.customerName}</div>
-                    <div className="text-[11px] text-[var(--text-muted)] font-mono">{sub.customerEmail}</div>
+                    <div className="text-[11px] text-[var(--muted)] font-mono">{sub.customerEmail}</div>
                   </td>
                   <td className="py-3 font-mono text-[var(--text-secondary)]">{sub.databaseName}</td>
                   <td className="py-3 font-mono text-[var(--text-primary)] font-semibold">
@@ -289,5 +289,3 @@ export default async function AdminBillingPage() {
     </div>
   );
 }
-
-

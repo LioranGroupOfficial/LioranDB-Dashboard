@@ -3,7 +3,7 @@ import { connectToDatabase, User, ManagedDatabase } from '@/lib/db';
 import { redirect } from 'next/navigation';
 import { decrypt } from '@/lib/crypto';
 import DatabaseCredentials from '@/components/database/DatabaseCredentials';
-import { Database, Server, Cpu, HardDrive, ShieldCheck, ExternalLink, Activity } from 'lucide-react';
+import { Server, ExternalLink, Activity } from 'lucide-react';
 
 export const metadata = { title: 'Managed Database — LioranDB' };
 
@@ -33,9 +33,9 @@ export default async function DatabasePage() {
   if (!database) {
     return (
       <div className="space-y-4">
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Managed Database</h1>
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Managed Database</h1>
         <div className="card">
-          <div className="flex items-center gap-2 text-[var(--accent)] mb-2">
+          <div className="flex items-center gap-2 text-[var(--primary)] mb-2">
             <Server className="w-4 h-4 animate-pulse" />
             <span className="font-semibold text-xs">Node Provisioning in Progress</span>
           </div>
@@ -78,7 +78,7 @@ export default async function DatabasePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Managed Database Cluster</h1>
+          <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Managed Database Cluster</h1>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
             High-performance ACID compliant multi-model instance with dedicated TLS termination
           </p>
@@ -107,15 +107,15 @@ export default async function DatabasePage() {
 
       {/* Resource allocation */}
       <div className="card space-y-4">
-        <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5 text-[var(--brand-green)]" />
+        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
+          <Activity className="w-3.5 h-3.5 text-[var(--primary)]" />
           Hardware &amp; Engine Allocation
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
           {Object.entries(PLAN_RESOURCES).map(([key, value]) => (
             <div key={key}>
-              <p className="text-[var(--text-muted)] uppercase tracking-wider text-[10px] font-semibold">{key}</p>
-              <p className="text-xs text-white font-medium mt-0.5">{value}</p>
+              <p className="text-[var(--muted)] uppercase tracking-wider text-[10px] font-semibold">{key}</p>
+              <p className="text-xs text-[var(--text-primary)] font-medium mt-0.5">{value}</p>
             </div>
           ))}
         </div>
@@ -126,8 +126,8 @@ export default async function DatabasePage() {
 
       {/* Studio link */}
       <div className="card space-y-3">
-        <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-          <ExternalLink className="w-3.5 h-3.5 text-[var(--brand-green)]" />
+        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
+          <ExternalLink className="w-3.5 h-3.5 text-[var(--primary)]" />
           LioranDB Studio &amp; Query Console
         </h2>
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -144,11 +144,10 @@ export default async function DatabasePage() {
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
-        <p className="text-[11px] text-[var(--text-muted)]">
+        <p className="text-[11px] text-[var(--muted)]">
           Never share your database master credentials in public repositories or unencrypted channels.
         </p>
       </div>
     </div>
   );
 }
-

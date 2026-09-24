@@ -3,7 +3,7 @@ import { connectToDatabase, User, Subscription, Payment } from '@/lib/db';
 import { redirect } from 'next/navigation';
 import { formatCurrency, getBillingStatus, formatDateIST } from '@/lib/billing';
 import SubmitPaymentProofModal from '@/components/customer/SubmitPaymentProofModal';
-import { CreditCard, ExternalLink, Clock, CheckCircle2, AlertCircle, ShieldAlert, Sparkles } from 'lucide-react';
+import { CreditCard, ExternalLink, Clock } from 'lucide-react';
 
 export const metadata = { title: 'Billing & Invoices' };
 
@@ -49,7 +49,7 @@ export default async function BillingPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Billing &amp; Invoices</h1>
+          <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Billing &amp; Invoices</h1>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
             Manage your monthly cluster hosting invoices, Razorpay payments, and payment verification
           </p>
@@ -59,7 +59,7 @@ export default async function BillingPage() {
       {/* Pending / Actionable Invoices Banner */}
       {serializedPending.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-xs font-semibold text-[var(--accent-orange)] uppercase tracking-wider flex items-center gap-1.5">
+          <h2 className="text-xs font-semibold text-[var(--warning)] uppercase tracking-wider flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" />
             Action Required: Monthly Hosting Invoices ({serializedPending.length})
           </h2>
@@ -68,11 +68,11 @@ export default async function BillingPage() {
             {serializedPending.map((inv) => (
               <div
                 key={inv.id}
-                className="card border-[var(--accent-orange)]/40 bg-[#1e1308] p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="card border-[var(--warning)]/40 bg-[var(--surface-card)] p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-white">
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">
                       {inv.billingMonth || 'Monthly Hosting Invoice'}
                     </span>
                     <span
@@ -85,22 +85,22 @@ export default async function BillingPage() {
                   </div>
                   <p className="text-xs text-[var(--text-secondary)]">
                     Amount Due:{' '}
-                    <span className="font-mono text-[var(--brand-green)] font-bold text-sm">
+                    <span className="font-serif text-[var(--primary)] font-normal text-sm">
                       {formatCurrency(inv.amount, inv.currency)}
                     </span>
                     {inv.dueDate && (
-                      <span className="text-[var(--text-muted)] ml-2">
+                      <span className="text-[var(--muted)] ml-2">
                         Due: {new Date(inv.dueDate).toLocaleDateString('en-IN')}
                       </span>
                     )}
                   </p>
                   {inv.submittedReference && (
-                    <p className="text-[11px] text-[var(--text-muted)] font-mono">
-                      Submitted Ref: <span className="text-[var(--brand-green)] font-bold">{inv.submittedReference}</span>
+                    <p className="text-[11px] text-[var(--muted)] font-mono">
+                      Submitted Ref: <span className="text-[var(--primary)] font-semibold">{inv.submittedReference}</span>
                     </p>
                   )}
                   {inv.verificationNotes && (
-                    <p className="text-[11px] text-red-400 font-medium">
+                    <p className="text-[11px] text-[var(--error)] font-medium">
                       Note: {inv.verificationNotes}
                     </p>
                   )}
@@ -112,7 +112,7 @@ export default async function BillingPage() {
                       href={inv.razorpayPaymentLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="btn-secondary text-xs px-4 py-2 flex items-center gap-2"
+                      className="btn-primary text-xs px-4 py-2 flex items-center gap-2"
                     >
                       <span>Pay via Razorpay</span>
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -136,25 +136,25 @@ export default async function BillingPage() {
         <>
           {/* Current Plan */}
           <div className="card">
-            <h2 className="text-xs font-semibold text-[var(--text-secondary)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
-              <CreditCard className="w-3.5 h-3.5 text-[var(--brand-green)]" />
+            <h2 className="text-xs font-semibold text-[var(--muted)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
+              <CreditCard className="w-3.5 h-3.5 text-[var(--primary)]" />
               Active Subscription Details
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
               <div>
-                <p className="text-[var(--text-muted)]">Plan Tier</p>
-                <p className="text-sm font-semibold text-white mt-0.5">
+                <p className="text-[var(--muted)]">Plan Tier</p>
+                <p className="text-sm font-medium text-[var(--text-primary)] mt-0.5">
                   {subscription.planName}
                 </p>
               </div>
               <div>
-                <p className="text-[var(--text-muted)]">Monthly Rate</p>
-                <p className="text-sm font-mono font-semibold text-[var(--brand-green)] mt-0.5">
+                <p className="text-[var(--muted)]">Monthly Rate</p>
+                <p className="text-base font-serif text-[var(--primary)] font-normal mt-0.5">
                   {formatCurrency(subscription.amount, subscription.currency)}/mo
                 </p>
               </div>
               <div>
-                <p className="text-[var(--text-muted)]">Deployment Status</p>
+                <p className="text-[var(--muted)]">Deployment Status</p>
                 <span
                   className={`badge mt-1 ${
                     subscription.status === 'ACTIVE'
@@ -169,8 +169,8 @@ export default async function BillingPage() {
               </div>
               {subscription.nextPaymentDate && (
                 <div>
-                  <p className="text-[var(--text-muted)]">Next Billing Date</p>
-                  <p className="text-sm font-medium text-white mt-0.5">
+                  <p className="text-[var(--muted)]">Next Billing Date</p>
+                  <p className="text-sm font-medium text-[var(--text-primary)] mt-0.5">
                     {formatDateIST(new Date(subscription.nextPaymentDate))}
                   </p>
                 </div>
@@ -185,14 +185,14 @@ export default async function BillingPage() {
 
           {/* Payment history */}
           <div className="card space-y-4">
-            <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+            <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">
               Payment &amp; Invoice History ({payments.length})
             </h2>
 
             <div className="overflow-x-auto w-full">
               <table className="w-full text-left text-xs min-w-[540px]">
                 <thead>
-                  <tr className="border-b border-[var(--border)] text-[var(--text-muted)] uppercase">
+                  <tr className="border-b border-[var(--hairline)] text-[var(--muted)] uppercase">
                     <th className="pb-3 font-semibold">Date</th>
                     <th className="pb-3 font-semibold">Period / Description</th>
                     <th className="pb-3 font-semibold">Amount</th>
@@ -200,10 +200,10 @@ export default async function BillingPage() {
                     <th className="pb-3 font-semibold">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--border)]">
+                <tbody className="divide-y divide-[var(--hairline)]">
                   {payments.map((p) => (
-                    <tr key={p._id.toString()} className="hover:bg-[var(--surface-2)]/50 transition-colors">
-                      <td className="py-3 text-[var(--text-muted)] font-mono">
+                    <tr key={p._id.toString()} className="hover:bg-[var(--surface-card)]/50 transition-colors">
+                      <td className="py-3 text-[var(--muted)] font-mono">
                         {new Date(p.createdAt).toLocaleDateString('en-IN')}
                       </td>
                       <td className="py-3 text-[var(--text-primary)] font-medium">
@@ -248,4 +248,3 @@ export default async function BillingPage() {
     </div>
   );
 }
-

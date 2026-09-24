@@ -39,12 +39,12 @@ export default function ForgotPasswordPage() {
   if (submitted) {
     return (
       <div className="card border-[var(--border)] shadow-xl bg-[var(--surface)] p-6 text-center">
-        <div className="w-12 h-12 rounded-full bg-[var(--brand-green)]/15 border border-[var(--brand-green)]/40 text-[var(--brand-green)] mx-auto flex items-center justify-center mb-4">
+        <div className="w-12 h-12 rounded-full bg-[var(--primary)]/15 border border-[var(--primary)]/40 text-[var(--primary)] mx-auto flex items-center justify-center mb-4">
           <CheckCircle2 className="w-6 h-6" />
         </div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Check Your Email</h1>
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Check Your Email</h1>
         <p className="mt-2 text-xs text-[var(--text-secondary)] leading-relaxed">
-          If an account exists with <span className="text-[var(--brand-green)] font-mono font-medium">{email}</span>, we&apos;ve sent password reset instructions. The link expires in 1 hour.
+          If an account exists with <span className="text-[var(--primary)] font-mono font-medium">{email}</span>, we&apos;ve sent password reset instructions. The link expires in 1 hour.
         </p>
         <div className="alert-banner alert-banner-info text-xs mt-4 text-left">
           Please check your spam or junk folder if the link does not arrive within 2 minutes.
@@ -65,10 +65,10 @@ export default function ForgotPasswordPage() {
   return (
     <div className="card border-[var(--border)] shadow-xl bg-[var(--surface)] p-6">
       <div className="mb-6">
-        <div className="w-10 h-10 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--brand-green)] flex items-center justify-center mb-3">
+        <div className="w-10 h-10 rounded-lg bg-[var(--surface-card)] border border-[var(--border)] text-[var(--primary)] flex items-center justify-center mb-3">
           <KeyRound className="w-5 h-5" />
         </div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Reset Password</h1>
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Reset Password</h1>
         <p className="mt-1 text-xs text-[var(--text-secondary)]">
           Enter your registered email address and we&apos;ll send recovery instructions.
         </p>
@@ -126,4 +126,3 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
-

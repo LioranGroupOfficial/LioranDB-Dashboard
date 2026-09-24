@@ -69,11 +69,11 @@ export default function SupportSidebar({ email, mobileOpen, onMobileClose }: Pro
           >
             <Icon
               className={`w-4 h-4 shrink-0 transition-colors ${
-                active ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'
+                active ? 'text-[var(--primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
               }`}
             />
             {(isMobile || !collapsed) && (
-              <span className="text-xs font-semibold truncate">{item.label}</span>
+              <span className="text-xs font-medium truncate">{item.label}</span>
             )}
           </Link>
         );
@@ -93,20 +93,20 @@ export default function SupportSidebar({ email, mobileOpen, onMobileClose }: Pro
         <div className="h-14 shrink-0 flex items-center justify-between px-3.5 border-b border-[var(--border)]">
           {!collapsed ? (
             <Link href="/support-console" className="flex items-center gap-2.5 group">
-              <div className="w-7 h-7 rounded-lg bg-[var(--brand-green)] text-[var(--on-primary)] font-bold flex items-center justify-center shadow-sm shadow-[var(--brand-green)]/20">
+              <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center shadow-xs">
                 <Database className="w-4 h-4 text-[var(--on-primary)]" />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
-                  Lioran<span className="text-[var(--accent)]">DB</span>
+                <span className="text-base font-normal font-serif tracking-tight text-[var(--text-primary)]">
+                  Lioran<span className="text-[var(--primary)] italic">DB</span>
                 </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-[var(--info)] border border-sky-500/30 font-mono font-bold">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-cream-strong)] text-[var(--text-strong)] border border-[var(--border)] font-sans font-semibold">
                   SUPPORT
                 </span>
               </div>
             </Link>
           ) : (
-            <div className="w-7 h-7 rounded-lg bg-[var(--brand-green)] text-[var(--on-primary)] font-bold flex items-center justify-center mx-auto shadow-sm shadow-[var(--brand-green)]/20">
+            <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center mx-auto shadow-xs">
               <Database className="w-4 h-4 text-[var(--on-primary)]" />
             </div>
           )}
@@ -115,7 +115,7 @@ export default function SupportSidebar({ email, mobileOpen, onMobileClose }: Pro
             type="button"
             onClick={toggleCollapsed}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors ${
+            className={`p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-card)] transition-colors ${
               collapsed ? 'hidden' : 'block'
             }`}
             aria-label="Toggle sidebar"
@@ -130,7 +130,7 @@ export default function SupportSidebar({ email, mobileOpen, onMobileClose }: Pro
               type="button"
               onClick={toggleCollapsed}
               title="Expand sidebar"
-              className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"
+              className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-card)] transition-colors"
             >
               <PanelLeftOpen className="w-4 h-4" />
             </button>
@@ -144,12 +144,12 @@ export default function SupportSidebar({ email, mobileOpen, onMobileClose }: Pro
           <button
             onClick={handleLogout}
             title={collapsed ? 'Sign out' : undefined}
-            className={`sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-full ${
+            className={`sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-lg ${
               collapsed ? 'justify-center px-0' : 'px-3.5'
             }`}
           >
             <LogOut className="w-4 h-4 shrink-0 text-red-500" />
-            {!collapsed && <span className="text-xs font-semibold">Sign Out</span>}
+            {!collapsed && <span className="text-xs font-medium">Sign Out</span>}
           </button>
         </div>
       </aside>
@@ -169,14 +169,14 @@ export default function SupportSidebar({ email, mobileOpen, onMobileClose }: Pro
                 onClick={onMobileClose}
                 className="flex items-center gap-2.5"
               >
-                <div className="w-7 h-7 rounded-lg bg-[var(--brand-green)] text-[var(--on-primary)] font-bold flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center">
                   <Database className="w-4 h-4 text-[var(--on-primary)]" />
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
-                    Lioran<span className="text-[var(--accent)]">DB</span>
+                  <span className="text-base font-normal font-serif tracking-tight text-[var(--text-primary)]">
+                    Lioran<span className="text-[var(--primary)] italic">DB</span>
                   </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-[var(--info)] border border-sky-500/30 font-mono font-bold">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-cream-strong)] text-[var(--text-strong)] border border-[var(--border)] font-sans font-semibold">
                     SUPPORT
                   </span>
                 </div>
@@ -184,7 +184,7 @@ export default function SupportSidebar({ email, mobileOpen, onMobileClose }: Pro
               <button
                 type="button"
                 onClick={onMobileClose}
-                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+                className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-card)]"
                 aria-label="Close menu"
               >
                 <X className="w-5 h-5" />
@@ -196,10 +196,10 @@ export default function SupportSidebar({ email, mobileOpen, onMobileClose }: Pro
             <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
               <button
                 onClick={handleLogout}
-                className="sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3.5 rounded-full"
+                className="sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3.5 rounded-lg"
               >
                 <LogOut className="w-4 h-4 shrink-0 text-red-500" />
-                <span className="text-xs font-semibold">Sign Out</span>
+                <span className="text-xs font-medium">Sign Out</span>
               </button>
             </div>
           </aside>

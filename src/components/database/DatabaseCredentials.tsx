@@ -45,10 +45,10 @@ export default function DatabaseCredentials({ db }: Props) {
   return (
     <div className="card space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">
           Connection Details
         </h2>
-        <span className="text-[11px] font-mono text-[var(--accent)] bg-[var(--surface-2)] px-2.5 py-0.5 rounded-full border border-[var(--border)]">
+        <span className="text-[11px] font-mono text-[var(--accent-teal)] bg-[var(--surface-card)] px-3 py-0.5 rounded-full border border-[var(--border)]">
           TLS v1.3 Verified
         </span>
       </div>
@@ -62,7 +62,7 @@ export default function DatabaseCredentials({ db }: Props) {
               {credExpiry && !isExpired && (
                 <> Credentials expire: {credExpiry.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST.</>
               )}
-              {isExpired && <strong className="text-red-500 font-semibold"> Credentials have expired — contact support.</strong>}
+              {isExpired && <strong className="text-[var(--error)] font-semibold"> Credentials have expired — contact support.</strong>}
             </p>
           </div>
         </div>
@@ -82,7 +82,7 @@ export default function DatabaseCredentials({ db }: Props) {
             <button
               type="button"
               onClick={() => setRevealed(!revealed)}
-              className="text-xs text-[var(--accent)] hover:underline transition-colors font-semibold"
+              className="text-xs text-[var(--primary)] hover:underline transition-colors font-medium"
             >
               {revealed ? 'Hide' : 'Reveal URI'}
             </button>
@@ -90,21 +90,21 @@ export default function DatabaseCredentials({ db }: Props) {
           <div className="code-mockup-card relative group">
             <div className="flex items-center justify-between gap-3 font-mono text-xs break-all">
               {revealed ? (
-                <span className="text-[var(--brand-green)] selection:bg-[var(--brand-green)] selection:text-black">{db.connectionUri}</span>
+                <span className="text-[var(--accent-teal)] selection:bg-[var(--primary)] selection:text-white">{db.connectionUri}</span>
               ) : (
-                <span className="text-[var(--text-muted)] tracking-widest">{'•'.repeat(48)}</span>
+                <span className="text-[var(--on-dark-soft)] tracking-widest">{'•'.repeat(48)}</span>
               )}
               <button
                 type="button"
                 onClick={() => copyToClipboard(db.connectionUri!, 'uri')}
-                className="btn-secondary text-xs px-3 py-1 shrink-0 rounded-full h-7 min-h-0"
+                className="btn-secondary-on-dark text-xs px-3 py-1 shrink-0 rounded-lg h-7 min-h-0"
               >
                 {copied === 'uri' ? '✓ Copied' : 'Copy'}
               </button>
             </div>
           </div>
           {revealed && (
-            <p className="text-[11px] text-amber-600 dark:text-red-300">
+            <p className="text-[11px] text-[var(--warning)]">
               Keep this URI secure. Never commit connection strings containing credentials to public repositories.
             </p>
           )}
@@ -112,7 +112,7 @@ export default function DatabaseCredentials({ db }: Props) {
       )}
 
       {db.provisionedAt && (
-        <p className="text-xs text-[var(--text-muted)] pt-1 border-t border-[var(--border)]">
+        <p className="text-xs text-[var(--muted)] pt-1 border-t border-[var(--border)]">
           Provisioned:{' '}
           {new Date(db.provisionedAt).toLocaleDateString('en-IN', {
             year: 'numeric',
@@ -137,13 +137,13 @@ function CredRow({
   copied: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-1.5 px-3 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--border)]">
-      <span className="text-xs text-[var(--text-muted)] w-28 shrink-0">{label}</span>
-      <span className="text-xs text-[var(--text-primary)] font-mono flex-1 truncate">{value}</span>
+    <div className="flex items-center justify-between gap-4 py-2 px-3.5 rounded-lg bg-[var(--surface-card)]/70 border border-[var(--hairline)]">
+      <span className="text-xs text-[var(--muted)] w-28 shrink-0 font-medium">{label}</span>
+      <span className="text-xs text-[var(--ink)] font-mono flex-1 truncate">{value}</span>
       <button
         type="button"
         onClick={onCopy}
-        className="text-xs text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors shrink-0 px-2.5 py-0.5 rounded-full hover:bg-[var(--surface-3)] font-medium"
+        className="text-xs text-[var(--muted)] hover:text-[var(--primary)] transition-colors shrink-0 px-2.5 py-0.5 rounded-md hover:bg-[var(--surface-cream-strong)] font-medium"
       >
         {copied ? '✓ Copied' : 'Copy'}
       </button>

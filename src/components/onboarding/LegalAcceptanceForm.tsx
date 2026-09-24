@@ -86,12 +86,12 @@ export default function LegalAcceptanceForm({ policies, allPreviouslyAccepted = 
       {allPreviouslyAccepted && (
         <div className="alert-banner alert-banner-success text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-[var(--brand-green)] shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-[var(--success)] shrink-0" />
             <span>You have signed all active agreements. Your acceptance record is securely logged.</span>
           </div>
           <Link
             href="/dashboard"
-            className="btn-secondary py-1.5 px-3 text-xs font-semibold inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0"
+            className="btn-secondary py-1.5 px-3 text-xs font-medium inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0"
           >
             <span>Dashboard</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -104,17 +104,17 @@ export default function LegalAcceptanceForm({ policies, allPreviouslyAccepted = 
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base font-semibold text-[var(--text-primary)]">{policy.title}</h3>
+                <h3 className="text-lg font-normal font-serif text-[var(--text-primary)]">{policy.title}</h3>
                 {policy.accepted && (
-                  <span className="badge badge-active text-[10px] font-semibold">Signed</span>
+                  <span className="badge badge-active text-[10px] font-medium">Signed</span>
                 )}
               </div>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">Version: {policy.version}</p>
+              <p className="text-xs text-[var(--muted)] mt-0.5">Version: {policy.version}</p>
             </div>
             <button
               type="button"
               onClick={() => setExpandedId(expandedId === policy.id ? null : policy.id)}
-              className="text-xs text-[var(--accent)] hover:underline transition-colors whitespace-nowrap font-semibold"
+              className="text-xs text-[var(--primary)] hover:underline transition-colors whitespace-nowrap font-medium"
             >
               {expandedId === policy.id ? 'Collapse ↑' : 'Read Policy ↓'}
             </button>
@@ -123,7 +123,7 @@ export default function LegalAcceptanceForm({ policies, allPreviouslyAccepted = 
           {expandedId === policy.id && (
             <div
               className="text-xs text-[var(--text-secondary)] leading-relaxed max-h-64 overflow-y-auto p-4 rounded-xl"
-              style={{ background: 'var(--background)', border: '1px solid var(--border)' }}
+              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}
             >
               <pre className="whitespace-pre-wrap font-sans leading-relaxed">{policy.content}</pre>
             </div>
@@ -134,7 +134,7 @@ export default function LegalAcceptanceForm({ policies, allPreviouslyAccepted = 
               type="checkbox"
               checked={acceptedIds.has(policy.id)}
               onChange={() => toggleAccept(policy.id)}
-              className="mt-0.5 accent-[var(--accent)] w-4 h-4 rounded-sm cursor-pointer"
+              className="mt-0.5 accent-[var(--primary)] w-4 h-4 rounded-sm cursor-pointer"
             />
             <span className="text-xs text-[var(--text-secondary)] leading-normal">
               I have read and agree to the{' '}
@@ -171,7 +171,7 @@ export default function LegalAcceptanceForm({ policies, allPreviouslyAccepted = 
       </button>
 
       {!allAccepted && (
-        <p className="text-xs text-center text-[var(--text-muted)]">
+        <p className="text-xs text-center text-[var(--muted)]">
           You must check all policy boxes before continuing.
         </p>
       )}

@@ -2,92 +2,108 @@
 
 @layer base {
   :root {
-    /* Brand Colors from DESIGN.md */
-    --primary: #00ed64;
-    --primary-deep: #00b545;
-    --primary-pressed: #008c34;
-    --on-primary: #001e2b;
-    --brand-green: #00ed64;
-    --brand-green-dark: #00684a;
-    --brand-green-mid: #00a35c;
-    --brand-green-soft: #c3f0d2;
-    --brand-teal-deep: #001e2b;
-    --brand-teal: #003d4f;
-    --brand-teal-mid: #00684a;
-    --accent-purple: #7b3ff2;
-    --accent-orange: #fa6e39;
-    --accent-pink: #f06bb8;
-    --accent-blue: #3d4f9f;
+    /* Claude Brand & Accent Colors from DESIGN.md */
+    --primary: #cc785c;
+    --primary-active: #a9583e;
+    --primary-disabled: #e6dfd8;
+    --on-primary: #ffffff;
+    --accent-coral: #cc785c;
+    --accent-teal: #5db8a6;
+    --accent-amber: #e8a55a;
 
-    /* Light Theme Palette (DEFAULT) from DESIGN.md */
-    --background: #ffffff;
-    --canvas-dark: #001e2b;
-    --surface: #ffffff;
-    --surface-2: #f4f7f6;
-    --surface-3: #e1e5e8;
-    --surface-soft: #f9fbfa;
-    --surface-feature: #e3fcef;
-    --sidebar-bg: #f9fbfa;
-    --header-bg: #ffffff;
-    --border: #e1e5e8;
-    --border-light: #eceff1;
-    --hairline-dark: #1c2d38;
-    --hairline-strong: #c1ccd6;
+    /* Light Theme Palette (Tinted Cream Canvas) from DESIGN.md */
+    --background: #faf9f5;
+    --canvas: #faf9f5;
+    --canvas-dark: #181715;
+    --surface: #faf9f5;
+    --surface-soft: #f5f0e8;
+    --surface-card: #efe9de;
+    --surface-cream-strong: #e8e0d2;
+    --surface-2: #f5f0e8;
+    --surface-3: #efe9de;
+    --surface-feature: #efe9de;
+    --surface-dark: #181715;
+    --surface-dark-elevated: #252320;
+    --surface-dark-soft: #1f1e1b;
+    --sidebar-bg: #f5f0e8;
+    --header-bg: #faf9f5;
+    --border: #e6dfd8;
+    --border-light: #ebe6df;
+    --hairline: #e6dfd8;
+    --hairline-soft: #ebe6df;
 
     /* Text Colors - Light Mode */
-    --text-primary: #001e2b;
-    --text-secondary: #3d4f5b;
-    --text-muted: #7c8c9a;
-    --ink: #001e2b;
-    --slate: #3d4f5b;
-    --steel: #5c6c7a;
+    --text-primary: #141413;
+    --text-secondary: #3d3d3a;
+    --text-strong: #252523;
+    --text-muted: #6c6a64;
+    --text-muted-soft: #8e8b82;
+    --ink: #141413;
+    --body: #3d3d3a;
+    --body-strong: #252523;
+    --muted: #6c6a64;
+    --muted-soft: #8e8b82;
+    --on-dark: #faf9f5;
+    --on-dark-soft: #a09d96;
 
     /* Accents & Status - Light Mode */
-    --accent: #00684a;
-    --accent-dark: #004d36;
-    --accent-primary: #00ed64;
-    --success: #00684a;
-    --warning: #fa6e39;
-    --error: #dc2626;
-    --info: #0284c7;
+    --accent: #cc785c;
+    --accent-dark: #a9583e;
+    --accent-primary: #cc785c;
+    --success: #5db872;
+    --warning: #d4a017;
+    --error: #c64545;
+    --info: #5db8a6;
 
-    --card-shadow: 0 1px 4px rgba(0, 30, 43, 0.06), 0 1px 2px rgba(0, 30, 43, 0.04);
+    --card-shadow: 0 1px 3px rgba(20, 20, 19, 0.05);
   }
 
   .dark {
-    /* Dark Theme Palette from DESIGN.md */
-    --background: #001e2b;
-    --canvas-dark: #001e2b;
-    --surface: #002838;
-    --surface-2: #063446;
-    --surface-3: #0d4054;
-    --surface-soft: #001824;
-    --surface-feature: #003822;
-    --sidebar-bg: #001824;
-    --header-bg: #001e2b;
-    --border: #1c3b4a;
-    --border-light: #2d5162;
-    --hairline-dark: #1c2d38;
-    --hairline-strong: #2d5162;
+    /* Claude Dark Theme Palette from DESIGN.md */
+    --background: #181715;
+    --canvas: #181715;
+    --canvas-dark: #121110;
+    --surface: #1f1e1b;
+    --surface-soft: #181715;
+    --surface-card: #252320;
+    --surface-cream-strong: #2e2b27;
+    --surface-2: #252320;
+    --surface-3: #2f2d29;
+    --surface-feature: #252320;
+    --surface-dark: #181715;
+    --surface-dark-elevated: #252320;
+    --surface-dark-soft: #1f1e1b;
+    --sidebar-bg: #181715;
+    --header-bg: #181715;
+    --border: #383530;
+    --border-light: #48443e;
+    --hairline: #383530;
+    --hairline-soft: #2e2b27;
 
     /* Text Colors - Dark Mode */
-    --text-primary: #ffffff;
-    --text-secondary: #a8b3bc;
-    --text-muted: #7c8c9a;
-    --ink: #001e2b;
-    --slate: #3d4f5b;
-    --steel: #5c6c7a;
+    --text-primary: #faf9f5;
+    --text-secondary: #d5d2cb;
+    --text-strong: #ffffff;
+    --text-muted: #a09d96;
+    --text-muted-soft: #78756e;
+    --ink: #faf9f5;
+    --body: #d5d2cb;
+    --body-strong: #ffffff;
+    --muted: #a09d96;
+    --muted-soft: #78756e;
+    --on-dark: #faf9f5;
+    --on-dark-soft: #a09d96;
 
     /* Accents & Status - Dark Mode */
-    --accent: #00ed64;
-    --accent-dark: #00b545;
-    --accent-primary: #00ed64;
-    --success: #00ed64;
-    --warning: #fa6e39;
-    --error: #ef4444;
-    --info: #38bdf8;
+    --accent: #cc785c;
+    --accent-dark: #e0886c;
+    --accent-primary: #cc785c;
+    --success: #5db872;
+    --warning: #e8a55a;
+    --error: #e06262;
+    --info: #5db8a6;
 
-    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   }
 
   * {
@@ -109,24 +125,32 @@
   body {
     background-color: var(--background);
     color: var(--text-primary);
-    font-family: var(--font-manrope), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100dvh;
   }
 
   code, kbd, samp, pre {
-    font-family: var(--font-mono), 'Source Code Pro', monospace;
+    font-family: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    letter-spacing: -0.02em;
-    font-weight: 600;
+  /* Display Serif Headlines from DESIGN.md (Copernicus / Newsreader / Tiempos) */
+  h1, h2, h3, .font-serif-display {
+    font-family: var(--font-serif), 'Newsreader', 'Cormorant Garamond', 'Tiempos Headline', Garamond, Georgia, serif;
+    letter-spacing: -0.025em;
+    font-weight: 400;
   }
 
-  /* Focus styles */
+  h4, h5, h6 {
+    font-family: var(--font-sans), 'Inter', sans-serif;
+    letter-spacing: -0.01em;
+    font-weight: 500;
+  }
+
+  /* Focus styles with Claude Coral accent */
   :focus-visible {
-    outline: 2px solid var(--brand-green);
+    outline: 2px solid var(--primary);
     outline-offset: 2px;
   }
 
@@ -151,48 +175,63 @@
 }
 
 @layer components {
-  /* Pill Buttons according to DESIGN.md */
+  /* Buttons from DESIGN.md (8px radius, coral primary, cream secondary) */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-150 cursor-pointer select-none min-h-[38px] shadow-sm;
-    background-color: var(--brand-green);
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer select-none min-h-[40px] shadow-xs;
+    background-color: var(--primary);
     color: var(--on-primary);
   }
   .btn-primary:hover {
-    background-color: var(--primary-deep);
-    box-shadow: 0 0 16px rgba(0, 237, 100, 0.25);
+    background-color: var(--primary-active);
+    box-shadow: 0 2px 8px rgba(204, 120, 92, 0.25);
   }
   .btn-primary:active {
-    background-color: var(--primary-pressed);
+    background-color: var(--primary-active);
+    transform: translateY(1px);
   }
   .btn-primary:disabled {
-    opacity: 0.5;
+    background-color: var(--primary-disabled);
+    color: var(--muted);
+    opacity: 0.7;
     cursor: not-allowed;
     box-shadow: none;
+    transform: none;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-150 border cursor-pointer select-none min-h-[38px];
-    background-color: var(--surface-2);
-    border-color: var(--border);
-    color: var(--text-primary);
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 border cursor-pointer select-none min-h-[40px];
+    background-color: var(--surface);
+    border-color: var(--hairline);
+    color: var(--ink);
   }
   .btn-secondary:hover {
-    background-color: var(--surface-3);
-    border-color: var(--border-light);
-    color: #ffffff;
+    background-color: var(--surface-card);
+    border-color: var(--border);
+    color: var(--ink);
   }
   .btn-secondary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
+  .btn-secondary-on-dark {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 border cursor-pointer select-none min-h-[40px];
+    background-color: var(--surface-dark-elevated);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--on-dark);
+  }
+  .btn-secondary-on-dark:hover {
+    background-color: var(--surface-dark-soft);
+    color: #ffffff;
+  }
+
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-150 cursor-pointer select-none min-h-[38px];
-    background-color: #dc2626;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer select-none min-h-[40px];
+    background-color: var(--error);
     color: #ffffff;
   }
   .btn-danger:hover {
-    background-color: #b91c1c;
+    background-color: #a83535;
   }
   .btn-danger:disabled {
     opacity: 0.5;
@@ -200,56 +239,81 @@
   }
 
   .btn-success {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-150 cursor-pointer select-none min-h-[38px];
-    background-color: var(--brand-green);
-    color: var(--on-primary);
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer select-none min-h-[40px];
+    background-color: var(--success);
+    color: #ffffff;
   }
   .btn-success:hover {
-    background-color: var(--primary-deep);
+    background-color: #4ca360;
   }
   .btn-success:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  /* 12px radius cards from DESIGN.md */
+  /* Cards from DESIGN.md: 12px radius, cream card or hairline border */
   .card {
     background-color: var(--surface);
-    border: 1px solid var(--border);
+    border: 1px solid var(--hairline);
     border-radius: 12px;
-    padding: 20px;
+    padding: 24px;
     box-shadow: var(--card-shadow);
     transition: background-color 0.15s ease, border-color 0.15s ease;
   }
 
-  .code-mockup-card {
-    background-color: var(--canvas-dark);
-    border: 1px solid #1c3b4a;
+  .feature-card {
+    background-color: var(--surface-card);
+    border: 1px solid var(--hairline);
     border-radius: 12px;
-    padding: 16px 20px;
-    font-family: var(--font-mono), 'Source Code Pro', monospace;
-    color: #ffffff;
+    padding: 32px;
+    box-shadow: var(--card-shadow);
   }
 
+  .callout-card-coral {
+    background-color: var(--primary);
+    color: var(--on-primary);
+    border-radius: 12px;
+    padding: 32px;
+  }
+
+  /* Dark Navy Product Surface Mockup Card from DESIGN.md */
+  .code-mockup-card, .code-window-card {
+    background-color: var(--surface-dark);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px 24px;
+    font-family: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
+    color: var(--on-dark);
+  }
+
+  .product-mockup-card-dark {
+    background-color: var(--surface-dark);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 32px;
+    color: var(--on-dark);
+  }
+
+  /* Form Inputs from DESIGN.md (8px radius, hairline border, coral focus) */
   .input-field {
-    @apply w-full px-3.5 py-2 rounded-lg text-sm transition-all duration-150;
+    @apply w-full px-3.5 py-2.5 rounded-lg text-sm transition-all duration-150;
     background-color: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
+    border: 1px solid var(--hairline);
+    color: var(--ink);
   }
   .input-field:focus {
     outline: none;
-    border-color: var(--brand-green-mid);
+    border-color: var(--primary);
     background-color: var(--surface);
-    box-shadow: 0 0 0 1px var(--brand-green-mid);
+    box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.15);
   }
   .dark .input-field:focus {
     background-color: var(--surface-2);
-    border-color: var(--brand-green);
-    box-shadow: 0 0 0 1px var(--brand-green);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.25);
   }
   .input-field::placeholder {
-    color: var(--text-muted);
+    color: var(--muted-soft);
   }
   .input-field:disabled {
     opacity: 0.5;
@@ -257,130 +321,136 @@
   }
 
   .label {
-    @apply block text-xs font-semibold uppercase tracking-wider mb-1.5;
-    color: var(--text-secondary);
+    @apply block text-xs font-medium uppercase tracking-wider mb-1.5;
+    color: var(--muted);
   }
 
-  /* Badges with full rounded pills */
+  /* Badges with full rounded pills from DESIGN.md */
   .badge {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold transition-colors;
+    @apply inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-medium transition-colors;
   }
   .badge-active {
-    background-color: #e3fcef;
-    color: #00684a;
-    border: 1px solid #c3f0d2;
+    background-color: #eef7f2;
+    color: #2d7a48;
+    border: 1px solid #c5e8d2;
   }
   .dark .badge-active {
-    background-color: #003822;
-    color: var(--brand-green);
-    border: 1px solid var(--brand-green-dark);
+    background-color: #1a2f23;
+    color: #5db872;
+    border: 1px solid #2d553d;
   }
   .badge-pending {
-    background-color: #fff8e0;
-    color: #946f3f;
-    border: 1px solid #fed7aa;
+    background-color: #fdf6ea;
+    color: #966014;
+    border: 1px solid #f5dfb8;
   }
   .dark .badge-pending {
-    background-color: #2e1704;
-    color: var(--accent-orange);
-    border: 1px solid #7c3a10;
+    background-color: #2e2314;
+    color: #e8a55a;
+    border: 1px solid #5a4220;
   }
   .badge-suspended {
-    background-color: #fee2e2;
-    color: #991b1b;
-    border: 1px solid #fca5a5;
+    background-color: #fdf0f0;
+    color: #a62828;
+    border: 1px solid #f7caca;
   }
   .dark .badge-suspended {
-    background-color: #2e0c0c;
-    color: #f87171;
-    border: 1px solid #7f1d1d;
+    background-color: #311818;
+    color: #e06262;
+    border: 1px solid #5c2c2c;
   }
   .badge-default {
-    background-color: var(--surface-2);
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
+    background-color: var(--surface-card);
+    color: var(--ink);
+    border: 1px solid var(--hairline);
   }
   .badge-info {
-    background-color: #e0f2fe;
-    color: #0369a1;
-    border: 1px solid #bae6fd;
+    background-color: #edf7f9;
+    color: #1e6e7d;
+    border: 1px solid #c8e8ee;
   }
   .dark .badge-info {
-    background-color: #0c2538;
-    color: #38bdf8;
-    border: 1px solid #0369a1;
+    background-color: #142a2e;
+    color: #5db8a6;
+    border: 1px solid #234f57;
+  }
+  .badge-coral {
+    background-color: var(--primary);
+    color: var(--on-primary);
+    border: 1px solid var(--primary);
   }
 
-  /* Navigation Sidebar Links */
+  /* Navigation Sidebar Links from DESIGN.md */
   .sidebar-link {
     @apply flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-all duration-150 cursor-pointer select-none;
-    color: var(--text-secondary);
+    color: var(--muted);
   }
   .sidebar-link:hover {
-    background-color: var(--surface-2);
-    color: var(--text-primary);
+    background-color: var(--surface-card);
+    color: var(--ink);
   }
   .sidebar-link.active {
-    background-color: var(--surface-feature);
-    color: var(--accent);
-    font-weight: 600;
+    background-color: var(--surface-card);
+    color: var(--primary);
+    font-weight: 500;
   }
   .dark .sidebar-link.active {
-    background-color: var(--brand-teal);
-    color: var(--brand-green);
-    font-weight: 600;
+    background-color: var(--surface-2);
+    color: var(--primary);
+    font-weight: 500;
   }
 
   .divider {
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--hairline);
   }
 
   .skeleton {
     @apply animate-pulse rounded-lg;
-    background-color: var(--surface-2);
+    background-color: var(--surface-card);
   }
 
+  /* Alert Banners */
   .alert-banner {
-    @apply flex items-start gap-3 p-3.5 rounded-xl text-sm leading-relaxed;
+    @apply flex items-start gap-3 p-4 rounded-xl text-sm leading-relaxed;
   }
   .alert-banner-error {
-    background-color: #fef2f2;
-    border: 1px solid #fecaca;
+    background-color: #fdf0f0;
+    border: 1px solid #f7caca;
     color: #991b1b;
   }
   .dark .alert-banner-error {
-    background-color: #2a0e0e;
-    border: 1px solid #7f1d1d;
+    background-color: #311818;
+    border: 1px solid #5c2c2c;
     color: #fca5a5;
   }
   .alert-banner-success {
-    background-color: #f0fdf4;
-    border: 1px solid #bbf7d0;
+    background-color: #eef7f2;
+    border: 1px solid #c5e8d2;
     color: #166534;
   }
   .dark .alert-banner-success {
-    background-color: #042918;
-    border: 1px solid #00684a;
+    background-color: #1a2f23;
+    border: 1px solid #2d553d;
     color: #86efac;
   }
   .alert-banner-warning {
-    background-color: #fffbeb;
-    border: 1px solid #fde68a;
+    background-color: #fdf6ea;
+    border: 1px solid #f5dfb8;
     color: #92400e;
   }
   .dark .alert-banner-warning {
-    background-color: #2e1704;
-    border: 1px solid #78350f;
+    background-color: #2e2314;
+    border: 1px solid #5a4220;
     color: #fde047;
   }
   .alert-banner-info {
-    background-color: #f0f9ff;
-    border: 1px solid #bae6fd;
+    background-color: #edf7f9;
+    border: 1px solid #c8e8ee;
     color: #075985;
   }
   .dark .alert-banner-info {
-    background-color: #0b253a;
-    border: 1px solid #1e3a8a;
+    background-color: #142a2e;
+    border: 1px solid #234f57;
     color: #93c5fd;
   }
 

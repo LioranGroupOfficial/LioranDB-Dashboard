@@ -20,7 +20,7 @@ function ResetPasswordForm() {
   if (!token) {
     return (
       <div className="card border-[var(--border)] shadow-xl bg-[var(--surface)] p-6 text-center">
-        <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-2">Invalid Reset Link</h1>
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] mb-2">Invalid Reset Link</h1>
         <p className="text-xs text-[var(--text-secondary)] mb-6 leading-relaxed">
           This password reset link is invalid or has expired. Please request a new recovery link.
         </p>
@@ -69,10 +69,10 @@ function ResetPasswordForm() {
   if (success) {
     return (
       <div className="card border-[var(--border)] shadow-xl bg-[var(--surface)] p-6 text-center">
-        <div className="w-12 h-12 rounded-full bg-[var(--brand-green)]/15 border border-[var(--brand-green)]/40 text-[var(--brand-green)] mx-auto flex items-center justify-center mb-4">
+        <div className="w-12 h-12 rounded-full bg-[var(--primary)]/15 border border-[var(--primary)]/40 text-[var(--primary)] mx-auto flex items-center justify-center mb-4">
           <CheckCircle2 className="w-6 h-6" />
         </div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-2">Password Reset Successfully</h1>
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] mb-2">Password Reset Successfully</h1>
         <p className="text-xs text-[var(--text-secondary)] mb-6">
           Your credentials have been updated. Redirecting to sign in...
         </p>
@@ -87,10 +87,10 @@ function ResetPasswordForm() {
   return (
     <div className="card border-[var(--border)] shadow-xl bg-[var(--surface)] p-6">
       <div className="mb-6">
-        <div className="w-10 h-10 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--brand-green)] flex items-center justify-center mb-3">
+        <div className="w-10 h-10 rounded-lg bg-[var(--surface-card)] border border-[var(--border)] text-[var(--primary)] flex items-center justify-center mb-3">
           <KeyRound className="w-5 h-5" />
         </div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Set New Password</h1>
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Set New Password</h1>
         <p className="mt-1 text-xs text-[var(--text-secondary)]">
           Create a strong password for your LioranDB account.
         </p>

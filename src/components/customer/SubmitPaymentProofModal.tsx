@@ -77,16 +77,16 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
           <div className="card border-[var(--border)] bg-[var(--surface)] max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-              <div className="flex items-center gap-2 text-[var(--accent)]">
+              <div className="flex items-center gap-2 text-[var(--primary)]">
                 <CreditCard className="w-5 h-5" />
-                <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
+                <h3 className="text-base font-normal font-serif text-[var(--text-primary)]">
                   Submit Razorpay Payment Proof
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm p-1 rounded-full hover:bg-[var(--surface-2)]"
+                className="text-[var(--muted)] hover:text-[var(--text-primary)] text-sm p-1 rounded-full hover:bg-[var(--surface-card)]"
               >
                 ✕
               </button>
@@ -100,19 +100,19 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
             )}
             {success && (
               <div className="alert-banner alert-banner-success text-xs">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--accent)]" />
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--success)]" />
                 <span>{success}</span>
               </div>
             )}
 
-            <div className="p-4 bg-[var(--surface-2)] border border-[var(--border)] rounded-xl space-y-2 text-xs">
+            <div className="p-4 bg-[var(--surface-card)] border border-[var(--border)] rounded-xl space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-[var(--text-muted)]">Invoice</span>
+                <span className="text-[var(--muted)]">Invoice</span>
                 <span className="text-[var(--text-primary)] font-semibold">{payment.billingMonth || 'Monthly Hosting'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[var(--text-muted)]">Amount</span>
-                <span className="font-mono text-[var(--accent)] font-bold">₹{payment.amount.toLocaleString('en-IN')}</span>
+                <span className="text-[var(--muted)]">Amount</span>
+                <span className="font-serif text-[var(--primary)] font-normal text-base">₹{payment.amount.toLocaleString('en-IN')}</span>
               </div>
               {payment.razorpayPaymentLink && (
                 <div className="pt-2 border-t border-[var(--border)]">
@@ -142,7 +142,7 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
                   className="input-field font-mono"
                   required
                 />
-                <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                <p className="text-[11px] text-[var(--muted)] mt-1">
                   After completing the payment on Razorpay, paste the Payment ID (starts with pay_) or bank UTR reference here.
                 </p>
               </div>
@@ -188,4 +188,3 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
     </>
   );
 }
-

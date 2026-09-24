@@ -116,23 +116,23 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
       <div className="card space-y-3">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
           <div>
-            <span className="text-[var(--text-muted)]">Category</span>
+            <span className="text-[var(--muted)]">Category</span>
             <p className="font-medium text-[var(--text-primary)] mt-0.5">{ticket.category.replace(/_/g, ' ')}</p>
           </div>
           <div>
-            <span className="text-[var(--text-muted)]">Priority</span>
+            <span className="text-[var(--muted)]">Priority</span>
             <p className="font-medium text-[var(--text-primary)] mt-0.5">{ticket.priority}</p>
           </div>
           <div>
-            <span className="text-[var(--text-muted)]">Created</span>
+            <span className="text-[var(--muted)]">Created</span>
             <p className="font-medium text-[var(--text-primary)] mt-0.5">
               {new Date(ticket.createdAt).toLocaleDateString('en-IN')}
             </p>
           </div>
           {ticket.url && (
             <div>
-              <span className="text-[var(--text-muted)]">Related URL</span>
-              <p className="font-medium text-[var(--accent)] mt-0.5 truncate">
+              <span className="text-[var(--muted)]">Related URL</span>
+              <p className="font-medium text-[var(--primary)] mt-0.5 truncate">
                 <a href={ticket.url} target="_blank" rel="noopener noreferrer">
                   {ticket.url}
                 </a>
@@ -142,7 +142,7 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
         </div>
         {ticket.environment && (
           <div className="text-xs pt-2 border-t border-[var(--border)]">
-            <span className="text-[var(--text-muted)]">Environment: </span>
+            <span className="text-[var(--muted)]">Environment: </span>
             <span className="text-[var(--text-secondary)]">{ticket.environment}</span>
           </div>
         )}
@@ -159,13 +159,13 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
               key={m.id}
               className={`p-5 rounded-xl border text-sm transition-colors ${
                 isInternal
-                  ? 'border-yellow-600/40 bg-amber-500/10'
+                  ? 'border-amber-600/40 bg-[var(--surface-cream-strong)]'
                   : isStaffAuthor
-                  ? 'border-[var(--accent)]/30 bg-emerald-500/10'
-                  : 'border-[var(--border)] bg-[var(--surface)] shadow-xs'
+                  ? 'border-[var(--primary)]/30 bg-[var(--surface-card)]'
+                  : 'border-[var(--hairline)] bg-[var(--surface)] shadow-xs'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[var(--border)]">
+              <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-[var(--hairline)]">
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-[var(--text-primary)]">
                     {isStaffAuthor ? 'LioranDB Support Engineering' : 'You (Customer)'}
@@ -177,7 +177,7 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
                     <span className="badge badge-pending text-[10px]">Internal Note</span>
                   )}
                 </div>
-                <span className="text-xs text-[var(--text-muted)] font-mono">
+                <span className="text-xs text-[var(--muted)] font-mono">
                   {new Date(m.createdAt).toLocaleString('en-IN', {
                     dateStyle: 'short',
                     timeStyle: 'short',
@@ -195,20 +195,20 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
       {/* Reply or Closed notice */}
       {isClosed ? (
         <div className="card text-center py-6">
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="text-xs text-[var(--muted)]">
             This ticket has been marked as closed.
           </p>
         </div>
       ) : (
         <form onSubmit={handleSendReply} className="card space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Reply to ticket</h3>
+            <h3 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider">Reply to ticket</h3>
             {!isClosed && (
               <button
                 type="button"
                 onClick={handleCloseTicket}
                 disabled={closing}
-                className="text-xs text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                className="text-xs text-[var(--muted)] hover:text-red-400 transition-colors"
               >
                 {closing ? 'Closing...' : 'Close ticket'}
               </button>
@@ -241,12 +241,12 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
                   type="checkbox"
                   checked={isInternalNote}
                   onChange={(e) => setIsInternalNote(e.target.checked)}
-                  className="accent-[var(--brand-green)]"
+                  className="accent-[var(--primary)]"
                 />
                 Post as internal note
               </label>
             ) : (
-              <span className="text-xs text-[var(--text-muted)]">
+              <span className="text-xs text-[var(--muted)]">
                 Support hours: 6:00 PM – 10:00 PM IST
               </span>
             )}
@@ -264,4 +264,3 @@ export default function TicketThread({ ticket, messages: initialMessages, isStaf
     </div>
   );
 }
-

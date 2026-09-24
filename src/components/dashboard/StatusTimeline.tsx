@@ -38,31 +38,31 @@ export default function StatusTimeline({ stage, rejectionReason }: Props) {
           <div key={idx} className="flex items-start gap-3 relative">
             <div className="mt-0.5 shrink-0">
               {isRejected ? (
-                <XCircle className="w-4 h-4 text-red-500" />
+                <XCircle className="w-4 h-4 text-[var(--error)]" />
               ) : isComplete ? (
-                <CheckCircle2 className="w-4 h-4 text-[var(--accent)]" />
+                <CheckCircle2 className="w-4 h-4 text-[var(--success)]" />
               ) : isCurrent ? (
-                <Clock className="w-4 h-4 text-[var(--accent)] animate-pulse" />
+                <Clock className="w-4 h-4 text-[var(--primary)] animate-pulse" />
               ) : (
-                <Circle className="w-4 h-4 text-[var(--text-muted)] opacity-30" />
+                <Circle className="w-4 h-4 text-[var(--muted-soft)] opacity-40" />
               )}
             </div>
             <div className="flex-1">
               <p
                 className={`text-xs ${
                   isRejected
-                    ? 'text-red-500 font-medium'
+                    ? 'text-[var(--error)] font-medium'
                     : isComplete
-                    ? 'text-[var(--text-secondary)]'
+                    ? 'text-[var(--text-secondary)] font-medium'
                     : isCurrent
-                    ? 'text-[var(--text-primary)] font-bold'
-                    : 'text-[var(--text-muted)]'
+                    ? 'text-[var(--text-primary)] font-semibold'
+                    : 'text-[var(--muted)]'
                 }`}
               >
                 {step.label}
               </p>
               {isRejected && rejectionReason && (
-                <p className="text-[11px] text-red-300 mt-0.5 font-medium">
+                <p className="text-[11px] text-[var(--error)] mt-0.5 font-medium">
                   Reason: {rejectionReason}
                 </p>
               )}
@@ -73,4 +73,3 @@ export default function StatusTimeline({ stage, rejectionReason }: Props) {
     </div>
   );
 }
-

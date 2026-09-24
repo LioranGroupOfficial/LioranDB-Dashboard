@@ -65,7 +65,7 @@ export default async function AccountPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Account Settings</h1>
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Account Settings</h1>
         <p className="mt-1 text-xs text-[var(--text-secondary)]">
           Manage your developer profile, security credentials, and organization preferences
         </p>
@@ -73,8 +73,8 @@ export default async function AccountPage() {
 
       {/* Profile form */}
       <div className="card">
-        <h2 className="text-xs font-semibold text-[var(--text-secondary)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
-          <UserCog className="w-3.5 h-3.5 text-[var(--accent)]" />
+        <h2 className="text-xs font-semibold text-[var(--muted)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
+          <UserCog className="w-3.5 h-3.5 text-[var(--primary)]" />
           Profile Information
         </h2>
         <AccountSettingsForm initialData={userData} />
@@ -82,8 +82,8 @@ export default async function AccountPage() {
 
       {/* Password change form */}
       <div className="card">
-        <h2 className="text-xs font-semibold text-[var(--text-secondary)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
-          <Shield className="w-3.5 h-3.5 text-[var(--accent)]" />
+        <h2 className="text-xs font-semibold text-[var(--muted)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
+          <Shield className="w-3.5 h-3.5 text-[var(--primary)]" />
           Security Credentials
         </h2>
         <PasswordChangeForm />
@@ -91,8 +91,8 @@ export default async function AccountPage() {
 
       {/* Notifications */}
       <div className="card">
-        <h2 className="text-xs font-semibold text-[var(--text-secondary)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
-          <Bell className="w-3.5 h-3.5 text-[var(--accent)]" />
+        <h2 className="text-xs font-semibold text-[var(--muted)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
+          <Bell className="w-3.5 h-3.5 text-[var(--primary)]" />
           Recent Notifications
         </h2>
         <NotificationList notifications={notificationList} />
@@ -101,8 +101,8 @@ export default async function AccountPage() {
       {/* Accepted Agreements */}
       {acceptanceList.length > 0 && (
         <div className="card">
-          <h2 className="text-xs font-semibold text-[var(--text-secondary)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
-            <FileCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
+          <h2 className="text-xs font-semibold text-[var(--muted)] mb-4 uppercase tracking-wider flex items-center gap-1.5">
+            <FileCheck className="w-3.5 h-3.5 text-[var(--primary)]" />
             Accepted Legal Agreements
           </h2>
           <div className="space-y-2">
@@ -110,9 +110,9 @@ export default async function AccountPage() {
               <div key={a.id} className="flex justify-between items-center py-2 border-b border-[var(--border)] text-xs">
                 <div>
                   <span className="font-medium text-[var(--text-primary)]">{a.policySlug}</span>
-                  <span className="text-[10px] text-[var(--text-muted)] font-mono ml-2">v{a.policyVersion}</span>
+                  <span className="text-[10px] text-[var(--muted)] font-mono ml-2">v{a.policyVersion}</span>
                 </div>
-                <span className="text-[10px] text-[var(--text-muted)]">
+                <span className="text-[10px] text-[var(--muted)]">
                   Accepted on {new Date(a.acceptedAt).toLocaleDateString('en-IN')}
                 </span>
               </div>
@@ -130,5 +130,3 @@ export default async function AccountPage() {
     </div>
   );
 }
-
-

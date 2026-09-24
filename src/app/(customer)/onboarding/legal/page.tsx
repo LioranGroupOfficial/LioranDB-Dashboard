@@ -70,8 +70,8 @@ export default async function LegalPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Review Agreements</h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Review Agreements</h1>
+        <p className="mt-1 text-xs text-[var(--text-secondary)]">
           Please read and accept the following agreements to continue your onboarding.
           Do not proceed unless you have read and understood each agreement.
         </p>

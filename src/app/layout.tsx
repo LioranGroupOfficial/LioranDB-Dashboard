@@ -1,19 +1,27 @@
 import type { Metadata, Viewport } from 'next';
-import { Manrope, Source_Code_Pro } from 'next/font/google';
+import { Newsreader, Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
-const manrope = Manrope({
+const newsreader = Newsreader({
   subsets: ['latin'],
-  variable: '--font-manrope',
+  variable: '--font-serif',
+  display: 'swap',
+  weight: ['400', '500'],
+  style: ['normal', 'italic'],
+});
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
   display: 'swap',
   weight: ['400', '500', '600', '700'],
 });
 
-const sourceCodePro = Source_Code_Pro({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
   display: 'swap',
-  weight: ['400', '500', '600'],
+  weight: ['400', '500'],
 });
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://app.liorandb.com';
@@ -22,8 +30,8 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider';
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#001e2b' },
+    { media: '(prefers-color-scheme: light)', color: '#faf9f5' },
+    { media: '(prefers-color-scheme: dark)', color: '#181715' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -88,7 +96,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${manrope.variable} ${sourceCodePro.variable}`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${newsreader.variable} ${inter.variable} ${jetbrainsMono.variable}`}
+    >
       <head>
         <script
           dangerouslySetInnerHTML={{

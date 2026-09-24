@@ -50,7 +50,7 @@ export default async function ApplicationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">
           {lastApp ? 'Edit & Reapply Hosting Application' : 'Apply for LioranDB Managed Hosting'}
         </h1>
         <p className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -69,4 +69,3 @@ export default async function ApplicationPage() {
     </div>
   );
 }
-

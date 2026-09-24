@@ -104,16 +104,16 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
           <div className="card border-[var(--border)] bg-[var(--surface)] max-w-lg w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4 rounded-xl">
             <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-              <div className="flex items-center gap-2 text-[var(--accent)]">
+              <div className="flex items-center gap-2 text-[var(--primary)]">
                 <Link2 className="w-5 h-5" />
-                <h3 className="text-sm sm:text-base font-semibold text-[var(--text-primary)]">
+                <h3 className="text-base font-normal font-serif text-[var(--text-primary)]">
                   Attach Razorpay Monthly Link
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm p-1 rounded-full hover:bg-[var(--surface-2)]"
+                className="text-[var(--muted)] hover:text-[var(--text-primary)] text-sm p-1 rounded-full hover:bg-[var(--surface-card)]"
               >
                 ✕
               </button>
@@ -127,7 +127,7 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
             )}
             {success && (
               <div className="alert-banner alert-banner-success text-xs">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--accent)]" />
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--success)]" />
                 <span>{success}</span>
               </div>
             )}
@@ -199,7 +199,7 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
 
               <div>
                 <label className="label flex items-center gap-1">
-                  <Link2 className="w-3.5 h-3.5 text-[var(--brand-green)]" />
+                  <Link2 className="w-3.5 h-3.5 text-[var(--primary)]" />
                   Razorpay Payment URL *
                 </label>
                 <input
@@ -210,7 +210,7 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
                   className="input-field font-mono"
                   required
                 />
-                <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                <p className="text-[11px] text-[var(--muted)] mt-1">
                   Enter the Razorpay payment page or payment button link generated from your Razorpay Dashboard.
                 </p>
               </div>
@@ -256,4 +256,3 @@ export default function AttachPaymentLinkModal({ customers }: Props) {
     </>
   );
 }
-

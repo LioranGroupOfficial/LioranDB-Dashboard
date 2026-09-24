@@ -50,10 +50,10 @@ export default function DeleteAccountSection({
   }
 
   return (
-    <div className="card border-red-900/40 bg-[#140D0D]">
+    <div className="card border-[var(--error)]/30 bg-[var(--surface-card)]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-sm font-semibold text-red-400 uppercase tracking-wider flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-[var(--error)] uppercase tracking-wider flex items-center gap-2">
             <Trash2 className="w-4 h-4" />
             Delete Account
           </h2>
@@ -66,21 +66,21 @@ export default function DeleteAccountSection({
 
       {hasPendingPayments ? (
         <div className="alert-banner alert-banner-warning mt-4 text-xs">
-          <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
           <div className="flex-1">
             <span className="font-semibold block">Outstanding Invoices Detected</span>
             <span>
               You have {pendingCount} unpaid invoice(s) totaling ₹{pendingTotal.toLocaleString('en-IN')}. All pending invoices must be paid and verified before your account can be deleted.{' '}
             </span>
-            <Link href="/billing" className="text-[var(--brand-green)] underline font-medium ml-1">
+            <Link href="/billing" className="text-[var(--primary)] underline font-medium ml-1">
               Go to Billing →
             </Link>
           </div>
         </div>
       ) : (
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-          <div className="text-xs text-[var(--brand-green)] flex items-center gap-1.5 font-medium">
-            <CheckCircle className="w-3.5 h-3.5 text-[var(--brand-green)] shrink-0" />
+          <div className="text-xs text-[var(--success)] flex items-center gap-1.5 font-medium">
+            <CheckCircle className="w-3.5 h-3.5 text-[var(--success)] shrink-0" />
             <span>All invoices cleared. You are eligible to close this account.</span>
           </div>
           <button
@@ -97,10 +97,10 @@ export default function DeleteAccountSection({
       {/* Confirmation Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="card border-red-800 bg-[var(--surface)] max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4">
-            <div className="flex items-center gap-2 text-red-400">
+          <div className="card border-[var(--error)]/50 bg-[var(--surface)] max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4">
+            <div className="flex items-center gap-2 text-[var(--error)]">
               <AlertTriangle className="w-5 h-5" />
-              <h3 className="text-base font-semibold">Confirm Account Deletion</h3>
+              <h3 className="text-base font-normal font-serif text-[var(--text-primary)]">Confirm Account Deletion</h3>
             </div>
 
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -115,7 +115,7 @@ export default function DeleteAccountSection({
 
             <div>
               <label className="label text-xs">
-                Type <span className="font-mono text-red-400 font-bold">DELETE</span> to confirm:
+                Type <span className="font-mono text-[var(--error)] font-bold">DELETE</span> to confirm:
               </label>
               <input
                 type="text"
@@ -160,4 +160,3 @@ export default function DeleteAccountSection({
     </div>
   );
 }
-

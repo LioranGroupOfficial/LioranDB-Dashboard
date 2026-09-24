@@ -114,10 +114,10 @@ export default function VerifyEmailPage() {
   return (
     <div className="card border-[var(--border)] shadow-xl bg-[var(--surface)] p-6">
       <div className="mb-6">
-        <div className="w-10 h-10 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--brand-green)] flex items-center justify-center mb-3">
+        <div className="w-10 h-10 rounded-lg bg-[var(--surface-card)] border border-[var(--border)] text-[var(--primary)] flex items-center justify-center mb-3">
           <MailCheck className="w-5 h-5" />
         </div>
-        <h1 className="text-xl font-semibold text-[var(--text-primary)]">Verify Your Email</h1>
+        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Verify Your Email</h1>
         <p className="mt-1 text-xs text-[var(--text-secondary)]">
           We sent a 6-digit verification code to your email address. Enter it below to activate your account.
         </p>
@@ -132,7 +132,7 @@ export default function VerifyEmailPage() {
         )}
         {success && (
           <div className="alert-banner alert-banner-success text-xs" role="status">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--brand-green)]" />
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--primary)]" />
             <span>{success}</span>
           </div>
         )}
@@ -150,10 +150,10 @@ export default function VerifyEmailPage() {
                 value={digit}
                 onChange={(e) => handleInput(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
-                className="w-11 h-13 text-center text-xl font-mono font-bold rounded-lg border focus:outline-none focus:border-[var(--brand-green)] focus:ring-1 focus:ring-[var(--brand-green)] transition-colors"
+                className="w-11 h-13 text-center text-xl font-mono font-bold rounded-lg border focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-colors"
                 style={{
-                  background: 'var(--surface-2)',
-                  borderColor: digit ? 'var(--brand-green)' : 'var(--border)',
+                  background: 'var(--surface-card)',
+                  borderColor: digit ? 'var(--primary)' : 'var(--border)',
                   color: 'var(--text-primary)',
                 }}
                 aria-label={`Digit ${index + 1}`}
@@ -187,7 +187,7 @@ export default function VerifyEmailPage() {
           <button
             onClick={handleResend}
             disabled={resendLoading || resendCooldown > 0}
-            className="text-[var(--accent)] hover:underline font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 ml-1"
+            className="text-[var(--primary)] hover:underline font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 ml-1"
           >
             {resendLoading && <RefreshCw className="w-3 h-3 animate-spin" />}
             {resendCooldown > 0
@@ -202,4 +202,3 @@ export default function VerifyEmailPage() {
     </div>
   );
 }
-

@@ -54,16 +54,16 @@ export default async function CustomerTicketDetailPage({
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-        <Link href="/support" className="hover:text-[var(--text-primary)]">
+      <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+        <Link href="/support" className="text-[var(--primary)] hover:underline">
           ← Back to Support
         </Link>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
         <div>
-          <span className="text-xs text-[var(--text-muted)]">Ticket #{ticketData.ticketNumber}</span>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)] mt-1">{ticketData.subject}</h1>
+          <span className="text-xs text-[var(--muted)] font-mono">Ticket #{ticketData.ticketNumber}</span>
+          <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] mt-1 tracking-tight">{ticketData.subject}</h1>
         </div>
         <div className="flex items-center gap-2">
           <span className="badge badge-pending">{ticketData.status.replace(/_/g, ' ')}</span>
@@ -75,4 +75,3 @@ export default async function CustomerTicketDetailPage({
     </div>
   );
 }
-

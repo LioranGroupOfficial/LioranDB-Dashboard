@@ -1,8 +1,8 @@
 import { requireVerifiedUser } from '@/lib/auth/guards';
-import { connectToDatabase, SupportTicket, User } from '@/lib/db';
+import { connectToDatabase, SupportTicket } from '@/lib/db';
 import Link from 'next/link';
 import NewTicketForm from '@/components/support/NewTicketForm';
-import { LifeBuoy, Clock, CheckCircle2, AlertCircle, Plus, MessageSquare, ArrowRight } from 'lucide-react';
+import { Clock, Plus, MessageSquare, ArrowRight } from 'lucide-react';
 
 export const metadata = { title: 'Developer Support — LioranDB' };
 
@@ -36,7 +36,7 @@ export default async function SupportPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Developer Support</h1>
+          <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Developer Support</h1>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
             Open technical assistance tickets for queries, connection troubleshooting, and infrastructure assistance
           </p>
@@ -56,8 +56,8 @@ export default async function SupportPage() {
 
       {/* New ticket */}
       <div className="card space-y-4">
-        <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-          <Plus className="w-3.5 h-3.5 text-[var(--accent)]" />
+        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
+          <Plus className="w-3.5 h-3.5 text-[var(--primary)]" />
           Create Support Query / Ticket
         </h2>
         <NewTicketForm />
@@ -65,22 +65,22 @@ export default async function SupportPage() {
 
       {/* Existing tickets */}
       <div className="card space-y-4">
-        <h2 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-          <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
+        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
+          <MessageSquare className="w-3.5 h-3.5 text-[var(--primary)]" />
           Your Support History ({tickets.length})
         </h2>
 
         {tickets.length > 0 ? (
-          <div className="space-y-0 divide-y divide-[var(--border)]">
+          <div className="space-y-0 divide-y divide-[var(--hairline)]">
             {tickets.map((ticket) => (
               <Link
                 key={ticket._id.toString()}
                 href={`/support/${ticket._id.toString()}`}
-                className="flex items-center justify-between py-3 gap-4 hover:bg-[var(--surface-2)]/50 transition-colors px-2 rounded-xs"
+                className="flex items-center justify-between py-3 gap-4 hover:bg-[var(--surface-card)]/50 transition-colors px-2 rounded-lg"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-[var(--text-primary)] truncate">{ticket.subject}</p>
-                  <p className="text-[11px] text-[var(--text-muted)] font-mono mt-0.5">
+                  <p className="text-[11px] text-[var(--muted)] font-mono mt-0.5">
                     #{ticket.ticketNumber} • {ticket.category.replace(/_/g, ' ')} •{' '}
                     {new Date(ticket.createdAt).toLocaleDateString('en-IN')}
                   </p>
@@ -108,7 +108,7 @@ export default async function SupportPage() {
                   >
                     {ticket.priority}
                   </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                  <ArrowRight className="w-3.5 h-3.5 text-[var(--muted)]" />
                 </div>
               </Link>
             ))}
@@ -122,4 +122,3 @@ export default async function SupportPage() {
     </div>
   );
 }
-
