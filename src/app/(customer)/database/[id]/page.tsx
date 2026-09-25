@@ -242,7 +242,13 @@ export default async function InstanceDetailsPage({
           Permanently delete this instance cluster and stop monthly subscription billing. This action cannot be undone.
         </p>
         <div className="pt-2">
-          <DeleteInstanceButton instanceId={instance._id.toString()} instanceName={instance.name} />
+          <DeleteInstanceButton
+            instanceId={instance._id.toString()}
+            instanceName={instance.name}
+            createdAt={instance.createdAt ? new Date(instance.createdAt).toISOString() : undefined}
+            monthlyPricePaise={instance.monthlyPricePaise}
+            planId={instance.planId}
+          />
         </div>
       </div>
     </div>

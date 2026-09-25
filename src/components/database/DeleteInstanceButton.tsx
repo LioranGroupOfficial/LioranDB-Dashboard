@@ -2,26 +2,46 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { Trash2, Loader2, AlertTriangle, Wallet, CheckCircle2 } from 'lucide-react';
+import { calculateInstanceDeletionRefund } from '@/lib/billing';
+import { calculatePlanPrice } from '@/lib/plans';
 
 interface DeleteInstanceButtonProps {
   instanceId: string;
   instanceName: string;
+  createdAt?: string | Date;
+  monthlyPricePaise?: number;
+  planId?: string;
 }
 
 export default function DeleteInstanceButton({
   instanceId,
   instanceName,
+  createdAt,
+  monthlyPricePaise,
+  planId,
 }: DeleteInstanceButtonProps) {
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const basePaise =
+    monthlyPricePaise ||
+    (planId ? calculatePlanPrice(planId).totalPricePaise : 149900);
+
+  const refundQuote = calculateInstanceDeletionRefund(
+    createdAt || new Date(),
+    basePaise,
+    new Date()
+  );
 
   const handleDelete = async () => {
     try {
       setLoading(true);
       setError('');
+      setSuccessMessage('');
 
       const res = await fetch(`/api/instances/${instanceId}`, {
         method: 'DELETE',
@@ -32,8 +52,17 @@ export default function DeleteInstanceButton({
         throw new Error(data.error || 'Failed to delete instance.');
       }
 
-      router.push('/database');
-      router.refresh();
+      setSuccessMessage(
+        data.message ||
+          `Instance terminated. A ${refundQuote.refundPercentage}% refund (₹${refundQuote.refundAmountRupees.toFixed(
+            2
+          )}) has been credited to your wallet.`
+      );
+
+      setTimeout(() => {
+        router.push('/database');
+        router.refresh();
+      }, 1500);
     } catch (err: unknown) {
       const errStr = err instanceof Error ? err.message : 'Deletion failed';
       setError(errStr);
@@ -53,33 +82,96 @@ export default function DeleteInstanceButton({
           <span>Delete Database Instance</span>
         </button>
       ) : (
-        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 space-y-3 max-w-md">
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 space-y-4 max-w-lg">
           <div className="flex items-center gap-2 text-xs font-semibold text-red-600 dark:text-red-400">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>Confirm Deletion of &ldquo;{instanceName}&rdquo;</span>
           </div>
 
           <p className="text-xs text-[var(--color-text-secondary)]">
-            Are you sure you want to terminate this instance? All stored data will be permanently wiped.
+            Are you sure you want to terminate this instance? All stored data and provisioned compute resources will be permanently deleted.
           </p>
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {/* Refund Policy Card */}
+          <div className="p-3.5 rounded-lg bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)] space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text-primary)]">
+                <Wallet className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Instant Wallet Refund Policy</span>
+              </div>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                {refundQuote.refundPercentage}% Refund Eligible
+              </span>
+            </div>
+
+            <div className="text-xs text-[var(--color-text-secondary)] space-y-1">
+              <p>
+                Estimated refund amount:{' '}
+                <strong className="text-[var(--color-text-primary)] font-mono">
+                  ₹{refundQuote.refundAmountRupees.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </strong>{' '}
+                credited instantly to your wallet.
+              </p>
+            </div>
+
+            {/* Refund Tier Schedule */}
+            <div className="grid grid-cols-3 gap-1.5 pt-1 text-[10px] text-center font-mono">
+              <div
+                className={`p-2 rounded border ${
+                  refundQuote.refundPercentage === 100
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-bold'
+                    : 'bg-[var(--color-surface-raised)] border-[var(--color-border-subtle)] text-[var(--color-text-tertiary)]'
+                }`}
+              >
+                <div>&lt; 15 mins</div>
+                <div className="text-[11px]">100% Refund</div>
+              </div>
+              <div
+                className={`p-2 rounded border ${
+                  refundQuote.refundPercentage === 90
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-bold'
+                    : 'bg-[var(--color-surface-raised)] border-[var(--color-border-subtle)] text-[var(--color-text-tertiary)]'
+                }`}
+              >
+                <div>&lt; 1 hour</div>
+                <div className="text-[11px]">90% Refund</div>
+              </div>
+              <div
+                className={`p-2 rounded border ${
+                  refundQuote.refundPercentage === 60
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-bold'
+                    : 'bg-[var(--color-surface-raised)] border-[var(--color-border-subtle)] text-[var(--color-text-tertiary)]'
+                }`}
+              >
+                <div>&gt; 1 hour</div>
+                <div className="text-[11px]">60% Refund</div>
+              </div>
+            </div>
+          </div>
+
+          {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+          {successMessage && (
+            <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{successMessage}</span>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 pt-1">
             <button
               type="button"
               onClick={handleDelete}
-              disabled={loading}
+              disabled={loading || !!successMessage}
               className="py-1.5 px-3 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>Yes, Terminate Cluster</span>
+              <span>Yes, Terminate &amp; Refund</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShowConfirm(false)}
-              disabled={loading}
+              disabled={loading || !!successMessage}
               className="py-1.5 px-3 rounded bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-primary)] text-xs font-medium border border-[var(--color-border-subtle)] transition-colors cursor-pointer"
             >
               Cancel
@@ -90,4 +182,5 @@ export default function DeleteInstanceButton({
     </div>
   );
 }
+
 

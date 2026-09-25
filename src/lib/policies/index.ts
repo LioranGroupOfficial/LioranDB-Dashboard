@@ -80,14 +80,19 @@ Violations of this Acceptable Use Policy will result in immediate suspension wit
     active: true,
     content: `LIORANDB REFUND AND CANCELLATION POLICY (v1.0)
 
-1. MONTHLY SUBSCRIPTION CANCELLATIONS
-Customers may cancel their managed hosting subscription at any time via the dashboard or by contacting support. Cancellations take effect at the conclusion of the current monthly billing period.
+1. MANAGED DATABASE INSTANCE DELETION & TIERED REFUND SCHEDULE
+When a customer terminates and deletes a managed database instance, an automatic refund is calculated based on the elapsed duration since instance creation and credited directly to the customer's wallet balance:
+- Deletion within 15 minutes of creation: 100% full refund of the charged instance amount.
+- Deletion within 1 hour (between 15 and 60 minutes) of creation: 90% refund of the charged instance amount.
+- Deletion after 1 hour (> 60 minutes) of creation: 60% refund of the charged instance amount.
 
-2. REFUND TERMS
-Hosting fees are billed in advance on a monthly basis and are non-refundable once the monthly billing cycle has commenced, except where mandated by applicable consumer protection laws.
+All refund credits are instantly credited to your LioranDB wallet and can be used immediately for new database instances, add-ons, or subscription renewals.
+
+2. MONTHLY SUBSCRIPTION CANCELLATIONS
+Customers may delete or cancel their database instances and subscriptions at any time via the dashboard. Upon deletion, automated recurring billing is halted immediately, and allocated compute resources are released.
 
 3. PRO-RATED BILLING
-New deployments provisioned mid-month are calculated based on the standard monthly rate effective until the subsequent 1st-of-month renewal.`,
+Deployments and terminations are processed in accordance with the aforementioned tiered refund policy.`,
   },
 ];
 

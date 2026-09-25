@@ -123,3 +123,56 @@ export function formatDateIST(date: Date): string {
     day: 'numeric',
   }).format(date);
 }
+
+export interface DeletionRefundQuote {
+  elapsedMinutes: number;
+  refundPercentage: number; // 100, 90, or 60
+  baseAmountPaise: number;
+  refundAmountPaise: number;
+  refundAmountRupees: number;
+  tierLabel: string;
+}
+
+/**
+ * Calculates instance deletion refund according to policy:
+ * - Deletion within 15 minutes of creation: 100% refund
+ * - Deletion within 1 hour (<= 60 mins) of creation: 90% refund
+ * - Deletion after 1 hour (> 60 mins): 60% refund
+ */
+export function calculateInstanceDeletionRefund(
+  createdAt: Date | string | number,
+  baseAmountPaise: number,
+  nowDate: Date = new Date()
+): DeletionRefundQuote {
+  const createdTime = new Date(createdAt).getTime();
+  const currentTime = nowDate.getTime();
+  const elapsedMs = Math.max(0, currentTime - createdTime);
+  const elapsedMinutes = elapsedMs / (1000 * 60);
+
+  let refundPercentage: number;
+  let tierLabel: string;
+
+  if (elapsedMinutes <= 15) {
+    refundPercentage = 100;
+    tierLabel = 'Under 15 minutes (100% full refund)';
+  } else if (elapsedMinutes <= 60) {
+    refundPercentage = 90;
+    tierLabel = 'Under 1 hour (90% refund)';
+  } else {
+    refundPercentage = 60;
+    tierLabel = 'After 1 hour (60% refund)';
+  }
+
+  const refundAmountPaise = Math.round(baseAmountPaise * (refundPercentage / 100));
+  const refundAmountRupees = refundAmountPaise / 100;
+
+  return {
+    elapsedMinutes,
+    refundPercentage,
+    baseAmountPaise,
+    refundAmountPaise,
+    refundAmountRupees,
+    tierLabel,
+  };
+}
+
