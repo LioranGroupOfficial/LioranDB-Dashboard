@@ -107,7 +107,8 @@ export async function DELETE(
     // 1. Calculate deletion refund according to policy:
     // < 15 mins -> 100% refund
     // < 1 hour  -> 90% refund
-    // >= 1 hour -> 60% refund
+    // 1 to 3 hours -> 60% refund
+    // > 3 hours -> 0% refund (no refund)
     const baseAmountPaise =
       inst.monthlyPricePaise ||
       calculatePlanPrice(inst.planId, !!inst.backupEnabled).totalPricePaise;
@@ -124,10 +125,15 @@ export async function DELETE(
 
     // 3. Cancel associated subscription
     if (inst.subscriptionId) {
+      const cancelReason =
+        refundQuote.refundPercentage > 0
+          ? `User terminated instance (${refundQuote.refundPercentage}% refund: ₹${refundQuote.refundAmountRupees.toFixed(2)})`
+          : 'User terminated instance (No refund: deleted after 3 hours)';
+
       await Subscription.findByIdAndUpdate(inst.subscriptionId, {
         status: 'CANCELLED',
         cancelledAt: new Date(),
-        cancellationReason: `User terminated instance (${refundQuote.refundPercentage}% refund: ₹${refundQuote.refundAmountRupees.toFixed(2)})`,
+        cancellationReason: cancelReason,
       });
     }
 
@@ -172,17 +178,31 @@ export async function DELETE(
     });
 
     // 6. Send User Notification
+    const notifTitle =
+      refundQuote.refundPercentage > 0
+        ? 'Database Terminated & Refund Credited'
+        : 'Database Instance Terminated';
+    const notifBody =
+      refundQuote.refundPercentage > 0
+        ? `Instance "${inst.name}" has been terminated. A ${refundQuote.refundPercentage}% refund of ₹${refundQuote.refundAmountRupees.toFixed(2)} has been credited to your wallet balance.`
+        : `Instance "${inst.name}" has been terminated. As deletion occurred after 3 hours of creation, no refund was applicable per policy.`;
+
     await createNotification({
       userId: targetUserId.toString(),
       type: 'GENERAL',
-      title: 'Database Terminated & Refund Credited',
-      body: `Instance "${inst.name}" has been terminated. A ${refundQuote.refundPercentage}% refund of ₹${refundQuote.refundAmountRupees.toFixed(2)} has been credited to your wallet balance.`,
+      title: notifTitle,
+      body: notifBody,
       link: '/billing',
     });
 
+    const responseMessage =
+      refundQuote.refundPercentage > 0
+        ? `Instance "${inst.name}" has been terminated. A ${refundQuote.refundPercentage}% refund of ₹${refundQuote.refundAmountRupees.toFixed(2)} has been credited to your wallet balance.`
+        : `Instance "${inst.name}" has been terminated. No refund is eligible as deletion occurred after 3 hours of creation.`;
+
     return NextResponse.json({
       success: true,
-      message: `Instance "${inst.name}" has been terminated. A ${refundQuote.refundPercentage}% refund of ₹${refundQuote.refundAmountRupees.toFixed(2)} has been credited to your wallet balance.`,
+      message: responseMessage,
       refund: {
         elapsedMinutes: Math.round(refundQuote.elapsedMinutes * 10) / 10,
         refundPercentage: refundQuote.refundPercentage,

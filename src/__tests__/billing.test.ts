@@ -89,7 +89,7 @@ describe('Billing Module', () => {
       expect(quote60m.refundAmountPaise).toBe(134910);
     });
 
-    test('refunds 60% when deleted after 1 hour (> 60 minutes)', () => {
+    test('refunds 60% when deleted between 1 hour and 3 hours (60 to 180 minutes)', () => {
       // 61 minutes after creation
       const created61m = new Date(now.getTime() - 61 * 60 * 1000);
       const quote61m = calculateInstanceDeletionRefund(created61m, basePaise, now);
@@ -98,12 +98,34 @@ describe('Billing Module', () => {
       expect(quote61m.refundAmountRupees).toBe(899.4);
       expect(quote61m.tierLabel).toContain('60%');
 
+      // 2 hours (120 minutes) after creation
+      const created2h = new Date(now.getTime() - 120 * 60 * 1000);
+      const quote2h = calculateInstanceDeletionRefund(created2h, basePaise, now);
+      expect(quote2h.refundPercentage).toBe(60);
+      expect(quote2h.refundAmountPaise).toBe(89940);
+
+      // Exactly 3 hours (180 minutes) after creation
+      const created3h = new Date(now.getTime() - 180 * 60 * 1000);
+      const quote3h = calculateInstanceDeletionRefund(created3h, basePaise, now);
+      expect(quote3h.refundPercentage).toBe(60);
+      expect(quote3h.refundAmountPaise).toBe(89940);
+    });
+
+    test('refunds 0% (no refund) when deleted after 3 hours (> 180 minutes)', () => {
+      // 181 minutes (3 hours 1 min) after creation
+      const created181m = new Date(now.getTime() - 181 * 60 * 1000);
+      const quote181m = calculateInstanceDeletionRefund(created181m, basePaise, now);
+      expect(quote181m.refundPercentage).toBe(0);
+      expect(quote181m.refundAmountPaise).toBe(0);
+      expect(quote181m.refundAmountRupees).toBe(0);
+      expect(quote181m.tierLabel).toContain('No refund');
+
       // 24 hours after creation
       const created24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const quote24h = calculateInstanceDeletionRefund(created24h, basePaise, now);
-      expect(quote24h.refundPercentage).toBe(60);
-      expect(quote24h.refundAmountPaise).toBe(89940);
-      expect(quote24h.refundAmountRupees).toBe(899.4);
+      expect(quote24h.refundPercentage).toBe(0);
+      expect(quote24h.refundAmountPaise).toBe(0);
+      expect(quote24h.refundAmountRupees).toBe(0);
     });
   });
 });

@@ -84,9 +84,10 @@ Violations of this Acceptable Use Policy will result in immediate suspension wit
 When a customer terminates and deletes a managed database instance, an automatic refund is calculated based on the elapsed duration since instance creation and credited directly to the customer's wallet balance:
 - Deletion within 15 minutes of creation: 100% full refund of the charged instance amount.
 - Deletion within 1 hour (between 15 and 60 minutes) of creation: 90% refund of the charged instance amount.
-- Deletion after 1 hour (> 60 minutes) of creation: 60% refund of the charged instance amount.
+- Deletion between 1 hour and 3 hours (60 to 180 minutes) of creation: 60% refund of the charged instance amount.
+- Deletion after 3 hours (> 180 minutes) of creation: No refund (0%).
 
-All refund credits are instantly credited to your LioranDB wallet and can be used immediately for new database instances, add-ons, or subscription renewals.
+All eligible refund credits are instantly credited to your LioranDB wallet and can be used immediately for new database instances, add-ons, or subscription renewals.
 
 2. MONTHLY SUBSCRIPTION CANCELLATIONS
 Customers may delete or cancel their database instances and subscriptions at any time via the dashboard. Upon deletion, automated recurring billing is halted immediately, and allocated compute resources are released.

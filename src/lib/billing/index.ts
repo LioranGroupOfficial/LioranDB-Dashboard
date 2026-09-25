@@ -126,7 +126,7 @@ export function formatDateIST(date: Date): string {
 
 export interface DeletionRefundQuote {
   elapsedMinutes: number;
-  refundPercentage: number; // 100, 90, or 60
+  refundPercentage: number; // 100, 90, 60, or 0
   baseAmountPaise: number;
   refundAmountPaise: number;
   refundAmountRupees: number;
@@ -137,7 +137,8 @@ export interface DeletionRefundQuote {
  * Calculates instance deletion refund according to policy:
  * - Deletion within 15 minutes of creation: 100% refund
  * - Deletion within 1 hour (<= 60 mins) of creation: 90% refund
- * - Deletion after 1 hour (> 60 mins): 60% refund
+ * - Deletion between 1 hour and 3 hours (<= 180 mins) of creation: 60% refund
+ * - Deletion after 3 hours (> 180 mins) of creation: 0% refund (No refund)
  */
 export function calculateInstanceDeletionRefund(
   createdAt: Date | string | number,
@@ -158,9 +159,12 @@ export function calculateInstanceDeletionRefund(
   } else if (elapsedMinutes <= 60) {
     refundPercentage = 90;
     tierLabel = 'Under 1 hour (90% refund)';
-  } else {
+  } else if (elapsedMinutes <= 180) {
     refundPercentage = 60;
-    tierLabel = 'After 1 hour (60% refund)';
+    tierLabel = '1 to 3 hours (60% refund)';
+  } else {
+    refundPercentage = 0;
+    tierLabel = 'After 3 hours (No refund)';
   }
 
   const refundAmountPaise = Math.round(baseAmountPaise * (refundPercentage / 100));
