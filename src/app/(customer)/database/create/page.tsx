@@ -1,665 +1,421 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
-  Database,
   Check,
   ArrowRight,
-  ArrowLeft,
-  ShieldCheck,
-  Server,
-  Cpu,
   Loader2,
   AlertCircle,
-  CreditCard,
-  Plus,
-  Sparkles,
+  Mail,
+  CheckCircle2,
 } from 'lucide-react';
-import { PLANS, calculatePlanPrice, formatRupees } from '@/lib/plans';
-import AddCreditsModal from '@/components/wallet/AddCreditsModal';
+import { PLANS, SUPPORT_CONTACT_EMAIL, formatPaiseToRupees } from '@/lib/plans';
 
 export default function CreateInstancePage() {
-  const router = useRouter();
 
-  // Wizard state
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
-  const [name, setName] = useState('');
-  const [region, setRegion] = useState('ap-south-1 (Mumbai)');
-  const [selectedPlanId, setSelectedPlanId] = useState('starter');
-  const [backupAddon, setBackupAddon] = useState(false);
+  // Form states
+  const [instanceName, setInstanceName] = useState('');
+  const [selectedPlanId, setSelectedPlanId] = useState<'shared' | 'dedicated'>('shared');
+  const [backupEnabled, setBackupEnabled] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discountPercentage: number;
+  } | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
 
-  // Wallet balance state
-  const [walletBalancePaise, setWalletBalancePaise] = useState<number | null>(null);
-  const [loadingWallet, setLoadingWallet] = useState(true);
-
-  // Status & processing
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [provisioningStatus, setProvisioningStatus] = useState<
-    'idle' | 'provisioning' | 'completed'
-  >('idle');
-  const [provisionedInstanceId, setProvisionedInstanceId] = useState<string | null>(null);
+  const [createdResult, setCreatedResult] = useState<{
+    id: string;
+    name: string;
+    username: string;
+    password?: string;
+    host: string;
+    port: number;
+    databaseName: string;
+  } | null>(null);
 
-  const planList = Object.values(PLANS);
-  const currentPlan = PLANS[selectedPlanId] || PLANS.starter;
-  const priceBreakdown = calculatePlanPrice(selectedPlanId, backupAddon);
+  const selectedPlan = PLANS[selectedPlanId];
 
-  const fetchWallet = async () => {
+  // Validate coupon
+  async function handleApplyCoupon() {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponError('');
     try {
-      setLoadingWallet(true);
-      const res = await fetch('/api/wallet');
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          planId: selectedPlanId,
+        }),
+      });
       const data = await res.json();
-      if (res.ok) {
-        setWalletBalancePaise(data.balancePaise);
+      if (!res.ok) {
+        throw new Error(data.error || 'Invalid coupon code');
       }
-    } catch {
-      // ignore
+      setAppliedCoupon({
+        code: data.code,
+        discountPercentage: data.discountPercentage,
+      });
+    } catch (err: unknown) {
+      setAppliedCoupon(null);
+      setCouponError(err instanceof Error ? err.message : 'Coupon validation failed');
     } finally {
-      setLoadingWallet(false);
+      setCouponLoading(false);
     }
-  };
+  }
 
-  useEffect(() => {
-    fetchWallet();
-  }, []);
-
-  const handleNextFromStep1 = (e: React.FormEvent) => {
+  // Create instance
+  async function handleCreateInstance(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || name.trim().length < 2) {
-      setErrorMessage('Please enter an instance name with at least 2 characters.');
+    if (!instanceName.trim()) {
+      setErrorMessage('Please enter an instance name');
       return;
     }
+
+    setLoading(true);
     setErrorMessage('');
-    setStep(2);
-  };
-
-  const handleSelectPlan = (planId: string) => {
-    setSelectedPlanId(planId);
-    const plan = PLANS[planId];
-    if (plan.backupIncluded) {
-      setBackupAddon(false);
-    }
-  };
-
-  const availableBalancePaise = walletBalancePaise ?? 0;
-  const hasSufficientCredits = availableBalancePaise >= priceBreakdown.totalPricePaise;
-  const remainingPaise = availableBalancePaise - priceBreakdown.totalPricePaise;
-  const shortfallPaise = Math.max(0, priceBreakdown.totalPricePaise - availableBalancePaise);
-
-  const handleCreateWithCredits = async () => {
     try {
-      if (!hasSufficientCredits) {
-        setErrorMessage('Insufficient credit balance. Please add credits before continuing.');
-        return;
-      }
-
-      setLoading(true);
-      setErrorMessage('');
-      setProvisioningStatus('provisioning');
-      setStep(5);
-
       const res = await fetch('/api/instances', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name.trim(),
+          name: instanceName.trim(),
           planId: selectedPlanId,
-          backupAddon: currentPlan.backupIncluded ? false : backupAddon,
-          region,
+          backupEnabled,
+          couponCode: appliedCoupon?.code,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || data.error || 'Failed to create instance.');
+        throw new Error(data.error || 'Failed to create instance');
       }
 
-      setProvisionedInstanceId(data.instanceId);
-      setWalletBalancePaise(data.remainingBalancePaise);
-      setProvisioningStatus('completed');
+      setCreatedResult(data.instance);
     } catch (err: unknown) {
-      const errStr = err instanceof Error ? err.message : 'Instance creation failed.';
-      setErrorMessage(errStr);
+      setErrorMessage(err instanceof Error ? err.message : 'Creation failed');
+    } finally {
       setLoading(false);
-      setProvisioningStatus('idle');
-      setStep(4);
     }
-  };
+  }
 
-  return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-16">
-      {/* Header Breadcrumb */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-mono text-[var(--color-text-tertiary)] mb-2">
-            <Link href="/database" className="hover:text-[var(--color-text-primary)]">
-              Databases
-            </Link>
-            <span>/</span>
-            <span className="text-[var(--color-text-primary)]">Create Instance</span>
-          </div>
-          <h1 className="font-serif text-3xl font-normal text-[var(--color-text-primary)]">
-            Deploy LioranDB Managed Instance
-          </h1>
-          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-            Purchased and renewed directly from your prepaid account credits.
-          </p>
-        </div>
-
-        {/* Live Credit Widget */}
-        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl px-4 py-2.5 flex items-center gap-3 shrink-0 self-start sm:self-auto">
-          <div>
-            <span className="text-[10px] font-mono uppercase text-[var(--color-text-tertiary)] block">
-              Available Credits
-            </span>
-            <span className="font-serif text-lg font-bold text-[var(--color-text-primary)]">
-              {loadingWallet ? '...' : `₹${((walletBalancePaise ?? 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
-            </span>
-          </div>
-          <AddCreditsModal
-            buttonText="Add Credits"
-            className="py-1 px-2.5 rounded bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-xs text-[var(--color-text-primary)] border border-[var(--color-border-subtle)] transition-colors inline-flex items-center gap-1 cursor-pointer"
-            onSuccess={(newBal) => setWalletBalancePaise(newBal)}
-          />
-        </div>
-      </div>
-
-      {/* Wizard Progress Indicator */}
-      {step < 5 && (
-        <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-4 text-xs font-mono">
-          <div className={`flex items-center gap-2 ${step >= 1 ? 'text-[var(--color-primary)] font-medium' : 'text-[var(--color-text-tertiary)]'}`}>
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${step >= 1 ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)]'}`}>
-              1
-            </span>
-            <span>1. Name & Region</span>
-          </div>
-          <div className={`hidden sm:flex items-center gap-2 ${step >= 2 ? 'text-[var(--color-primary)] font-medium' : 'text-[var(--color-text-tertiary)]'}`}>
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${step >= 2 ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)]'}`}>
-              2
-            </span>
-            <span>2. Choose Plan</span>
-          </div>
-          <div className={`hidden sm:flex items-center gap-2 ${step >= 3 ? 'text-[var(--color-primary)] font-medium' : 'text-[var(--color-text-tertiary)]'}`}>
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${step >= 3 ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)]'}`}>
-              3
-            </span>
-            <span>3. Backups</span>
-          </div>
-          <div className={`flex items-center gap-2 ${step >= 4 ? 'text-[var(--color-primary)] font-medium' : 'text-[var(--color-text-tertiary)]'}`}>
-            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${step >= 4 ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)]'}`}>
-              4
-            </span>
-            <span>4. Review & Deploy</span>
-          </div>
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
-      {/* STEP 1: Name & Region */}
-      {step === 1 && (
-        <form onSubmit={handleNextFromStep1} className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-6 sm:p-8 space-y-6">
-          <div>
-            <h2 className="text-lg font-medium text-[var(--color-text-primary)]">
-              Instance Details
-            </h2>
-            <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-              Choose a unique display name and target region for your LioranDB cluster.
-            </p>
-          </div>
-
-          <div className="space-y-4 max-w-md">
+  // If successfully created, show credentials modal
+  if (createdResult) {
+    return (
+      <div className="max-w-2xl mx-auto py-8 space-y-6">
+        <div className="card space-y-6 border-emerald-500/30">
+          <div className="flex items-center gap-3 text-emerald-400">
+            <CheckCircle2 className="w-8 h-8 shrink-0" />
             <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-[var(--color-text-secondary)] mb-1.5">
-                Instance Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. production-core-db"
-                required
-                className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] focus:outline-hidden focus:border-[var(--color-primary)] transition-colors"
-              />
-              <span className="text-[11px] text-[var(--color-text-tertiary)] mt-1 block">
-                Only lowercase letters, numbers, and hyphens recommended.
-              </span>
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono uppercase tracking-wider text-[var(--color-text-secondary)] mb-1.5">
-                Deployment Region
-              </label>
-              <select
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-lg bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)] text-sm text-[var(--color-text-primary)] focus:outline-hidden focus:border-[var(--color-primary)] transition-colors"
-              >
-                <option value="ap-south-1 (Mumbai)">ap-south-1 (Mumbai, India) — Ultra-Low Latency</option>
-                <option value="ap-southeast-1 (Singapore)">ap-southeast-1 (Singapore)</option>
-                <option value="eu-central-1 (Frankfurt)">eu-central-1 (Frankfurt)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="pt-4 flex justify-end">
-            <button
-              type="submit"
-              className="py-2.5 px-5 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white text-sm font-medium transition-all flex items-center gap-2 cursor-pointer shadow-xs"
-            >
-              <span>Select Plan</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* STEP 2: Choose Plan */}
-      {step === 2 && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-medium text-[var(--color-text-primary)]">
-                Choose your LioranDB Plan
-              </h2>
-              <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-                Purchased in monthly increments from your credit balance.
+              <h1 className="text-xl font-semibold text-[var(--text-primary)]">
+                Database Instance Active!
+              </h1>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Your managed cluster <strong>{createdResult.name}</strong> is running and ready for connections.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {planList.map((plan) => {
-              const isSelected = selectedPlanId === plan.id;
-              return (
-                <div
-                  key={plan.id}
-                  onClick={() => handleSelectPlan(plan.id)}
-                  className={`relative rounded-xl p-5 border transition-all cursor-pointer flex flex-col justify-between ${
-                    isSelected
-                      ? 'bg-[var(--color-surface-raised)] border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/20 shadow-sm'
-                      : 'bg-[var(--color-surface-raised)] border-[var(--color-border-subtle)] hover:border-[var(--color-text-tertiary)]'
-                  }`}
-                >
-                  {plan.badge && (
-                    <span className="absolute -top-2.5 right-4 px-2 py-0.5 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-mono uppercase tracking-wider font-semibold">
-                      {plan.badge}
-                    </span>
-                  )}
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-mono uppercase tracking-wider text-[var(--color-text-tertiary)]">
-                        {plan.type}
-                      </span>
-                      {isSelected && (
-                        <span className="w-5 h-5 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center">
-                          <Check className="w-3 h-3" />
-                        </span>
-                      )}
-                    </div>
-
-                    <h3 className="font-serif text-lg font-medium text-[var(--color-text-primary)]">
-                      {plan.name}
-                    </h3>
-
-                    <div className="mt-3 mb-4">
-                      <span className="font-serif text-2xl sm:text-3xl font-bold text-[var(--color-text-primary)]">
-                        ₹{plan.priceRupees.toLocaleString('en-IN')}
-                      </span>
-                      <span className="text-xs text-[var(--color-text-tertiary)]"> /month</span>
-                    </div>
-
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-4 min-h-[32px]">
-                      {plan.purpose}
-                    </p>
-
-                    <div className="space-y-2 border-t border-[var(--color-border-subtle)] pt-3 text-xs text-[var(--color-text-secondary)]">
-                      <div className="flex items-center gap-2">
-                        <Cpu className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />
-                        <span>{plan.cpu}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Server className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />
-                        <span>{plan.memory}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Database className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />
-                        <span>{plan.documentGuideline}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />
-                        <span>
-                          {plan.backupIncluded ? 'Daily backup included' : 'Backup optional (+₹500)'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {plan.isSharedNotice && (
-                      <div className="mt-3 p-2 rounded bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300">
-                        {plan.isSharedNotice}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-4 mt-4 border-t border-[var(--color-border-subtle)]">
-                    <button
-                      type="button"
-                      className={`w-full py-1.5 px-3 rounded text-xs font-medium transition-colors ${
-                        isSelected
-                          ? 'bg-[var(--color-primary)] text-white'
-                          : 'bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]'
-                      }`}
-                    >
-                      {isSelected ? 'Selected' : 'Choose Plan'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-between pt-4">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="py-2.5 px-4 rounded-lg bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-primary)] text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer border border-[var(--color-border-subtle)]"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setStep(3)}
-              className="py-2.5 px-5 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white text-sm font-medium transition-all flex items-center gap-2 cursor-pointer shadow-xs"
-            >
-              <span>Continue to Backups</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 3: Backup Selection */}
-      {step === 3 && (
-        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-6 sm:p-8 space-y-6">
-          <div>
-            <h2 className="text-lg font-medium text-[var(--color-text-primary)]">
-              Automated Daily Backups
-            </h2>
-            <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-              Protect your database against accidental deletion and hardware failures.
+          <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 space-y-2">
+            <p className="font-semibold text-amber-200">
+              ⚠️ Important: Master Database Password Generated
             </p>
-          </div>
-
-          {currentPlan.backupIncluded ? (
-            <div className="p-5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300">
-              <div className="flex items-start gap-3">
-                <Check className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <h3 className="text-sm font-semibold">
-                    Daily Backups Included in {currentPlan.name}
-                  </h3>
-                  <p className="text-xs mt-1 opacity-90">
-                    Your chosen plan already includes automated daily snapshots with 7-day retention at no extra charge.
-                  </p>
-                </div>
+            <p>
+              Copy this password now. For security reasons, LioranDB does not store passwords in plaintext and you will not be able to view it again.
+            </p>
+            {createdResult.password && (
+              <div className="p-2.5 bg-black/40 rounded border border-amber-500/30 font-mono text-sm text-white select-all">
+                {createdResult.password}
               </div>
-            </div>
-          ) : (
-            <div
-              onClick={() => setBackupAddon(!backupAddon)}
-              className={`p-5 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-4 ${
-                backupAddon
-                  ? 'bg-[var(--color-surface-sunken)] border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/20'
-                  : 'bg-[var(--color-surface-sunken)] border-[var(--color-border-subtle)] hover:border-[var(--color-text-tertiary)]'
-              }`}
-            >
-              <div className="flex items-start gap-3.5">
-                <div className={`w-5 h-5 rounded mt-0.5 border flex items-center justify-center transition-colors ${
-                  backupAddon ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white' : 'border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)]'
-                }`}>
-                  {backupAddon && <Check className="w-3.5 h-3.5" />}
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-[var(--color-text-primary)]">
-                    Enable Automated Daily Backups (+₹500/month)
-                  </h3>
-                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-                    Automated 24-hour backup snapshots with point-in-time recovery and one-click rollback.
-                  </p>
-                </div>
-              </div>
-              <span className="text-sm font-serif font-bold text-[var(--color-text-primary)] shrink-0">
-                +₹500/mo
-              </span>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between pt-4">
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="py-2.5 px-4 rounded-lg bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-primary)] text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer border border-[var(--color-border-subtle)]"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setStep(4)}
-              className="py-2.5 px-5 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white text-sm font-medium transition-all flex items-center gap-2 cursor-pointer shadow-xs"
-            >
-              <span>Review Order</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 4: Review & Deploy */}
-      {step === 4 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-6 sm:p-8 space-y-6">
-              <div>
-                <h2 className="text-lg font-medium text-[var(--color-text-primary)]">
-                  Order Summary
-                </h2>
-                <p className="text-xs text-[var(--color-text-secondary)] mt-1">
-                  Review your deployment specifications. Credits will be deducted upon confirmation.
-                </p>
-              </div>
-
-              <div className="space-y-3 border-t border-[var(--color-border-subtle)] pt-4 text-sm">
-                <div className="flex justify-between py-1">
-                  <span className="text-[var(--color-text-secondary)]">Instance Name</span>
-                  <span className="font-mono font-medium text-[var(--color-text-primary)]">{name}</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-[var(--color-text-secondary)]">Region</span>
-                  <span className="font-medium text-[var(--color-text-primary)]">{region}</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-[var(--color-text-secondary)]">Plan</span>
-                  <span className="font-medium text-[var(--color-text-primary)]">{currentPlan.name}</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-[var(--color-text-secondary)]">Resources</span>
-                  <span className="font-medium text-[var(--color-text-primary)]">
-                    {currentPlan.cpu} • {currentPlan.memory}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-[var(--color-text-secondary)]">Document Limit</span>
-                  <span className="font-medium text-[var(--color-text-primary)]">
-                    {currentPlan.documentGuideline}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-[var(--color-text-secondary)]">Backups</span>
-                  <span className="font-medium text-[var(--color-text-primary)]">
-                    {priceBreakdown.backupAddon ? 'Enabled' : 'Disabled'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Credit Payment Box */}
-          <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-6 flex flex-col justify-between space-y-6">
-            <div>
-              <h3 className="text-xs font-mono uppercase tracking-wider text-[var(--color-text-tertiary)] mb-4">
-                Credit Balance Summary
-              </h3>
-
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-[var(--color-text-secondary)]">
-                  <span>Available Balance</span>
-                  <span className="font-mono font-medium text-[var(--color-text-primary)]">
-                    ₹{(availableBalancePaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="flex justify-between text-[var(--color-text-secondary)]">
-                  <span>Required Credits</span>
-                  <span className="font-mono font-medium text-[var(--color-primary)]">
-                    -₹{(priceBreakdown.totalPricePaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-
-                <div className="border-t border-[var(--color-border-subtle)] pt-3 flex justify-between items-baseline">
-                  <span className="text-xs font-medium text-[var(--color-text-secondary)]">
-                    {hasSufficientCredits ? 'Remaining Balance' : 'Shortfall Amount'}
-                  </span>
-                  <span className={`font-serif text-xl font-bold ${hasSufficientCredits ? 'text-[var(--color-text-primary)]' : 'text-red-500'}`}>
-                    ₹{(Math.abs(remainingPaise) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
-
-              {!hasSufficientCredits && (
-                <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 space-y-1.5">
-                  <div className="font-semibold flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Insufficient Credits</span>
-                  </div>
-                  <p className="text-[11px]">
-                    You need an additional ₹{(shortfallPaise / 100).toLocaleString('en-IN')} credits to deploy this instance.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              {hasSufficientCredits ? (
-                <button
-                  type="button"
-                  onClick={handleCreateWithCredits}
-                  disabled={loading}
-                  className="w-full py-3 px-4 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white font-medium text-sm transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Provisioning...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Create Instance — ₹{priceBreakdown.totalPriceRupees.toLocaleString('en-IN')} Credits</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              ) : (
-                <AddCreditsModal
-                  buttonText={`Add Credits (Need ₹${(shortfallPaise / 100).toLocaleString('en-IN')})`}
-                  initialAmount={Math.max(100, Math.ceil(shortfallPaise / 100))}
-                  className="w-full py-3 px-4 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white font-medium text-sm transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
-                  onSuccess={(newBal) => {
-                    setWalletBalancePaise(newBal);
-                    setErrorMessage('');
-                  }}
-                />
-              )}
-
-              <button
-                type="button"
-                onClick={() => setStep(3)}
-                disabled={loading}
-                className="w-full py-2 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-center cursor-pointer"
-              >
-                Modify Configuration
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 5: Provisioning Status Screen */}
-      {step === 5 && (
-        <div className="bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] rounded-xl p-8 sm:p-12 text-center max-w-xl mx-auto space-y-6">
-          <div className="w-16 h-16 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] mx-auto flex items-center justify-center border border-[var(--color-primary)]/20">
-            {provisioningStatus === 'provisioning' ? (
-              <Loader2 className="w-8 h-8 animate-spin" />
-            ) : (
-              <ShieldCheck className="w-8 h-8 text-emerald-500" />
             )}
           </div>
 
+          <div className="space-y-2 text-xs font-mono bg-[var(--surface-2)] p-4 rounded-lg border border-[var(--border)]">
+            <div className="flex justify-between py-1 border-b border-[var(--border)]">
+              <span className="text-[var(--text-muted)]">Host / Endpoint</span>
+              <span className="text-[var(--text-primary)]">{createdResult.host}:{createdResult.port}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-[var(--border)]">
+              <span className="text-[var(--text-muted)]">Database Name</span>
+              <span className="text-[var(--text-primary)]">{createdResult.databaseName}</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-[var(--text-muted)]">Master User</span>
+              <span className="text-[var(--text-primary)]">{createdResult.username}</span>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Link
+              href={`/database/${createdResult.id}`}
+              className="btn btn-primary text-xs py-2 px-5"
+            >
+              Go to Database Control Plane →
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Create Database Instance</h1>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          Self-service postpaid deployment with no upfront registration fees
+        </p>
+      </div>
+
+      {errorMessage && (
+        <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleCreateInstance} className="space-y-6">
+        {/* Step 1: Instance Name */}
+        <div className="card space-y-3">
+          <label className="block text-sm font-semibold text-[var(--text-primary)]">
+            1. Instance Name *
+          </label>
+          <input
+            type="text"
+            required
+            pattern="^[a-z0-9-]+$"
+            title="Lowercase letters, numbers, and hyphens only"
+            className="input text-xs w-full font-mono"
+            placeholder="my-production-db"
+            value={instanceName}
+            onChange={(e) => setInstanceName(e.target.value)}
+          />
+          <p className="text-[11px] text-[var(--text-muted)]">
+            Lowercase alphanumeric characters and hyphens only (3–32 chars).
+          </p>
+        </div>
+
+        {/* Step 2: Plan Selection */}
+        <div className="card space-y-4">
           <div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-normal text-[var(--color-text-primary)]">
-              {provisioningStatus === 'provisioning'
-                ? 'Provisioning your LioranDB instance...'
-                : 'Instance Successfully Deployed!'}
-            </h2>
-            <p className="text-sm text-[var(--color-text-secondary)] mt-2">
-              {provisioningStatus === 'provisioning'
-                ? 'Deducting credits, allocating compute, setting up secure firewall credentials, and initializing MongoDB instance...'
-                : 'Your managed database cluster is now active, isolated, and ready for connections.'}
+            <label className="block text-sm font-semibold text-[var(--text-primary)]">
+              2. Select Database Plan
+            </label>
+            <p className="text-xs text-[var(--text-muted)]">
+              Usage accumulates hourly while your instance is active. Billed postpaid monthly.
             </p>
           </div>
 
-          <div className="p-4 rounded-lg bg-[var(--color-surface-sunken)] border border-[var(--color-border-subtle)] text-xs text-left font-mono space-y-1.5 max-w-sm mx-auto">
-            <div className="flex justify-between">
-              <span className="text-[var(--color-text-tertiary)]">Status:</span>
-              <span className={provisioningStatus === 'provisioning' ? 'text-amber-500' : 'text-emerald-500'}>
-                {provisioningStatus === 'provisioning' ? 'PROVISIONING' : 'ACTIVE / RUNNING'}
-              </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Shared Plan */}
+            <div
+              onClick={() => setSelectedPlanId('shared')}
+              className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                selectedPlanId === 'shared'
+                  ? 'border-[var(--primary)] bg-[var(--primary)]/5 ring-1 ring-[var(--primary)]'
+                  : 'border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--text-muted)]'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-sm text-[var(--text-primary)]">Shared</span>
+                <span className="text-xs font-mono font-bold text-[var(--primary)]">₹1/hour</span>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] mb-3">
+                Developers, MVPs, prototypes, small applications, and testing.
+              </p>
+              <div className="space-y-1 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Up to 1,000 documents</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Up to 3,000 ops/sec max limit</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Shared infrastructure</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>No backups by default</span>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--color-text-tertiary)]">Cluster:</span>
-              <span className="text-[var(--color-text-primary)]">{name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[var(--color-text-tertiary)]">Plan:</span>
-              <span className="text-[var(--color-text-primary)]">{currentPlan.name}</span>
+
+            {/* Dedicated Plan */}
+            <div
+              onClick={() => setSelectedPlanId('dedicated')}
+              className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                selectedPlanId === 'dedicated'
+                  ? 'border-[var(--primary)] bg-[var(--primary)]/5 ring-1 ring-[var(--primary)]'
+                  : 'border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--text-muted)]'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-sm text-[var(--text-primary)]">Dedicated</span>
+                <span className="text-xs font-mono font-bold text-[var(--primary)]">₹8/hour</span>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] mb-3">
+                Production workloads requiring dedicated managed compute.
+              </p>
+              <div className="space-y-1 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Dedicated managed database instance</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Dedicated compute throughput</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Custom production capacity</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>No backups by default</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {provisioningStatus === 'completed' && (
-            <div className="pt-4">
-              <button
-                type="button"
-                onClick={() => router.push(provisionedInstanceId ? `/database/${provisionedInstanceId}` : '/database')}
-                className="py-3 px-6 rounded-lg bg-[var(--color-primary)] hover:opacity-95 text-white font-medium text-sm transition-all shadow-xs inline-flex items-center gap-2 cursor-pointer"
-              >
-                <span>View Database Instance</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+          {/* High Capacity Notice */}
+          <div className="p-3.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-between text-xs">
+            <div>
+              <span className="font-semibold text-[var(--text-primary)]">High Capacity Enterprise (₹250/hour): </span>
+              <span className="text-[var(--text-muted)]">
+                For high-throughput and specialized workloads.
+              </span>
+            </div>
+            <a
+              href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=High%20Capacity%20Instance%20Inquiry`}
+              className="btn btn-secondary text-xs inline-flex items-center gap-1 shrink-0 ml-3"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Contact LioranDB</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Step 3: Managed Backups */}
+        <div className="card space-y-3">
+          <label className="block text-sm font-semibold text-[var(--text-primary)]">
+            3. Optional Managed Backups
+          </label>
+          <label className="flex items-start gap-3 p-3.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={backupEnabled}
+              onChange={(e) => setBackupEnabled(e.target.checked)}
+            />
+            <div className="space-y-0.5 text-xs">
+              <span className="font-semibold text-[var(--text-primary)]">
+                Enable Automated Managed Backups (+₹200/month)
+              </span>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Continuous point-in-time recovery and snapshot archives. Prorated to active running instance duration.
+              </p>
+            </div>
+          </label>
+        </div>
+
+        {/* Step 4: Optional Coupon */}
+        <div className="card space-y-3">
+          <label className="block text-sm font-semibold text-[var(--text-primary)]">
+            4. Promotional Coupon (Optional)
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className="input uppercase font-mono text-xs flex-1"
+              placeholder="e.g. LAUNCH20"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={handleApplyCoupon}
+              disabled={couponLoading || !couponCode.trim()}
+              className="btn btn-secondary text-xs px-4"
+            >
+              {couponLoading ? 'Checking...' : 'Apply Coupon'}
+            </button>
+          </div>
+
+          {appliedCoupon && (
+            <div className="p-2.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-mono">
+              ✓ Coupon <strong>{appliedCoupon.code}</strong> applied: {appliedCoupon.discountPercentage}% discount on accumulated charges.
+            </div>
+          )}
+          {couponError && (
+            <div className="p-2.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400">
+              {couponError}
             </div>
           )}
         </div>
-      )}
+
+        {/* Step 5: Review & Create */}
+        <div className="card space-y-4">
+          <label className="block text-sm font-semibold text-[var(--text-primary)]">
+            5. Order Review
+          </label>
+
+          <div className="space-y-2 text-xs bg-[var(--surface-2)] p-4 rounded-lg border border-[var(--border)]">
+            <div className="flex justify-between py-1 border-b border-[var(--border)]">
+              <span className="text-[var(--text-muted)]">Instance Name</span>
+              <span className="font-mono text-[var(--text-primary)]">{instanceName || '—'}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-[var(--border)]">
+              <span className="text-[var(--text-muted)]">Plan & Hourly Rate</span>
+              <span className="font-medium text-[var(--text-primary)]">
+                {selectedPlan.name} ({formatPaiseToRupees(selectedPlan.hourlyRatePaise)}/hr)
+              </span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-[var(--border)]">
+              <span className="text-[var(--text-muted)]">Managed Backups</span>
+              <span className="text-[var(--text-primary)]">
+                {backupEnabled ? 'Enabled (+₹200/month prorated)' : 'Disabled (₹0)'}
+              </span>
+            </div>
+            {appliedCoupon && (
+              <div className="flex justify-between py-1 border-b border-[var(--border)] text-emerald-400">
+                <span>Promotional Discount</span>
+                <span>-{appliedCoupon.discountPercentage}%</span>
+              </div>
+            )}
+            <div className="flex justify-between py-1 text-sm font-semibold text-[var(--text-primary)] pt-2">
+              <span>Upfront Payment Due Now</span>
+              <span className="text-emerald-400">₹0.00 (Postpaid)</span>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !instanceName.trim()}
+            className="btn btn-primary w-full py-2.5 text-xs inline-flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Provisioning Database Instance...</span>
+              </>
+            ) : (
+              <>
+                <span>Create Database Instance</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

@@ -2,7 +2,8 @@ import { connectToDatabase, AuditLog } from '../db';
 import type { AuditAction } from '../db/models/AuditLog';
 import type { UserRole } from '../db/models/User';
 
-interface CreateAuditLogParams {
+export interface CreateAuditLogParams {
+  userId?: string;
   actorId?: string;
   actorRole?: UserRole | 'system';
   action: AuditAction;
@@ -17,7 +18,7 @@ export async function createAuditLog(params: CreateAuditLogParams): Promise<void
   try {
     await connectToDatabase();
     await AuditLog.create({
-      actorId: params.actorId,
+      actorId: params.actorId || params.userId,
       actorRole: params.actorRole,
       action: params.action,
       entityType: params.entityType,

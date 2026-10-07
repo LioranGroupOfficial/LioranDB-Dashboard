@@ -1,24 +1,37 @@
+import React from 'react';
 import { requireAnyRole } from '@/lib/auth/guards';
-import { connectToDatabase, SupportTicket, HostingApplication } from '@/lib/db';
+import { connectToDatabase, SupportTicket } from '@/lib/db';
 import Link from 'next/link';
-import { LifeBuoy, Clock, FileText, CheckCircle2, MessageSquare, ArrowRight } from 'lucide-react';
+import { LifeBuoy, MessageSquare, ArrowRight } from 'lucide-react';
 
 export const metadata = { title: 'Developer Support Console — LioranDB' };
+
+interface SupportTicketDoc {
+  _id: { toString(): string };
+  ticketNumber: string;
+  subject: string;
+  category?: string;
+  priority: string;
+  status: string;
+  userId?: { _id: string; email: string; profile?: { fullName?: string } } | null;
+}
 
 export default async function SupportConsolePage() {
   await requireAnyRole(['admin', 'support']);
   await connectToDatabase();
 
-  const [tickets, pendingAppsCount] = await Promise.all([
-    SupportTicket.find()
-      .populate('userId', 'email profile')
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean(),
-    HostingApplication.countDocuments({ status: 'SUBMITTED' }),
-  ]);
+  const rawTickets = await SupportTicket.find()
+    .populate('userId', 'email profile')
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
 
-  const openTicketsCount = tickets.filter((t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length;
+  const tickets = rawTickets as unknown as SupportTicketDoc[];
+
+  const openTicketsCount = tickets.filter(
+    (t) => t.status === 'OPEN' || t.status === 'IN_PROGRESS'
+  ).length;
+  const closedTicketsCount = tickets.filter((t) => t.status === 'CLOSED').length;
 
   return (
     <div className="space-y-6">
@@ -26,18 +39,8 @@ export default async function SupportConsolePage() {
         <div>
           <h1 className="text-xl font-semibold text-[var(--text-primary)]">Developer Support Console</h1>
           <p className="mt-1 text-xs text-[var(--text-secondary)]">
-            Technical queries resolution, developer assistance, and application review queue (Live Window: 6:00 PM – 10:00 PM IST)
+            Technical queries resolution and developer assistance (Live Window: 6:00 PM – 10:00 PM IST)
           </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link
-            href="/support-console/applications"
-            className="btn-secondary text-xs inline-flex items-center gap-1.5"
-          >
-            <FileText className="w-3.5 h-3.5 text-[var(--accent)]" />
-            <span>Applications Queue ({pendingAppsCount})</span>
-          </Link>
         </div>
       </div>
 
@@ -54,11 +57,11 @@ export default async function SupportConsolePage() {
 
         <div className="card">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Applications Awaiting Review</span>
-            <FileText className="w-4 h-4 text-[var(--accent)]" />
+            <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Resolved Tickets</span>
+            <LifeBuoy className="w-4 h-4 text-emerald-400" />
           </div>
-          <p className="text-2xl font-bold text-[var(--accent)] mt-2">{pendingAppsCount}</p>
-          <span className="text-[11px] text-[var(--text-secondary)] mt-1 block">New applicant hosting submissions</span>
+          <p className="text-2xl font-bold text-emerald-400 mt-2">{closedTicketsCount}</p>
+          <span className="text-[11px] text-[var(--text-secondary)] mt-1 block">Successfully resolved inquiries</span>
         </div>
       </div>
 
@@ -83,7 +86,7 @@ export default async function SupportConsolePage() {
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
               {tickets.map((t) => {
-                const user = t.userId as unknown as { _id: string; email: string; profile?: { fullName?: string } } | null;
+                const user = t.userId;
                 return (
                   <tr key={t._id.toString()} className="hover:bg-[var(--surface-2)]/50 transition-colors">
                     <td className="py-3">
@@ -94,7 +97,7 @@ export default async function SupportConsolePage() {
                       <div className="text-[var(--text-primary)] font-medium">{user?.profile?.fullName || 'Customer'}</div>
                       <div className="text-[11px] text-[var(--text-muted)] font-mono">{user?.email}</div>
                     </td>
-                    <td className="py-3 text-[var(--text-secondary)]">{t.category.replace(/_/g, ' ')}</td>
+                    <td className="py-3 text-[var(--text-secondary)]">{t.category?.replace(/_/g, ' ')}</td>
                     <td className="py-3">
                       <span
                         className={`badge ${
@@ -118,7 +121,7 @@ export default async function SupportConsolePage() {
                             : 'badge-active'
                         }`}
                       >
-                        {t.status.replace(/_/g, ' ')}
+                        {t.status?.replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className="py-3 text-right">
@@ -147,5 +150,3 @@ export default async function SupportConsolePage() {
     </div>
   );
 }
-
-

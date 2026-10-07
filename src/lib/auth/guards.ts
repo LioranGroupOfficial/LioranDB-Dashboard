@@ -96,6 +96,14 @@ export async function requireRoleAPI(role: UserRole): Promise<SessionData> {
   return user;
 }
 
+export async function requireAdmin(): Promise<SessionData> {
+  return requireRole('admin');
+}
+
+export async function requireAdminAPI(): Promise<SessionData> {
+  return requireRoleAPI('admin');
+}
+
 export async function requireAnyRoleAPI(roles: UserRole[]): Promise<SessionData> {
   const user = await requireUserAPI();
   if (!roles.includes(user.role)) {
@@ -103,3 +111,4 @@ export async function requireAnyRoleAPI(roles: UserRole[]): Promise<SessionData>
   }
   return user;
 }
+

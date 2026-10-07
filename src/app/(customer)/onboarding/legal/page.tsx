@@ -1,5 +1,5 @@
 import { requireVerifiedUser } from '@/lib/auth/guards';
-import { connectToDatabase, User, HostingApplication, PolicyDocument, PolicyAcceptance } from '@/lib/db';
+import { connectToDatabase, User, PolicyDocument, PolicyAcceptance } from '@/lib/db';
 import { redirect } from 'next/navigation';
 import LegalAcceptanceForm from '@/components/onboarding/LegalAcceptanceForm';
 import { REQUIRED_POLICIES, ensureDefaultPolicies } from '@/lib/policies';
@@ -10,25 +10,9 @@ export default async function LegalPage() {
   const sessionUser = await requireVerifiedUser();
 
   await connectToDatabase();
-  const [user, latestApp] = await Promise.all([
-    User.findById(sessionUser.userId).lean(),
-    HostingApplication.findOne({ userId: sessionUser.userId }).sort({ createdAt: -1 }).lean(),
-  ]);
+  const user = await User.findById(sessionUser.userId).lean();
 
   if (!user) redirect('/login');
-
-  const isEligible =
-    ['APPLICATION_APPROVED', 'TERMS_REQUIRED', 'PROVISIONING', 'ACTIVE', 'SUSPENDED'].includes(user.onboardingStage) ||
-    latestApp?.status === 'APPROVED';
-
-  if (!isEligible) {
-    redirect('/dashboard');
-  }
-
-  // Auto-sync onboarding stage if application was approved but stage was out of sync
-  if (latestApp?.status === 'APPROVED' && ['APPLICATION_PENDING', 'APPLICATION_REQUIRED'].includes(user.onboardingStage)) {
-    await User.findByIdAndUpdate(user._id, { onboardingStage: 'APPLICATION_APPROVED' });
-  }
 
   // Ensure default legal policy documents exist in the database
   await ensureDefaultPolicies();
@@ -72,8 +56,7 @@ export default async function LegalPage() {
       <div>
         <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Review Agreements</h1>
         <p className="mt-1 text-xs text-[var(--text-secondary)]">
-          Please read and accept the following agreements to continue your onboarding.
-          Do not proceed unless you have read and understood each agreement.
+          Please read and accept the following agreements to continue using the platform.
         </p>
       </div>
 

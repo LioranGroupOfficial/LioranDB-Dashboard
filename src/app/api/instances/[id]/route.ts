@@ -1,71 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUserAPI } from '@/lib/auth/guards';
-import { connectToDatabase, ManagedDatabase, Subscription } from '@/lib/db';
-import { calculatePlanPrice, getPlan } from '@/lib/plans';
+import { connectToDatabase, ManagedDatabase, BillingInterval } from '@/lib/db';
+import { PLANS, formatPaiseToInr } from '@/lib/plans';
+import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import { createAuditLog } from '@/lib/audit';
-import { calculateInstanceDeletionRefund } from '@/lib/billing';
-import { refundWallet } from '@/lib/wallet';
 import { createNotification } from '@/lib/notifications';
+import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const sessionUser = await requireUserAPI();
     const { id } = await params;
-
     await connectToDatabase();
-    const inst = await ManagedDatabase.findById(id);
 
-    if (!inst) {
-      return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
+    const instance = await ManagedDatabase.findOne({
+      _id: id,
+      $or: [{ customerId: sessionUser.userId }, { userId: sessionUser.userId }],
+    }).lean();
+
+    if (!instance) {
+      return NextResponse.json({ error: 'Database instance not found.' }, { status: 404 });
     }
 
-    if (
-      sessionUser.role !== 'admin' &&
-      sessionUser.role !== 'support' &&
-      inst.customerId.toString() !== sessionUser.userId &&
-      inst.userId?.toString() !== sessionUser.userId
-    ) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const plan = PLANS[instance.planId] || { name: instance.planId, hourlyRatePaise: instance.hourlyRatePaise || 100 };
+    const period = getCurrentMonthPeriod();
+    const calc = calculateInstanceUsage(instance as unknown as IManagedDatabase, period);
 
-    const plan = getPlan(inst.planId);
-    const subscription = inst.subscriptionId
-      ? await Subscription.findById(inst.subscriptionId).lean()
-      : null;
+    // Filter databaseUsers so no plaintext is exposed
+    const safeUsers = (instance.databaseUsers || []).map((u: { username: string; createdAt?: Date }) => ({
+      username: u.username,
+      createdAt: u.createdAt,
+    }));
 
     return NextResponse.json({
       instance: {
-        id: inst._id.toString(),
-        name: inst.name,
-        slug: inst.slug,
-        type: inst.type || plan?.type || 'dedicated',
-        status: inst.status,
-        planId: inst.planId,
-        planName: plan?.name || 'Starter Dedicated',
-        region: inst.region || 'ap-south-1 (Mumbai)',
-        cpu: inst.cpu || plan?.cpu || '1 vCPU',
-        memoryMb: inst.memoryMb || plan?.memoryMb || 1024,
-        documentLimit: inst.documentLimit || plan?.documentLimit || 100000,
-        backupEnabled: inst.backupEnabled ?? false,
-        host: inst.host,
-        port: inst.port,
-        databaseName: inst.databaseName,
-        username: inst.username,
-        monthlyPricePaise: inst.monthlyPricePaise || (plan?.pricePaise || 149900),
-        provisionedAt: inst.provisionedAt,
-        createdAt: inst.createdAt,
-        subscription: subscription
-          ? {
-              id: subscription._id.toString(),
-              status: subscription.status,
-              amount: subscription.amount,
-              currentPeriodEnd: subscription.currentPeriodEnd,
-              backupAddon: subscription.backupAddon,
-            }
-          : null,
+        id: instance._id.toString(),
+        name: instance.name,
+        planId: instance.planId,
+        planName: plan.name,
+        hourlyRatePaise: instance.hourlyRatePaise || plan.hourlyRatePaise || 100,
+        hourlyRateFormatted: formatPaiseToInr(instance.hourlyRatePaise || plan.hourlyRatePaise || 100) + '/hr',
+        status: instance.status,
+        host: instance.host,
+        port: instance.port,
+        databaseName: instance.databaseName,
+        username: instance.username,
+        backupEnabled: Boolean(instance.backupEnabled),
+        billingStartedAt: instance.billingStartedAt ? new Date(instance.billingStartedAt).toISOString() : null,
+        currentEstimatedUsagePaise: calc.totalPaise,
+        currentEstimatedHours: calc.billableHours,
+        couponCode: instance.couponCode,
+        couponDiscountPercentage: instance.couponDiscountPercentage,
+        databaseUsers: safeUsers,
+        createdAt: instance.createdAt ? new Date(instance.createdAt).toISOString() : new Date().toISOString(),
       },
     });
   } catch (error: unknown) {
@@ -81,142 +71,76 @@ export async function DELETE(
   try {
     const sessionUser = await requireUserAPI();
     const { id } = await params;
-
     await connectToDatabase();
-    const inst = await ManagedDatabase.findById(id);
 
-    if (!inst) {
-      return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
+    const instance = await ManagedDatabase.findOne({
+      _id: id,
+      $or: [{ customerId: sessionUser.userId }, { userId: sessionUser.userId }],
+    });
+
+    if (!instance) {
+      return NextResponse.json({ error: 'Database instance not found.' }, { status: 404 });
     }
 
-    if (
-      sessionUser.role !== 'admin' &&
-      inst.customerId.toString() !== sessionUser.userId &&
-      inst.userId?.toString() !== sessionUser.userId
-    ) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (instance.status === 'TERMINATED') {
+      return NextResponse.json({ error: 'This instance is already terminated.' }, { status: 400 });
     }
 
-    if (inst.status === 'TERMINATED' || inst.status === 'DELETED') {
+    const body = await req.json().catch(() => ({}));
+    const { confirmName, reason } = body as { confirmName?: string; reason?: string };
+
+    if (confirmName !== instance.name) {
       return NextResponse.json(
-        { error: 'Instance has already been terminated.' },
+        { error: `Confirmation name does not match. Please enter "${instance.name}" to confirm termination.` },
         { status: 400 }
       );
     }
 
-    // 1. Calculate deletion refund according to policy:
-    // < 15 mins -> 100% refund
-    // < 1 hour  -> 90% refund
-    // 1 to 3 hours -> 60% refund
-    // > 3 hours -> 0% refund (no refund)
-    const baseAmountPaise =
-      inst.monthlyPricePaise ||
-      calculatePlanPrice(inst.planId, !!inst.backupEnabled).totalPricePaise;
+    const now = new Date();
 
-    const refundQuote = calculateInstanceDeletionRefund(
-      inst.createdAt || new Date(),
-      baseAmountPaise,
-      new Date()
+    // 1. Mark instance terminated and record billingStoppedAt
+    instance.status = 'TERMINATED';
+    instance.billingStoppedAt = now;
+    if (instance.backupEnabled) {
+      instance.backupStoppedAt = now;
+    }
+    await instance.save();
+
+    // 2. Close active billing interval
+    await BillingInterval.findOneAndUpdate(
+      { instanceId: instance._id, endedAt: null },
+      { endedAt: now }
     );
 
-    // 2. Mark instance as TERMINATED
-    inst.status = 'TERMINATED';
-    await inst.save();
-
-    // 3. Cancel associated subscription
-    if (inst.subscriptionId) {
-      const cancelReason =
-        refundQuote.refundPercentage > 0
-          ? `User terminated instance (${refundQuote.refundPercentage}% refund: ₹${refundQuote.refundAmountRupees.toFixed(2)})`
-          : 'User terminated instance (No refund: deleted after 3 hours)';
-
-      await Subscription.findByIdAndUpdate(inst.subscriptionId, {
-        status: 'CANCELLED',
-        cancelledAt: new Date(),
-        cancellationReason: cancelReason,
-      });
-    }
-
-    // 4. Process wallet refund
-    const targetUserId = inst.userId || inst.customerId;
-    let walletResult = null;
-    if (refundQuote.refundAmountPaise > 0) {
-      walletResult = await refundWallet({
-        userId: targetUserId,
-        amountPaise: refundQuote.refundAmountPaise,
-        description: `Refund (${refundQuote.refundPercentage}%): Terminated "${inst.name}" (${refundQuote.tierLabel})`,
-        instanceId: inst._id,
-        idempotencyKey: `refund_del_${inst._id}`,
-        metadata: {
-          instanceId: inst._id.toString(),
-          instanceName: inst.name,
-          planId: inst.planId,
-          elapsedMinutes: Math.round(refundQuote.elapsedMinutes * 10) / 10,
-          refundPercentage: refundQuote.refundPercentage,
-          baseAmountPaise: refundQuote.baseAmountPaise,
-          refundAmountPaise: refundQuote.refundAmountPaise,
-          refundAmountRupees: refundQuote.refundAmountRupees,
-        },
-      });
-    }
-
-    // 5. Record Audit Log
+    // 3. Audit log
     await createAuditLog({
       actorId: sessionUser.userId,
       actorRole: sessionUser.role,
       action: 'DATABASE_TERMINATED',
       entityType: 'ManagedDatabase',
-      entityId: inst._id.toString(),
+      entityId: instance._id.toString(),
       metadata: {
-        name: inst.name,
-        planId: inst.planId,
-        elapsedMinutes: Math.round(refundQuote.elapsedMinutes * 10) / 10,
-        refundPercentage: refundQuote.refundPercentage,
-        refundAmountPaise: refundQuote.refundAmountPaise,
-        refundAmountRupees: refundQuote.refundAmountRupees,
+        instanceName: instance.name,
+        planId: instance.planId,
+        reason: reason || 'Customer requested termination',
+        billingStoppedAt: now,
       },
     });
 
-    // 6. Send User Notification
-    const notifTitle =
-      refundQuote.refundPercentage > 0
-        ? 'Database Terminated & Refund Credited'
-        : 'Database Instance Terminated';
-    const notifBody =
-      refundQuote.refundPercentage > 0
-        ? `Instance "${inst.name}" has been terminated. A ${refundQuote.refundPercentage}% refund of ₹${refundQuote.refundAmountRupees.toFixed(2)} has been credited to your wallet balance.`
-        : `Instance "${inst.name}" has been terminated. As deletion occurred after 3 hours of creation, no refund was applicable per policy.`;
-
     await createNotification({
-      userId: targetUserId.toString(),
-      type: 'GENERAL',
-      title: notifTitle,
-      body: notifBody,
-      link: '/billing',
+      userId: sessionUser.userId,
+      type: 'SERVICE_DELETED',
+      title: 'Database Instance Terminated',
+      body: `Your database instance "${instance.name}" has been terminated and its billing has been halted. Any accumulated usage will be included on your monthly invoice.`,
+      link: '/database',
     });
-
-    const responseMessage =
-      refundQuote.refundPercentage > 0
-        ? `Instance "${inst.name}" has been terminated. A ${refundQuote.refundPercentage}% refund of ₹${refundQuote.refundAmountRupees.toFixed(2)} has been credited to your wallet balance.`
-        : `Instance "${inst.name}" has been terminated. No refund is eligible as deletion occurred after 3 hours of creation.`;
 
     return NextResponse.json({
       success: true,
-      message: responseMessage,
-      refund: {
-        elapsedMinutes: Math.round(refundQuote.elapsedMinutes * 10) / 10,
-        refundPercentage: refundQuote.refundPercentage,
-        baseAmountPaise: refundQuote.baseAmountPaise,
-        baseAmountRupees: refundQuote.baseAmountPaise / 100,
-        refundAmountPaise: refundQuote.refundAmountPaise,
-        refundAmountRupees: refundQuote.refundAmountRupees,
-        tierLabel: refundQuote.tierLabel,
-        newWalletBalanceRupees: walletResult ? walletResult.wallet.balancePaise / 100 : undefined,
-      },
+      message: `Database instance "${instance.name}" has been terminated. Usage billing stopped.`,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to delete instance';
+    const message = error instanceof Error ? error.message : 'Failed to terminate instance';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

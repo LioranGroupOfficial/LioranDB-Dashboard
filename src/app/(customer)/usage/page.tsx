@@ -1,9 +1,12 @@
 import { requireVerifiedUser } from '@/lib/auth/guards';
-import { connectToDatabase, User, ManagedDatabase } from '@/lib/db';
+import { connectToDatabase, User } from '@/lib/db';
 import { redirect } from 'next/navigation';
-import { Activity, Database, HardDrive, ShieldCheck, Cpu, Zap, Info } from 'lucide-react';
+import { Activity, Server, Info } from 'lucide-react';
+import { getCustomerMonthEstimate } from '@/lib/billing';
+import { formatPaiseToRupees } from '@/lib/plans';
+import Link from 'next/link';
 
-export const metadata = { title: 'Usage & Telemetry — LioranDB' };
+export const metadata = { title: 'Usage & Hours — LioranDB' };
 
 export default async function UsagePage() {
   const sessionUser = await requireVerifiedUser();
@@ -12,110 +15,134 @@ export default async function UsagePage() {
   const user = await User.findById(sessionUser.userId).lean();
   if (!user) redirect('/login');
 
-  if (user.onboardingStage !== 'ACTIVE') {
-    redirect('/dashboard');
-  }
-
-  const database = await ManagedDatabase.findOne({ customerId: user._id }).lean();
-  if (!database) {
-    redirect('/dashboard');
-  }
+  const estimate = await getCustomerMonthEstimate(user._id);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-normal font-serif text-[var(--text-primary)] tracking-tight">Usage &amp; Telemetry</h1>
-        <p className="mt-1 text-xs text-[var(--text-secondary)]">
-          Resource utilization and performance metrics for {database.name}
-        </p>
-      </div>
-
-      {/* Integration disclaimer */}
-      <div className="alert-banner alert-banner-info text-xs">
-        <Info className="w-4 h-4 shrink-0 mt-0.5 text-[var(--accent-teal)]" />
+    <div className="space-y-6 max-w-5xl mx-auto pb-16">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <strong>Telemetry Integration Notice:</strong>
-          <p className="mt-0.5">
-            Live telemetry hooks are connected to your dedicated instance. Metrics update in real-time with continuous heartbeat sampling.
+          <h1 className="font-serif text-3xl font-normal text-[var(--text-primary)] tracking-tight">
+            Usage &amp; Hours
+          </h1>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+            Hourly compute utilization and backup tracking for the current billing cycle.
           </p>
         </div>
+        <Link
+          href="/billing"
+          className="py-2 px-4 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-card)] text-[var(--text-primary)] text-xs font-medium border border-[var(--border)] transition-colors self-start sm:self-auto shadow-2xs"
+        >
+          <span>View Invoices</span>
+        </Link>
       </div>
 
-      {/* Health status */}
-      <div className="card space-y-2">
-        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5 text-[var(--primary)]" />
-          Deployment Health &amp; Availability
-        </h2>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[var(--accent-teal)] animate-pulse shadow-sm"></span>
-            <span className="text-xs font-medium text-[var(--text-primary)]">
-              Cluster Node {database.status === 'ACTIVE' ? 'Online & Healthy' : database.status}
+      {/* Hero Overview */}
+      <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-6 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1.5">
+            <Activity className="w-4 h-4 text-[var(--primary)]" />
+            Current Cycle Period
+          </span>
+          <span className="text-xs font-mono text-[var(--text-secondary)]">
+            {estimate.period.start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} –{' '}
+            {estimate.period.end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-[var(--border)] pt-4 font-mono">
+          <div>
+            <span className="text-[10px] text-[var(--muted)] uppercase block">Total Compute Used</span>
+            <span className="text-lg font-serif font-bold text-[var(--text-primary)] block mt-0.5">
+              {formatPaiseToRupees(estimate.totalComputePaise)}
             </span>
           </div>
-          <span className="text-xs font-mono text-[var(--text-secondary)]">Endpoint: {database.host}:{database.port}</span>
+          <div>
+            <span className="text-[10px] text-[var(--muted)] uppercase block">Total Backup Charges</span>
+            <span className="text-lg font-serif font-bold text-[var(--text-primary)] block mt-0.5">
+              {formatPaiseToRupees(estimate.totalBackupPaise)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] text-[var(--muted)] uppercase block">Estimated Month Total</span>
+            <span className="text-lg font-serif font-bold text-[var(--primary)] block mt-0.5">
+              {formatPaiseToRupees(estimate.totalEstimatedPaise)}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard label="Estimated Documents" value="~0" subtext="Quota: ~1,000,000" icon={Database} />
-        <MetricCard label="Storage Allocated" value="10 GB" subtext="Used: < 100 MB NVMe" icon={HardDrive} />
-        <MetricCard label="Target Uptime" value="99.9%" subtext="Continuous SLA" icon={ShieldCheck} />
-        <MetricCard label="Daily Backups" value="Automated" subtext="Nightly point-in-time" icon={Cpu} />
-      </div>
-
-      {/* Benchmark characteristics */}
-      <div className="card space-y-4">
-        <h2 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
-          <Zap className="w-3.5 h-3.5 text-[var(--primary)]" />
-          Engine Benchmark Characteristics
+      {/* Per-Instance Usage Table */}
+      <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-6 shadow-2xs space-y-4">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <Server className="w-4 h-4 text-[var(--primary)]" />
+          Instance Usage Breakdown ({estimate.instanceCalculations.length})
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-4 bg-[var(--surface-card)] rounded-lg border border-[var(--border)]">
-            <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-semibold">Benchmark Reads</span>
-            <p className="text-lg font-medium text-[var(--text-primary)] font-serif mt-1">~35,000 ops/s</p>
-            <span className="text-[11px] text-[var(--text-secondary)]">Single-node in-memory tier</span>
-          </div>
-          <div className="p-4 bg-[var(--surface-card)] rounded-lg border border-[var(--border)]">
-            <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-semibold">Benchmark Writes</span>
-            <p className="text-lg font-medium text-[var(--text-primary)] font-serif mt-1">~10,000 ops/s</p>
-            <span className="text-[11px] text-[var(--text-secondary)]">WAL-backed persistence</span>
-          </div>
-          <div className="p-4 bg-[var(--surface-cream-strong)] rounded-lg border border-[var(--primary)]/30">
-            <span className="text-[10px] text-[var(--primary)] uppercase tracking-wider font-semibold">Combined Peak</span>
-            <p className="text-lg font-normal text-[var(--primary)] font-serif mt-1">~45,000 ops/s</p>
-            <span className="text-[11px] text-[var(--text-secondary)]">Optimal concurrency profile</span>
+
+        <div className="border border-[var(--border)] rounded-lg overflow-hidden">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full text-left text-xs min-w-[640px]">
+              <thead className="bg-[var(--surface-2)] border-b border-[var(--border)] text-[var(--muted)] uppercase font-mono">
+                <tr>
+                  <th className="py-2.5 px-4 font-medium">Instance</th>
+                  <th className="py-2.5 px-4 font-medium">Plan</th>
+                  <th className="py-2.5 px-4 font-medium text-right">Hourly Rate</th>
+                  <th className="py-2.5 px-4 font-medium text-right">Billable Hours</th>
+                  <th className="py-2.5 px-4 font-medium text-right">Backups</th>
+                  <th className="py-2.5 px-4 font-medium text-right">Discount</th>
+                  <th className="py-2.5 px-4 font-medium text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)] font-mono">
+                {estimate.instanceCalculations.map((inst) => (
+                  <tr key={inst.instanceId} className="hover:bg-[var(--surface-2)]/40 transition-colors">
+                    <td className="py-3 px-4 font-medium text-[var(--text-primary)] font-sans">
+                      <Link
+                        href={`/database/${inst.instanceId}`}
+                        className="hover:underline text-[var(--primary)]"
+                      >
+                        {inst.instanceName}
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4 text-[var(--text-secondary)]">
+                      {inst.planName}
+                    </td>
+                    <td className="py-3 px-4 text-right text-[var(--text-secondary)]">
+                      ₹{inst.hourlyRatePaise / 100}/hr
+                    </td>
+                    <td className="py-3 px-4 text-right text-[var(--text-primary)] font-bold">
+                      {inst.billableHours.toFixed(1)} hrs
+                    </td>
+                    <td className="py-3 px-4 text-right text-[var(--text-secondary)]">
+                      {inst.backupAmountPaise > 0 ? `+${formatPaiseToRupees(inst.backupAmountPaise)}` : '—'}
+                    </td>
+                    <td className="py-3 px-4 text-right text-emerald-600 dark:text-emerald-400">
+                      {inst.discountPaise > 0 ? `-${formatPaiseToRupees(inst.discountPaise)}` : '—'}
+                    </td>
+                    <td className="py-3 px-4 text-right font-serif font-bold text-[var(--text-primary)]">
+                      {formatPaiseToRupees(inst.totalPaise)}
+                    </td>
+                  </tr>
+                ))}
+                {estimate.instanceCalculations.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-6 text-center text-xs font-sans text-[var(--muted)]">
+                      No billable usage recorded in this cycle.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-        <p className="text-[11px] text-[var(--muted)] leading-relaxed">
-          * Benchmark metrics reflect theoretical hardware capabilities in laboratory benchmarks. Actual application throughput varies based on payload size, indexing schema, query complexity, and client network latency.
-        </p>
-      </div>
-    </div>
-  );
-}
 
-function MetricCard({
-  label,
-  value,
-  subtext,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  subtext: string;
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-semibold">{label}</span>
-        <Icon className="w-4 h-4 text-[var(--muted)]" />
+        <div className="flex items-center gap-2 text-[11px] text-[var(--muted)]">
+          <Info className="w-3.5 h-3.5 text-[var(--primary)] shrink-0" />
+          <span>
+            Usage is calculated by continuous second-level tracking while instances remain in active state. Terminated instances stop accumulating immediately.
+          </span>
+        </div>
       </div>
-      <p className="text-xl font-normal font-serif text-[var(--text-primary)]">{value}</p>
-      <p className="text-[11px] text-[var(--text-secondary)] mt-1">{subtext}</p>
     </div>
   );
 }

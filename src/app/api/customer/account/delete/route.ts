@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireVerifiedUser } from '@/lib/auth/guards';
 import {
   connectToDatabase,
@@ -6,7 +6,8 @@ import {
   Payment,
   Subscription,
   ManagedDatabase,
-  HostingApplication,
+  Invoice,
+  BillingInterval,
   PolicyAcceptance,
   SupportTicket,
   TicketMessage,
@@ -17,35 +18,37 @@ import {
 import { createAuditLog } from '@/lib/audit';
 import { clearSession } from '@/lib/auth/session';
 import { createApiError } from '@/lib/errors';
+import { formatPaiseToRupees } from '@/lib/plans';
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(_req: NextRequest) {
   try {
     const sessionUser = await requireVerifiedUser();
 
     await connectToDatabase();
 
-    // Check for any pending or submitted unpaid payments
-    const pendingPayments = await Payment.find({
-      userId: sessionUser.userId,
-      status: { $in: ['PENDING', 'SUBMITTED'] },
+    // Check for any unpaid OPEN or OVERDUE invoices
+    const unpaidInvoices = await Invoice.find({
+      customerId: sessionUser.userId,
+      status: { $in: ['OPEN', 'OVERDUE'] },
     }).lean();
 
-    if (pendingPayments.length > 0) {
-      const pendingAmount = pendingPayments.reduce((acc, p) => acc + p.amount, 0);
-      return Response.json(
+    if (unpaidInvoices.length > 0) {
+      const unpaidPaise = unpaidInvoices.reduce((acc, inv) => acc + (inv.totalPaise || 0), 0);
+      return NextResponse.json(
         {
-          error: `Account deletion blocked: You have ${pendingPayments.length} unpaid / pending invoice(s) totaling ₹${pendingAmount.toLocaleString('en-IN')}. Please settle all outstanding payments before deleting your account.`,
-          unpaidCount: pendingPayments.length,
-          unpaidAmount: pendingAmount,
+          error: `Account deletion blocked: You have ${unpaidInvoices.length} unpaid invoice(s) totaling ${formatPaiseToRupees(
+            unpaidPaise
+          )}. Please settle all outstanding invoices before deleting your account.`,
+          unpaidCount: unpaidInvoices.length,
+          unpaidPaise,
         },
         { status: 400 }
       );
     }
 
-    // 1. Audit log the deletion before removing records
+    // 1. Audit log the deletion
     await createAuditLog({
-      actorId: sessionUser.userId,
-      actorRole: sessionUser.role,
+      userId: sessionUser.userId,
       action: 'ACCOUNT_DELETED',
       entityType: 'User',
       entityId: sessionUser.userId,
@@ -63,14 +66,15 @@ export async function DELETE(req: NextRequest) {
     }
     await SupportTicket.deleteMany({ userId: sessionUser.userId });
 
-    // 3. Delete managed database records
+    // 3. Delete managed database records and intervals
     await ManagedDatabase.deleteMany({
       $or: [{ userId: sessionUser.userId }, { customerId: sessionUser.userId }],
     });
+    await BillingInterval.deleteMany({ customerId: sessionUser.userId });
 
-    // 4. Delete subscriptions, applications, and payments
+    // 4. Delete subscriptions, invoices, and payments
     await Subscription.deleteMany({ userId: sessionUser.userId });
-    await HostingApplication.deleteMany({ userId: sessionUser.userId });
+    await Invoice.deleteMany({ customerId: sessionUser.userId });
     await Payment.deleteMany({ userId: sessionUser.userId });
 
     // 5. Delete legal agreements and policy acceptances
@@ -81,13 +85,13 @@ export async function DELETE(req: NextRequest) {
     await EmailVerification.deleteMany({ userId: sessionUser.userId });
     await PasswordReset.deleteMany({ userId: sessionUser.userId });
 
-    // 7. Permanently delete the User document from the database
+    // 7. Permanently delete the User document
     await User.findByIdAndDelete(sessionUser.userId);
 
     // 8. Destroy active session cookie
     await clearSession();
 
-    return Response.json({
+    return NextResponse.json({
       success: true,
       message: 'Account and associated data have been permanently removed from the database.',
     });

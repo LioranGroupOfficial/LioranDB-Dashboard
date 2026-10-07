@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/lib/razorpay';
-import { connectToDatabase, Payment, User, Subscription, ManagedDatabase } from '@/lib/db';
-import { provisionInstance } from '@/lib/providers/provisioning';
+import { connectToDatabase, Payment, Invoice } from '@/lib/db';
+import { createAuditLog } from '@/lib/audit';
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,22 +38,23 @@ export async function POST(req: NextRequest) {
           payment.razorpaySignatureVerified = true;
           await payment.save();
 
-          // If this was a registration payment
-          if (payment.type === 'registration') {
-            await User.findByIdAndUpdate(payment.userId, {
-              accountRegistrationPaid: true,
-              accountRegistrationPaidAt: new Date(),
-              onboardingStage: 'ACTIVE',
-            });
-          }
+          // Handle invoice payment
+          const invoiceId = paymentEntity?.notes?.invoiceId;
+          if (invoiceId) {
+            const invoice = await Invoice.findById(invoiceId);
+            if (invoice && invoice.status !== 'PAID') {
+              invoice.status = 'PAID';
+              invoice.paidAt = new Date();
+              invoice.paymentTransactionReference = paymentId;
+              await invoice.save();
 
-          // If this was an instance payment
-          if (payment.instanceId) {
-            const instance = await ManagedDatabase.findById(payment.instanceId);
-            if (instance && instance.status === 'PENDING') {
-              instance.status = 'PROVISIONING';
-              await instance.save();
-              await provisionInstance(instance);
+              await createAuditLog({
+                userId: invoice.customerId.toString(),
+                action: 'INVOICE_PAID_WEBHOOK',
+                entityType: 'INVOICE',
+                entityId: invoice._id.toString(),
+                metadata: { orderId, paymentId, amountPaise: invoice.totalPaise },
+              });
             }
           }
         }
@@ -67,14 +68,6 @@ export async function POST(req: NextRequest) {
           { status: 'FAILED', notes: paymentEntity?.error_description }
         );
       }
-    } else if (eventType === 'subscription.cancelled') {
-      const subEntity = payload.subscription?.entity;
-      if (subEntity?.id) {
-        await Subscription.findOneAndUpdate(
-          { razorpaySubscriptionId: subEntity.id },
-          { status: 'CANCELLED', cancelledAt: new Date() }
-        );
-      }
     }
 
     return NextResponse.json({ status: 'ok', received: true });
@@ -84,4 +77,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

@@ -33,6 +33,7 @@ export interface IInvoice extends Document {
   discountPaise: number;
   taxPaise: number;
   totalPaise: number;
+  currency?: string;
   status: InvoiceStatus;
   paidAt?: Date;
   paymentId?: string;
@@ -90,6 +91,7 @@ const InvoiceSchema = new Schema<IInvoice>(
     discountPaise: { type: Number, required: true, default: 0 },
     taxPaise: { type: Number, required: true, default: 0 },
     totalPaise: { type: Number, required: true, default: 0 },
+    currency: { type: String, default: 'INR' },
     status: {
       type: String,
       enum: ['DRAFT', 'OPEN', 'PAID', 'OVERDUE', 'VOID'],

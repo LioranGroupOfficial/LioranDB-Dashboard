@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireRegisteredUserAPI, requireUserAPI } from '@/lib/auth/guards';
-import { connectToDatabase, User, ManagedDatabase, Subscription } from '@/lib/db';
-import { calculatePlanPrice, getPlan, formatPaiseToRupees } from '@/lib/plans';
-import { debitWallet, refundWallet, InsufficientBalanceError, getOrCreateWallet } from '@/lib/wallet';
+import { requireUserAPI } from '@/lib/auth/guards';
+import { connectToDatabase, User, ManagedDatabase } from '@/lib/db';
+import { getPlan, formatPaiseToRupees, formatPaiseToInr, PLANS } from '@/lib/plans';
+import { validateCoupon, incrementCouponRedemption } from '@/lib/billing/coupons';
 import { provisionInstance } from '@/lib/providers/provisioning';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
+import { generateDatabasePassword } from '@/lib/crypto';
+import { CreateInstanceSchema, getZodErrorMessage } from '@/lib/validation/schemas';
+import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
+import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 
 export async function GET() {
   try {
@@ -14,33 +18,32 @@ export async function GET() {
 
     const instances = await ManagedDatabase.find({
       $or: [{ customerId: sessionUser.userId }, { userId: sessionUser.userId }],
-      status: { $nin: ['DELETED', 'TERMINATED'] },
+      status: { $ne: 'TERMINATED' },
     })
       .sort({ createdAt: -1 })
       .lean();
 
+    const period = getCurrentMonthPeriod();
+
     const enriched = instances.map((inst) => {
-      const plan = getPlan(inst.planId);
+      const plan = PLANS[inst.planId] || { name: inst.planId, hourlyRatePaise: inst.hourlyRatePaise || 100 };
+      const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, period);
       return {
         id: inst._id.toString(),
         name: inst.name,
-        slug: inst.slug,
-        type: inst.type || plan?.type || 'dedicated',
-        status: inst.status,
         planId: inst.planId,
-        planName: plan?.name || 'Managed Instance',
-        region: inst.region || 'ap-south-1 (Mumbai)',
-        cpu: inst.cpu || plan?.cpu || '1 vCPU',
-        memoryMb: inst.memoryMb || plan?.memoryMb || 1024,
-        documentLimit: inst.documentLimit || plan?.documentLimit || 100000,
-        backupEnabled: inst.backupEnabled ?? false,
+        planName: plan.name,
+        hourlyRatePaise: inst.hourlyRatePaise || plan.hourlyRatePaise || 100,
+        hourlyRateFormatted: formatPaiseToInr(inst.hourlyRatePaise || plan.hourlyRatePaise || 100) + '/hr',
+        status: inst.status,
         host: inst.host,
         port: inst.port,
         databaseName: inst.databaseName,
-        username: inst.username,
-        monthlyPricePaise: inst.monthlyPricePaise || (plan?.pricePaise || 149900),
-        provisionedAt: inst.provisionedAt,
-        createdAt: inst.createdAt,
+        backupEnabled: Boolean(inst.backupEnabled),
+        billingStartedAt: inst.billingStartedAt ? new Date(inst.billingStartedAt).toISOString() : null,
+        currentEstimatedUsagePaise: calc.totalPaise,
+        currentEstimatedHours: calc.billableHours,
+        createdAt: inst.createdAt ? new Date(inst.createdAt).toISOString() : new Date().toISOString(),
       };
     });
 
@@ -53,148 +56,123 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const sessionUser = await requireRegisteredUserAPI();
-    const body = await req.json();
-    const { name, planId, backupAddon, region } = body;
-
-    if (!name || typeof name !== 'string' || name.trim().length < 2) {
-      return NextResponse.json(
-        { error: 'Please provide a valid database name (at least 2 characters).' },
-        { status: 400 }
-      );
-    }
-
-    const plan = getPlan(planId);
-    if (!plan) {
-      return NextResponse.json(
-        { error: 'Invalid plan selected.' },
-        { status: 400 }
-      );
-    }
-
-    // Authoritative server-side price calculation
-    const price = calculatePlanPrice(planId, !!backupAddon);
-
+    const sessionUser = await requireUserAPI();
     await connectToDatabase();
+
     const user = await User.findById(sessionUser.userId);
     if (!user) {
-      return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+      return NextResponse.json({ error: 'User account not found.' }, { status: 404 });
     }
 
-    const trimmedName = name.trim();
-    const cleanSlug = trimmedName.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 32);
+    if (!user.emailVerified) {
+      return NextResponse.json(
+        { error: 'Email verification is required before creating database instances.' },
+        { status: 403 }
+      );
+    }
 
-    // 1. Atomic Wallet Debit
-    let debitResult;
-    try {
-      debitResult = await debitWallet({
-        userId: user._id,
-        amountPaise: price.totalPricePaise,
-        category: 'instance_purchase',
-        description: `Deploy LioranDB ${plan.name} (${trimmedName})`,
-        metadata: {
-          planId: plan.id,
-          instanceName: trimmedName,
-          backupAddon: price.backupAddon,
+    const body = await req.json();
+    const parseResult = CreateInstanceSchema.safeParse(body);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: getZodErrorMessage(parseResult.error) },
+        { status: 400 }
+      );
+    }
+
+    const { name, planId, backupEnabled, couponCode } = parseResult.data;
+
+    // Check plan validity and self-service status
+    const plan = getPlan(planId);
+    if (!plan) {
+      return NextResponse.json({ error: 'Invalid database plan selected.' }, { status: 400 });
+    }
+
+    if (!plan.isSelfService) {
+      return NextResponse.json(
+        {
+          error: `The ${plan.name} plan requires manual communication with LioranDB. Please contact ${plan.contactEmail || 'support@liorandb.com'}.`,
         },
+        { status: 400 }
+      );
+    }
+
+    // Check unique name for this customer
+    const existing = await ManagedDatabase.findOne({
+      customerId: user._id,
+      name: name.trim().toLowerCase(),
+      status: { $ne: 'TERMINATED' },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: `You already have an active database instance named "${name}". Please choose another name.` },
+        { status: 409 }
+      );
+    }
+
+    // Validate coupon if provided
+    let appliedCouponCode: string | undefined = undefined;
+    let couponDiscountPercentage = 0;
+
+    if (couponCode && couponCode.trim()) {
+      const couponCheck = await validateCoupon({
+        code: couponCode,
+        customerId: user._id,
+        planId: plan.id,
       });
-    } catch (err: unknown) {
-      if (err instanceof InsufficientBalanceError) {
+
+      if (!couponCheck.valid) {
         return NextResponse.json(
-          {
-            error: 'Insufficient credits',
-            message: err.message,
-            requiredPaise: err.requiredPaise,
-            availablePaise: err.availablePaise,
-            shortfallPaise: err.shortfallPaise,
-            requiredRupees: err.requiredPaise / 100,
-            availableRupees: err.availablePaise / 100,
-            shortfallRupees: err.shortfallPaise / 100,
-          },
+          { error: couponCheck.error || 'Invalid coupon code.' },
           { status: 400 }
         );
       }
-      throw err;
+
+      appliedCouponCode = couponCheck.code;
+      couponDiscountPercentage = couponCheck.discountPercentage;
     }
 
-    // 2. Create Instance & Subscription Records
-    const now = new Date();
-    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    // Generate initial master user password (returned only once)
+    const masterPassword = generateDatabasePassword(24);
+    const masterUsername = 'db_admin';
 
+    // Create ManagedDatabase in PENDING status
     const instance = await ManagedDatabase.create({
       customerId: user._id,
       userId: user._id,
-      name: trimmedName,
-      slug: `${cleanSlug}-${Date.now().toString(36)}`,
-      type: plan.type,
+      name: name.trim().toLowerCase(),
       planId: plan.id,
+      hourlyRatePaise: plan.hourlyRatePaise,
+      backupEnabled: Boolean(backupEnabled),
+      backupMonthlyPaise: backupEnabled ? 20000 : 0,
+      couponCode: appliedCouponCode,
+      couponDiscountPercentage,
       status: 'PROVISIONING',
-      host: 'pending-allocation',
+      host: 'provisioning...',
       port: 27017,
-      databaseName: `db_${cleanSlug.slice(0, 16)}`,
-      username: `usr_${Math.random().toString(36).slice(2, 8)}`,
-      cpu: plan.cpu,
-      memoryMb: plan.memoryMb,
-      documentLimit: plan.documentLimit,
-      backupEnabled: price.backupAddon,
-      region: region || 'ap-south-1 (Mumbai)',
-      monthlyPricePaise: price.totalPricePaise,
+      databaseName: name.trim().toLowerCase().replace(/-/g, '_'),
+      username: masterUsername,
+      databaseUsers: [
+        {
+          username: masterUsername,
+          createdAt: new Date(),
+        },
+      ],
     });
 
-    const subscription = await Subscription.create({
-      userId: user._id,
-      databaseId: instance._id,
-      instanceId: instance._id,
-      planId: plan.id,
-      planName: plan.name,
-      amount: price.totalPriceRupees,
-      basePricePaise: price.basePricePaise,
-      backupAddon: price.backupAddon,
-      backupPricePaise: price.backupPricePaise,
-      totalPricePaise: price.totalPricePaise,
-      monthlyPricePaise: price.totalPricePaise,
-      currency: 'INR',
-      status: 'ACTIVE',
-      autoRenew: true,
-      startedAt: now,
-      lastChargedAt: now,
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      nextBillingAt: periodEnd,
-      nextPaymentDate: periodEnd,
-    });
-
-    instance.subscriptionId = subscription._id;
-    await instance.save();
-
-    // 3. Trigger Automatic Provisioning with Compensation Safeguard
-    let provisionedInstance;
+    // Run provisioning pipeline
     try {
-      provisionedInstance = await provisionInstance(instance, user.email);
-    } catch (provisionErr: unknown) {
-      console.error('[Provisioning Error, Refunding Credits]', provisionErr);
-      // Compensation mechanism: Refund the debited amount idempotently
-      await refundWallet({
-        userId: user._id,
-        amountPaise: price.totalPricePaise,
-        description: `Refund: Provisioning failed for ${trimmedName}`,
-        instanceId: instance._id,
-        idempotencyKey: `refund_prov_fail_${instance._id}`,
-      });
-
+      await provisionInstance(instance);
+      if (appliedCouponCode) {
+        await incrementCouponRedemption(appliedCouponCode);
+      }
+    } catch (provErr) {
+      console.error('[Provisioning Error]', provErr);
       instance.status = 'FAILED';
       await instance.save();
-
-      subscription.status = 'CANCELLED';
-      subscription.cancellationReason = 'Provisioning infrastructure failure (Credits refunded)';
-      await subscription.save();
-
       return NextResponse.json(
-        {
-          error: 'Instance provisioning encountered an infrastructure error. Your credits have been automatically refunded to your wallet.',
-          instanceId: instance._id.toString(),
-          status: 'FAILED',
-        },
+        { error: 'Instance provisioning encountered an infrastructure error. Please try again or contact support.' },
         { status: 500 }
       );
     }
@@ -208,34 +186,40 @@ export async function POST(req: NextRequest) {
       metadata: {
         planId: instance.planId,
         name: instance.name,
-        backupAddon: price.backupAddon,
-        creditsDebitedPaise: price.totalPricePaise,
+        hourlyRatePaise: instance.hourlyRatePaise,
+        backupEnabled: instance.backupEnabled,
+        couponCode: appliedCouponCode,
       },
     });
 
     await createNotification({
       userId: user._id.toString(),
       type: 'PROVISIONING_COMPLETE',
-      title: 'Database Instance Ready',
-      body: `Your instance "${instance.name}" (${plan.name}) has been provisioned and is active. ${formatPaiseToRupees(
-        price.totalPricePaise
-      )} credits deducted.`,
-      link: `/database/${instance._id}`,
+      title: 'Database Instance Active',
+      body: `Your database "${instance.name}" (${plan.name} at ${formatPaiseToRupees(instance.hourlyRatePaise || 100)}/hr) is now active and running.`,
+      link: `/database/${instance._id.toString()}`,
     });
 
     return NextResponse.json({
       success: true,
-      instanceId: provisionedInstance._id.toString(),
-      status: provisionedInstance.status,
-      host: provisionedInstance.host,
-      port: provisionedInstance.port,
-      databaseName: provisionedInstance.databaseName,
-      remainingBalancePaise: debitResult.wallet.balancePaise,
-      remainingBalanceRupees: debitResult.wallet.balancePaise / 100,
+      instance: {
+        id: instance._id.toString(),
+        name: instance.name,
+        planId: instance.planId,
+        planName: plan.name,
+        status: instance.status,
+        host: instance.host,
+        port: instance.port,
+        databaseName: instance.databaseName,
+        username: masterUsername,
+        password: masterPassword, // returned strictly once upon creation
+        hourlyRatePaise: instance.hourlyRatePaise,
+        backupEnabled: instance.backupEnabled,
+        billingStartedAt: instance.billingStartedAt,
+      },
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to create instance';
-    console.error('[Create Instance Error]', error);
+    const message = error instanceof Error ? error.message : 'Instance creation failed';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
