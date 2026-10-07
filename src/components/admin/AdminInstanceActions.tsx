@@ -254,3 +254,4 @@ export default function AdminInstanceActions({ instanceId, instanceName, status 
     </div>
   );
 }
+
