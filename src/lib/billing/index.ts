@@ -1,117 +1,379 @@
 /**
- * Centralized billing service.
- * All date calculations use Asia/Kolkata (IST) timezone.
- * Timestamps stored in UTC internally.
+ * Centralized Usage-Based Postpaid Billing Service
  *
- * INTEGRATION POINT: Replace manual payment handling with Stripe/Razorpay
- * when a payment gateway is configured.
+ * Product model:
+ * - Billing starts ONLY when an instance reaches ACTIVE state (billingStartedAt).
+ * - Billing stops when the instance is terminated/stopped (billingStoppedAt).
+ * - Prorated backups at ₹200/month (20,000 paise).
+ * - Authoritative server-side integer paise calculation.
+ * - All dates calculated relative to Asia/Kolkata (IST).
  */
+
+import { connectToDatabase, ManagedDatabase, Invoice, User } from '../db';
+import type { IManagedDatabase } from '../db/models/ManagedDatabase';
+import type { IInvoice, IInvoiceLineItem } from '../db/models/Invoice';
+import { BACKUP_MONTHLY_PAISE, formatPaiseToRupees, getPlan } from '../plans';
+import mongoose from 'mongoose';
 
 const IST_TIMEZONE = 'Asia/Kolkata';
 
-/**
- * Get the next billing date (1st of next month in IST).
- */
-export function getNextBillingDate(fromDate: Date = new Date()): Date {
-  // Work in IST
-  const istFormatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: IST_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-
-  const parts = istFormatter.formatToParts(fromDate);
-  const year = parseInt(parts.find((p) => p.type === 'year')!.value, 10);
-  const month = parseInt(parts.find((p) => p.type === 'month')!.value, 10);
-
-  // Next month
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-
-  // 1st of next month at midnight IST → UTC
-  const istMidnight = new Date(`${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00+05:30`);
-  return istMidnight;
+export interface BillingPeriod {
+  start: Date;
+  end: Date;
 }
 
 /**
- * Get current billing period dates.
+ * Returns the billing period for the current calendar month in IST.
  */
-export function getCurrentBillingPeriod(startedAt: Date): {
-  periodStart: Date;
-  periodEnd: Date;
-  nextPaymentDate: Date;
-} {
-  const now = new Date();
-
-  // Billing is always on the 1st of month in IST
+export function getCurrentMonthPeriod(referenceDate: Date = new Date()): BillingPeriod {
   const istFormatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: IST_TIMEZONE,
     year: 'numeric',
     month: '2-digit',
   });
 
-  const parts = istFormatter.formatToParts(now);
+  const parts = istFormatter.formatToParts(referenceDate);
   const year = parseInt(parts.find((p) => p.type === 'year')!.value, 10);
   const month = parseInt(parts.find((p) => p.type === 'month')!.value, 10);
 
-  const periodStart = new Date(
-    `${year}-${String(month).padStart(2, '0')}-01T00:00:00+05:30`
-  );
-
+  const start = new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00+05:30`);
   const nextMonth = month === 12 ? 1 : month + 1;
   const nextYear = month === 12 ? year + 1 : year;
-  const periodEnd = new Date(
-    `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00+05:30`
+  const end = new Date(`${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00+05:30`);
+
+  return { start, end };
+}
+
+/**
+ * Returns the billing period for the previous calendar month in IST.
+ */
+export function getPreviousMonthPeriod(referenceDate: Date = new Date()): BillingPeriod {
+  const istFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: IST_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+  });
+
+  const parts = istFormatter.formatToParts(referenceDate);
+  const year = parseInt(parts.find((p) => p.type === 'year')!.value, 10);
+  const month = parseInt(parts.find((p) => p.type === 'month')!.value, 10);
+
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+
+  const start = new Date(`${prevYear}-${String(prevMonth).padStart(2, '0')}-01T00:00:00+05:30`);
+  const end = new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00+05:30`);
+
+  return { start, end };
+}
+
+export interface InstanceUsageCalculation {
+  instanceId: string;
+  instanceName: string;
+  planId: string;
+  planName: string;
+  hourlyRatePaise: number;
+  billableSeconds: number;
+  billableHours: number;
+  usageAmountPaise: number;
+  backupEnabled: boolean;
+  backupSeconds: number;
+  backupAmountPaise: number;
+  couponCode?: string;
+  couponDiscountPercentage: number;
+  discountPaise: number;
+  subtotalPaise: number;
+  totalPaise: number;
+}
+
+/**
+ * Calculates deterministic billable usage for a single database instance in a given period.
+ */
+export function calculateInstanceUsage(
+  instance: {
+    _id: string | mongoose.Types.ObjectId;
+    name: string;
+    planId: string;
+    planName?: string;
+    status: string;
+    hourlyRatePaise?: number;
+    billingStartedAt?: Date | string | null;
+    billingStoppedAt?: Date | string | null;
+    backupEnabled?: boolean;
+    backupMonthlyPaise?: number;
+    backupStartedAt?: Date | string | null;
+    backupStoppedAt?: Date | string | null;
+    couponCode?: string;
+    couponDiscountPercentage?: number;
+  },
+  period: BillingPeriod,
+  now: Date = new Date()
+): InstanceUsageCalculation {
+  const plan = getPlan(instance.planId);
+  const hourlyRatePaise =
+    typeof instance.hourlyRatePaise === 'number'
+      ? instance.hourlyRatePaise
+      : plan?.hourlyRatePaise || 100;
+  const planName = instance.planName || plan?.name || 'Shared';
+
+  // If billing has not started yet (e.g. still PROVISIONING or PENDING), usage is 0
+  if (!instance.billingStartedAt) {
+    return {
+      instanceId: instance._id.toString(),
+      instanceName: instance.name,
+      planId: instance.planId,
+      planName,
+      hourlyRatePaise,
+      billableSeconds: 0,
+      billableHours: 0,
+      usageAmountPaise: 0,
+      backupEnabled: false,
+      backupSeconds: 0,
+      backupAmountPaise: 0,
+      couponCode: instance.couponCode,
+      couponDiscountPercentage: instance.couponDiscountPercentage || 0,
+      discountPaise: 0,
+      subtotalPaise: 0,
+      totalPaise: 0,
+    };
+  }
+
+  const billingStart = new Date(instance.billingStartedAt);
+  const billingStop = instance.billingStoppedAt ? new Date(instance.billingStoppedAt) : undefined;
+
+  // Window bounds
+  const effectiveStart = new Date(Math.max(billingStart.getTime(), period.start.getTime()));
+  const maxEndBound = Math.min(now.getTime(), period.end.getTime());
+  const effectiveEnd = billingStop
+    ? new Date(Math.min(billingStop.getTime(), period.end.getTime()))
+    : new Date(maxEndBound);
+
+  let billableSeconds = 0;
+  if (effectiveEnd.getTime() > effectiveStart.getTime()) {
+    billableSeconds = Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / 1000);
+  }
+
+  const billableHours = billableSeconds / 3600;
+  const usageAmountPaise = Math.round((billableSeconds * hourlyRatePaise) / 3600);
+
+  // Backup Calculation
+  let backupSeconds = 0;
+  let backupAmountPaise = 0;
+  const hasBackup = !!instance.backupEnabled || !!instance.backupStartedAt;
+
+  if (hasBackup && billableSeconds > 0) {
+    const backupStart = instance.backupStartedAt
+      ? new Date(instance.backupStartedAt)
+      : billingStart;
+    const backupStop = instance.backupStoppedAt
+      ? new Date(instance.backupStoppedAt)
+      : billingStop;
+
+    const backupEffStart = new Date(
+      Math.max(backupStart.getTime(), effectiveStart.getTime(), period.start.getTime())
+    );
+    const backupEffEnd = backupStop
+      ? new Date(Math.min(backupStop.getTime(), effectiveEnd.getTime(), period.end.getTime()))
+      : effectiveEnd;
+
+    if (backupEffEnd.getTime() > backupEffStart.getTime()) {
+      backupSeconds = Math.floor((backupEffEnd.getTime() - backupEffStart.getTime()) / 1000);
+      const totalMonthSeconds = Math.max(
+        1,
+        Math.floor((period.end.getTime() - period.start.getTime()) / 1000)
+      );
+      backupAmountPaise = Math.round((backupSeconds / totalMonthSeconds) * BACKUP_MONTHLY_PAISE);
+    }
+  }
+
+  const grossSubtotalPaise = usageAmountPaise + backupAmountPaise;
+  const couponDiscountPercentage = Math.min(
+    100,
+    Math.max(0, instance.couponDiscountPercentage || 0)
   );
+  const discountPaise = Math.round((grossSubtotalPaise * couponDiscountPercentage) / 100);
+  const totalPaise = Math.max(0, grossSubtotalPaise - discountPaise);
 
   return {
-    periodStart,
-    periodEnd,
-    nextPaymentDate: periodEnd,
+    instanceId: instance._id.toString(),
+    instanceName: instance.name,
+    planId: instance.planId,
+    planName,
+    hourlyRatePaise,
+    billableSeconds,
+    billableHours,
+    usageAmountPaise,
+    backupEnabled: hasBackup,
+    backupSeconds,
+    backupAmountPaise,
+    couponCode: instance.couponCode,
+    couponDiscountPercentage,
+    discountPaise,
+    subtotalPaise: grossSubtotalPaise,
+    totalPaise,
   };
 }
 
-export type BillingStatus =
-  | 'ACTIVE'
-  | 'UPCOMING_PAYMENT'
-  | 'DUE'
-  | 'PAST_DUE'
-  | 'SUSPENDED'
-  | 'CANCELLED';
+export interface CustomerMonthEstimate {
+  customerId: string;
+  period: BillingPeriod;
+  instanceCalculations: InstanceUsageCalculation[];
+  totalComputePaise: number;
+  totalBackupPaise: number;
+  totalDiscountPaise: number;
+  totalEstimatedPaise: number;
+  totalEstimatedRupees: number;
+  activeInstancesCount: number;
+}
 
 /**
- * Determine billing status from subscription data.
+ * Calculates estimated month-to-date usage across all customer instances.
  */
-export function getBillingStatus(params: {
-  subscriptionStatus: string;
-  nextPaymentDate?: Date;
-  lastPaymentStatus?: string;
-}): BillingStatus {
-  const { subscriptionStatus, nextPaymentDate, lastPaymentStatus } = params;
+export async function getCustomerMonthEstimate(
+  customerId: string | mongoose.Types.ObjectId,
+  referenceDate: Date = new Date()
+): Promise<CustomerMonthEstimate> {
+  await connectToDatabase();
+  const period = getCurrentMonthPeriod(referenceDate);
 
-  if (subscriptionStatus === 'CANCELLED') return 'CANCELLED';
-  if (subscriptionStatus === 'SUSPENDED') return 'SUSPENDED';
-  if (subscriptionStatus === 'PAST_DUE') return 'PAST_DUE';
+  // Find all instances belonging to customer that were active or terminated during this period
+  const instances = await ManagedDatabase.find({
+    $and: [
+      { $or: [{ customerId }, { userId: customerId }] },
+      { billingStartedAt: { $exists: true, $ne: null, $lt: period.end } },
+      { $or: [{ billingStoppedAt: { $exists: false } }, { billingStoppedAt: null }, { billingStoppedAt: { $gte: period.start } }] },
+    ],
+  }).lean();
 
-  if (nextPaymentDate) {
-    const now = new Date();
-    const daysUntilDue = (nextPaymentDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+  const instanceCalculations: InstanceUsageCalculation[] = [];
+  let totalComputePaise = 0;
+  let totalBackupPaise = 0;
+  let totalDiscountPaise = 0;
+  let totalEstimatedPaise = 0;
+  let activeCount = 0;
 
-    if (daysUntilDue < 0) return 'DUE';
-    if (daysUntilDue <= 7) return 'UPCOMING_PAYMENT';
+  for (const inst of instances) {
+    const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, period, referenceDate);
+    if (calc.billableSeconds > 0 || inst.status === 'ACTIVE' || inst.status === 'RUNNING') {
+      instanceCalculations.push(calc);
+      totalComputePaise += calc.usageAmountPaise;
+      totalBackupPaise += calc.backupAmountPaise;
+      totalDiscountPaise += calc.discountPaise;
+      totalEstimatedPaise += calc.totalPaise;
+    }
+    if (inst.status === 'ACTIVE' || inst.status === 'RUNNING') {
+      activeCount++;
+    }
   }
 
-  if (lastPaymentStatus === 'PENDING') return 'UPCOMING_PAYMENT';
+  return {
+    customerId: customerId.toString(),
+    period,
+    instanceCalculations,
+    totalComputePaise,
+    totalBackupPaise,
+    totalDiscountPaise,
+    totalEstimatedPaise,
+    totalEstimatedRupees: totalEstimatedPaise / 100,
+    activeInstancesCount: activeCount,
+  };
+}
 
-  return 'ACTIVE';
+/**
+ * Generates an immutable snapshot Invoice for a customer's usage in a given period.
+ */
+export async function generateMonthlyInvoice(
+  customerId: string | mongoose.Types.ObjectId,
+  period: BillingPeriod
+): Promise<IInvoice | null> {
+  await connectToDatabase();
+  const user = await User.findById(customerId);
+  if (!user) {
+    throw new Error(`Customer not found for ID: ${customerId}`);
+  }
+
+  // Find instances with activity in the given period
+  const instances = await ManagedDatabase.find({
+    $and: [
+      { $or: [{ customerId }, { userId: customerId }] },
+      { billingStartedAt: { $exists: true, $ne: null, $lt: period.end } },
+      { $or: [{ billingStoppedAt: { $exists: false } }, { billingStoppedAt: null }, { billingStoppedAt: { $gte: period.start } }] },
+    ],
+  }).lean();
+
+  const lineItems: IInvoiceLineItem[] = [];
+  let subtotalPaise = 0;
+  let discountPaise = 0;
+  let totalPaise = 0;
+
+  for (const inst of instances) {
+    const calc = calculateInstanceUsage(
+      inst as unknown as IManagedDatabase,
+      period,
+      period.end
+    );
+    if (calc.billableSeconds > 0) {
+      lineItems.push({
+        instanceId: inst._id as unknown as mongoose.Types.ObjectId,
+        instanceName: inst.name,
+        planId: inst.planId,
+        planName: calc.planName,
+        hourlyRatePaise: calc.hourlyRatePaise,
+        billableHours: parseFloat(calc.billableHours.toFixed(2)),
+        usageAmountPaise: calc.usageAmountPaise,
+        backupAmountPaise: calc.backupAmountPaise,
+        discountPaise: calc.discountPaise,
+        subtotalPaise: calc.totalPaise,
+        description: `${calc.planName} Database: ${calc.billableHours.toFixed(1)} hrs @ ${formatPaiseToRupees(calc.hourlyRatePaise)}/hr${
+          calc.backupAmountPaise > 0 ? ` + Backup: ${formatPaiseToRupees(calc.backupAmountPaise)}` : ''
+        }${calc.discountPaise > 0 ? ` (Coupon: -${formatPaiseToRupees(calc.discountPaise)})` : ''}`,
+      });
+
+      subtotalPaise += calc.subtotalPaise;
+      discountPaise += calc.discountPaise;
+      totalPaise += calc.totalPaise;
+    }
+  }
+
+  if (lineItems.length === 0) {
+    return null;
+  }
+
+  const issueDate = new Date();
+  const dueDate = new Date(issueDate.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days payment window
+  const yearMonth = `${period.start.getFullYear()}${String(period.start.getMonth() + 1).padStart(2, '0')}`;
+  const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+  const invoiceNumber = `INV-${yearMonth}-${randomSuffix}`;
+
+  const customerName = user.profile?.fullName || user.email.split('@')[0];
+
+  const invoice = await Invoice.create({
+    invoiceNumber,
+    customerId: user._id,
+    customerName,
+    customerEmail: user.email,
+    billingPeriod: {
+      start: period.start,
+      end: period.end,
+    },
+    issueDate,
+    dueDate,
+    lineItems,
+    subtotalPaise,
+    discountPaise,
+    taxPaise: 0,
+    totalPaise,
+    status: 'OPEN',
+  });
+
+  return invoice;
 }
 
 export function formatCurrency(amount: number, currency: string = 'INR'): string {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency,
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(amount);
 }
 
@@ -123,60 +385,3 @@ export function formatDateIST(date: Date): string {
     day: 'numeric',
   }).format(date);
 }
-
-export interface DeletionRefundQuote {
-  elapsedMinutes: number;
-  refundPercentage: number; // 100, 90, 60, or 0
-  baseAmountPaise: number;
-  refundAmountPaise: number;
-  refundAmountRupees: number;
-  tierLabel: string;
-}
-
-/**
- * Calculates instance deletion refund according to policy:
- * - Deletion within 15 minutes of creation: 100% refund
- * - Deletion within 1 hour (<= 60 mins) of creation: 90% refund
- * - Deletion between 1 hour and 3 hours (<= 180 mins) of creation: 60% refund
- * - Deletion after 3 hours (> 180 mins) of creation: 0% refund (No refund)
- */
-export function calculateInstanceDeletionRefund(
-  createdAt: Date | string | number,
-  baseAmountPaise: number,
-  nowDate: Date = new Date()
-): DeletionRefundQuote {
-  const createdTime = new Date(createdAt).getTime();
-  const currentTime = nowDate.getTime();
-  const elapsedMs = Math.max(0, currentTime - createdTime);
-  const elapsedMinutes = elapsedMs / (1000 * 60);
-
-  let refundPercentage: number;
-  let tierLabel: string;
-
-  if (elapsedMinutes <= 15) {
-    refundPercentage = 100;
-    tierLabel = 'Under 15 minutes (100% full refund)';
-  } else if (elapsedMinutes <= 60) {
-    refundPercentage = 90;
-    tierLabel = 'Under 1 hour (90% refund)';
-  } else if (elapsedMinutes <= 180) {
-    refundPercentage = 60;
-    tierLabel = '1 to 3 hours (60% refund)';
-  } else {
-    refundPercentage = 0;
-    tierLabel = 'After 3 hours (No refund)';
-  }
-
-  const refundAmountPaise = Math.round(baseAmountPaise * (refundPercentage / 100));
-  const refundAmountRupees = refundAmountPaise / 100;
-
-  return {
-    elapsedMinutes,
-    refundPercentage,
-    baseAmountPaise,
-    refundAmountPaise,
-    refundAmountRupees,
-    tierLabel,
-  };
-}
-

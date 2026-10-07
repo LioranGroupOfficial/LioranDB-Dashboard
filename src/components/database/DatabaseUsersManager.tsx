@@ -1,0 +1,410 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Users,
+  Plus,
+  KeyRound,
+  Trash2,
+  Copy,
+  Check,
+  AlertTriangle,
+  Loader2,
+  X,
+  ShieldAlert,
+} from 'lucide-react';
+
+interface DatabaseUser {
+  username: string;
+  createdAt: string | Date;
+}
+
+interface Props {
+  instanceId: string;
+  initialUsers: DatabaseUser[];
+  instanceStatus: string;
+}
+
+export default function DatabaseUsersManager({
+  instanceId,
+  initialUsers,
+  instanceStatus,
+}: Props) {
+  const router = useRouter();
+  const [users, setUsers] = useState<DatabaseUser[]>(initialUsers);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // One-time password display modal
+  const [oneTimeSecret, setOneTimeSecret] = useState<{
+    username: string;
+    password: string;
+    title: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // User deletion state
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+
+  const handleCopySecret = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const username = newUsername.trim();
+    if (!username) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch(`/api/instances/${instanceId}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create database user');
+      }
+
+      setShowCreateModal(false);
+      setNewUsername('');
+      setUsers((prev) => [...prev, { username, createdAt: new Date().toISOString() }]);
+
+      // Display one-time password modal
+      setOneTimeSecret({
+        username,
+        password: data.generatedPassword,
+        title: 'New Database User Created',
+      });
+      router.refresh();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Creation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (username: string) => {
+    if (!confirm(`Are you sure you want to generate a new password for database user "${username}"?`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/instances/${instanceId}/users/${encodeURIComponent(username)}`, {
+        method: 'POST',
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to reset password');
+      }
+
+      setOneTimeSecret({
+        username,
+        password: data.generatedPassword,
+        title: 'Database User Password Reset',
+      });
+      router.refresh();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    setDeletingUser(true);
+    try {
+      const res = await fetch(`/api/instances/${instanceId}/users/${encodeURIComponent(userToDelete)}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete user');
+      }
+
+      setUsers((prev) => prev.filter((u) => u.username !== userToDelete));
+      setUserToDelete(null);
+      router.refresh();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Deletion failed');
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
+  const isActive = instanceStatus === 'ACTIVE' || instanceStatus === 'RUNNING';
+
+  return (
+    <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-6 space-y-4 shadow-2xs">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <Users className="w-4 h-4 text-[var(--primary)]" />
+            Database Users &amp; Access Control
+          </h2>
+          <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+            Manage authorized database credentials. Passwords are never stored in plaintext and are shown only once upon generation.
+          </p>
+        </div>
+
+        {isActive && (
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="py-1.5 px-3 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-card)] text-xs font-medium text-[var(--text-primary)] border border-[var(--border)] transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+          >
+            <Plus className="w-3.5 h-3.5 text-[var(--primary)]" />
+            <span>Create Database User</span>
+          </button>
+        )}
+      </div>
+
+      {/* Users Table */}
+      <div className="border border-[var(--border)] rounded-lg overflow-hidden">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-[var(--surface-2)] border-b border-[var(--border)] text-[var(--muted)] uppercase font-mono">
+            <tr>
+              <th className="py-2.5 px-4 font-medium">Username</th>
+              <th className="py-2.5 px-4 font-medium">Created Date</th>
+              <th className="py-2.5 px-4 font-medium text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--border)] font-mono">
+            {users.map((u) => (
+              <tr key={u.username} className="hover:bg-[var(--surface-2)]/40 transition-colors">
+                <td className="py-2.5 px-4 font-semibold text-[var(--text-primary)]">
+                  {u.username}
+                </td>
+                <td className="py-2.5 px-4 text-[var(--muted)]">
+                  {new Date(u.createdAt).toLocaleDateString('en-IN', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </td>
+                <td className="py-2.5 px-4 text-right">
+                  <div className="inline-flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleResetPassword(u.username)}
+                      disabled={loading || !isActive}
+                      title="Reset and generate new password"
+                      className="py-1 px-2 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-card)] text-[var(--text-secondary)] hover:text-[var(--primary)] border border-[var(--border)] transition-colors inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    >
+                      <KeyRound className="w-3 h-3 text-[var(--primary)]" />
+                      <span>Reset Password</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setUserToDelete(u.username)}
+                      disabled={loading || !isActive}
+                      title="Delete user"
+                      className="p-1 rounded text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={3} className="py-6 text-center text-xs font-sans text-[var(--muted)]">
+                  No database users configured.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* CREATE USER MODAL */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-lg font-medium text-[var(--text-primary)]">
+                Create Database User
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="text-[var(--muted)] hover:text-[var(--text-primary)]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-secondary)] mb-1.5">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  placeholder="e.g. app_backend_user"
+                  required
+                  className="w-full px-3.5 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--text-primary)] font-mono focus:outline-hidden focus:border-[var(--primary)]"
+                />
+                <span className="text-[11px] text-[var(--muted)] mt-1 block">
+                  3-24 alphanumeric characters or underscores.
+                </span>
+              </div>
+
+              {error && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="py-2 px-4 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-card)] text-xs font-medium text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || !newUsername.trim()}
+                  className="py-2 px-4 rounded-lg bg-[var(--primary)] hover:opacity-95 text-white text-xs font-medium transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>Generate Password &amp; Create</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ONE-TIME PASSWORD DISPLAY MODAL */}
+      {oneTimeSecret && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="bg-[var(--surface-card)] border border-[var(--primary)]/40 rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0 border border-emerald-500/20">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-serif text-lg font-bold text-[var(--text-primary)]">
+                  {oneTimeSecret.title}
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  User: <strong className="font-mono text-[var(--text-primary)]">{oneTimeSecret.username}</strong>
+                </p>
+              </div>
+            </div>
+
+            {/* Crucial Security Notice */}
+            <div className="p-3.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2.5">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <strong className="block font-semibold">Copy this password now. You won&apos;t be able to view it again.</strong>
+                <p className="text-[11px] mt-0.5 opacity-90">
+                  For your security, database passwords are never saved in recoverable plaintext on our servers.
+                </p>
+              </div>
+            </div>
+
+            {/* Password Box */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-mono uppercase text-[var(--muted)]">
+                Generated Password
+              </label>
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] font-mono text-sm text-[var(--text-primary)] break-all select-all">
+                <span className="flex-1">{oneTimeSecret.password}</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopySecret(oneTimeSecret.password)}
+                  className="py-1.5 px-3 rounded bg-[var(--primary)] hover:opacity-90 text-white text-xs font-medium transition-colors shrink-0 inline-flex items-center gap-1 cursor-pointer"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setOneTimeSecret(null)}
+                className="py-2.5 px-6 rounded-lg bg-[var(--primary)] hover:opacity-95 text-white text-xs font-medium transition-colors cursor-pointer shadow-xs"
+              >
+                I have saved this password
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE USER MODAL */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-[var(--surface-card)] border border-red-500/30 rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-semibold text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Delete Database User</span>
+            </div>
+
+            <p className="text-xs text-[var(--text-secondary)]">
+              Are you sure you want to permanently delete user <strong className="font-mono text-[var(--text-primary)]">&ldquo;{userToDelete}&rdquo;</strong>? Applications authenticating with these credentials will lose access immediately.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                disabled={deletingUser}
+                className="py-1.5 px-3 rounded-lg bg-[var(--surface-2)] text-xs text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteUser}
+                disabled={deletingUser}
+                className="py-1.5 px-3 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                {deletingUser ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                <span>Delete User</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

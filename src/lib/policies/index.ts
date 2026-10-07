@@ -12,33 +12,33 @@ export const DEFAULT_POLICIES = [
   {
     slug: 'managed-hosting-terms',
     title: 'LioranDB Managed Hosting Terms of Service',
-    version: '1.0',
+    version: '2.0',
     effectiveAt: new Date('2026-01-01'),
     active: true,
-    content: `LIORANDB MANAGED HOSTING SERVICE AGREEMENT (v1.0)
+    content: `LIORANDB MANAGED HOSTING SERVICE AGREEMENT (v2.0)
 
 1. PROVISION OF SERVICES
-LioranDB agrees to provide managed database hosting services in accordance with the specifications of the selected subscription plan. The customer is granted a non-exclusive, revocable right to connect to and store data in the managed instance.
+LioranDB agrees to provide managed database hosting services under a postpaid usage-based model. The customer is granted a non-exclusive, revocable right to connect to and store data in their managed instance.
 
 2. SERVICE LEVEL OBJECTIVES & BENCHMARK CHARACTERISTICS
-Managed instances target a 99.9% monthly availability baseline. Benchmark performance characteristics (e.g. ~35,000 reads/sec, ~10,000 writes/sec) represent laboratory baseline performance and do not constitute absolute throughput guarantees. Performance is dependent on workload, indexing, schema design, and client concurrency.
+Managed instances target a 99.9% monthly availability baseline. Shared instances support up to 1,000 documents and 3,000 operations/sec overall. Dedicated instances provide dedicated hardware allocations. High Capacity workloads require manual provisioning via LioranDB support.
 
-3. PRICING & BILLING
-Managed hosting is billed at the standard rate of ₹5,000 (INR) per month per instance, due on the 1st day of each month in the Asia/Kolkata timezone. Failure to maintain payment status may result in service suspension.
+3. PRICING & USAGE-BASED BILLING
+Compute usage is billed postpaid on an hourly basis (Shared at ₹1/hour, Dedicated at ₹8/hour). Optional managed backups are billed at ₹200/month prorated to active instance duration. Billing starts strictly when an instance transitions to ACTIVE status and ceases when terminated. Invoices are generated at the end of each billing cycle in Asia/Kolkata timezone.
 
 4. CREDENTIALS & SECURITY RESPONSIBILITY
-Customers must change temporary credentials immediately upon instance activation. Customers are solely responsible for safeguarding database credentials and connection URIs.
+Customers must safeguard database connection URIs and user credentials. LioranDB does not store customer database passwords in plaintext.
 
 5. TERMINATION & SUSPENSION
-LioranDB reserves the right to suspend or terminate services in the event of terms violations, acceptable use breaches, or delinquent billing accounts.`,
+Customers may terminate instances at any time to halt billing immediately. LioranDB reserves the right to suspend or terminate services in the event of acceptable use breaches or delinquent unpaid invoices.`,
   },
   {
     slug: 'privacy-policy',
     title: 'LioranDB Privacy Policy',
-    version: '1.0',
+    version: '2.0',
     effectiveAt: new Date('2026-01-01'),
     active: true,
-    content: `LIORANDB MANAGED HOSTING PRIVACY POLICY (v1.0)
+    content: `LIORANDB MANAGED HOSTING PRIVACY POLICY (v2.0)
 
 1. DATA COLLECTION
 We collect necessary account registration information (email, contact name, company name, country, and phone number) to deliver hosting services, verify identities, and facilitate support interactions.
@@ -50,15 +50,15 @@ We maintain an append-only audit trail recording administrative actions, logins,
 Customer database contents are stored in isolated managed deployments. LioranDB does not access, inspect, or sell customer application data stored within managed database collections.
 
 4. DATA RETENTION
-Upon account termination, customer database storage volumes and backups are retained for 30 days prior to permanent, irrecoverable deletion.`,
+Upon instance termination, billing ceases immediately and compute instances are decommissioned. Customer invoices and audit logs are retained for accounting and compliance records.`,
   },
   {
     slug: 'acceptable-use-policy',
     title: 'LioranDB Acceptable Use Policy',
-    version: '1.0',
+    version: '2.0',
     effectiveAt: new Date('2026-01-01'),
     active: true,
-    content: `LIORANDB MANAGED HOSTING ACCEPTABLE USE POLICY (v1.0)
+    content: `LIORANDB MANAGED HOSTING ACCEPTABLE USE POLICY (v2.0)
 
 1. PROHIBITED USES
 Customer managed database instances may not be utilized to:
@@ -67,33 +67,27 @@ Customer managed database instances may not be utilized to:
 (c) Attempt unauthorized intrusion or penetration of the LioranDB control plane or underlying compute nodes.
 
 2. RESOURCE GOVERNANCE
-Customers agree not to intentionally disrupt shared cluster infrastructure or exceed allocated compute and IOPS allocations in a manner detrimental to network stability.
+Customers agree not to intentionally disrupt shared cluster infrastructure or exceed allocated plan limits in a manner detrimental to network stability.
 
 3. ENFORCEMENT
 Violations of this Acceptable Use Policy will result in immediate suspension without prior notice.`,
   },
   {
     slug: 'refund-cancellation-policy',
-    title: 'LioranDB Refund & Cancellation Policy',
-    version: '1.0',
+    title: 'LioranDB Billing & Cancellation Policy',
+    version: '2.0',
     effectiveAt: new Date('2026-01-01'),
     active: true,
-    content: `LIORANDB REFUND AND CANCELLATION POLICY (v1.0)
+    content: `LIORANDB POSTPAID USAGE & CANCELLATION POLICY (v2.0)
 
-1. MANAGED DATABASE INSTANCE DELETION & TIERED REFUND SCHEDULE
-When a customer terminates and deletes a managed database instance, an automatic refund is calculated based on the elapsed duration since instance creation and credited directly to the customer's wallet balance:
-- Deletion within 15 minutes of creation: 100% full refund of the charged instance amount.
-- Deletion within 1 hour (between 15 and 60 minutes) of creation: 90% refund of the charged instance amount.
-- Deletion between 1 hour and 3 hours (60 to 180 minutes) of creation: 60% refund of the charged instance amount.
-- Deletion after 3 hours (> 180 minutes) of creation: No refund (0%).
+1. USAGE-BASED BILLING & ACCUMULATION
+All compute and optional backup charges accumulate based on exact active running duration (seconds accumulated server-side). There are no upfront registration fees or prepayment requirements for standard self-service plans.
 
-All eligible refund credits are instantly credited to your LioranDB wallet and can be used immediately for new database instances, add-ons, or subscription renewals.
+2. INSTANCE TERMINATION
+Customers can terminate database instances at any moment through the dashboard. Terminating an instance immediately halts further usage accumulation and closes the active billing interval.
 
-2. MONTHLY SUBSCRIPTION CANCELLATIONS
-Customers may delete or cancel their database instances and subscriptions at any time via the dashboard. Upon deletion, automated recurring billing is halted immediately, and allocated compute resources are released.
-
-3. PRO-RATED BILLING
-Deployments and terminations are processed in accordance with the aforementioned tiered refund policy.`,
+3. INVOICE SETTLEMENT
+At the end of each monthly billing cycle, an itemized invoice is generated reflecting exact hourly usage and applied promotional discounts. Customers have a 15-day settlement window to pay invoices via Razorpay or configured payment methods.`,
   },
 ];
 
@@ -123,4 +117,3 @@ export async function ensureDefaultPolicies() {
     );
   }
 }
-

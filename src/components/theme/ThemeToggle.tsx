@@ -2,19 +2,21 @@
 
 import { useTheme } from './ThemeProvider';
 import { Sun, Moon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 interface Props {
   className?: string;
 }
 
+const emptySubscribe = () => () => {};
+
 export default function ThemeToggle({ className = '' }: Props) {
   const { theme, toggleTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   if (!mounted) {
     return (
@@ -42,4 +44,3 @@ export default function ThemeToggle({ className = '' }: Props) {
     </button>
   );
 }
-

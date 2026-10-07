@@ -104,7 +104,6 @@ export async function loginUser(
     email: user.email,
     role: user.role,
     emailVerified: user.emailVerified,
-    accountRegistrationPaid: user.accountRegistrationPaid || false,
   };
 
   // Persist session
@@ -113,7 +112,6 @@ export async function loginUser(
   session.email = sessionData.email;
   session.role = sessionData.role;
   session.emailVerified = sessionData.emailVerified;
-  session.accountRegistrationPaid = sessionData.accountRegistrationPaid;
   await session.save();
 
   await createAuditLog({
@@ -207,7 +205,7 @@ export async function verifyEmailOTP(
   await User.findByIdAndUpdate(userId, {
     emailVerified: true,
     emailVerifiedAt: new Date(),
-    onboardingStage: 'APPLICATION_REQUIRED',
+    onboardingStage: 'ACTIVE',
   });
 
   // Remove verification record
@@ -234,8 +232,8 @@ export async function verifyEmailOTP(
     userId,
     type: 'EMAIL_VERIFIED',
     title: 'Email verified',
-    body: 'Your email address has been verified. You can now apply for managed hosting.',
-    link: '/application',
+    body: 'Your email address has been verified. You can now create and manage your database instances directly.',
+    link: '/database/create',
   });
 
   return { success: true, message: 'Email verified successfully.' };

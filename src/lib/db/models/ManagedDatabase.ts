@@ -14,7 +14,13 @@ export type DatabaseStatus =
 
 export type DatabaseType = 'shared' | 'dedicated';
 
+export interface IDatabaseUser {
+  username: string;
+  createdAt: Date;
+}
+
 export interface IManagedDatabase extends Document {
+  _id: mongoose.Types.ObjectId;
   customerId: mongoose.Types.ObjectId;
   userId?: mongoose.Types.ObjectId;
   name: string;
@@ -27,23 +33,40 @@ export interface IManagedDatabase extends Document {
   databaseName: string;
   status: DatabaseStatus;
   planId: string;
+  planName?: string;
+  hourlyRatePaise: number;
+  backupMonthlyPaise: number;
+  backupEnabled: boolean;
+  backupStartedAt?: Date;
+  backupStoppedAt?: Date;
+  billingStartedAt?: Date;
+  billingStoppedAt?: Date;
+  couponCode?: string;
+  couponDiscountPercentage?: number;
+  databaseUsers: IDatabaseUser[];
+  opsPerSecondLimit?: number;
+  documentLimit?: number;
   cpu?: string;
   memoryMb?: number;
-  documentLimit?: number;
-  backupEnabled?: boolean;
   region?: string;
-  monthlyPricePaise?: number;
-  subscriptionId?: mongoose.Types.ObjectId;
   provisionedAt?: Date;
   suspendedAt?: Date;
   suspensionReason?: string;
-  temporaryCredentialExpiresAt?: Date;
-  passwordChangeRequired: boolean;
+  terminatedAt?: Date;
+  terminationReason?: string;
   adminNotes?: string;
   providerDeploymentId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const DatabaseUserSchema = new Schema<IDatabaseUser>(
+  {
+    username: { type: String, required: true, trim: true },
+    createdAt: { type: Date, required: true, default: () => new Date() },
+  },
+  { _id: false }
+);
 
 const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
   {
@@ -51,7 +74,7 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     name: { type: String, required: true, trim: true },
     slug: { type: String, trim: true },
-    type: { type: String, enum: ['shared', 'dedicated'], default: 'dedicated' },
+    type: { type: String, enum: ['shared', 'dedicated'], default: 'shared' },
     username: { type: String, required: true, trim: true },
     encryptedConnectionUri: { type: String },
     host: { type: String, required: true, trim: true },
@@ -73,19 +96,28 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
       ],
       default: 'PENDING',
     },
-    planId: { type: String, required: true, default: 'starter' },
+    planId: { type: String, required: true, default: 'shared' },
+    planName: { type: String, default: 'Shared' },
+    hourlyRatePaise: { type: Number, required: true, default: 100 },
+    backupMonthlyPaise: { type: Number, required: true, default: 0 },
+    backupEnabled: { type: Boolean, default: false },
+    backupStartedAt: { type: Date },
+    backupStoppedAt: { type: Date },
+    billingStartedAt: { type: Date },
+    billingStoppedAt: { type: Date },
+    couponCode: { type: String, uppercase: true, trim: true },
+    couponDiscountPercentage: { type: Number, default: 0 },
+    databaseUsers: { type: [DatabaseUserSchema], default: [] },
+    opsPerSecondLimit: { type: Number },
+    documentLimit: { type: Number },
     cpu: { type: String },
     memoryMb: { type: Number },
-    documentLimit: { type: Number },
-    backupEnabled: { type: Boolean, default: false },
     region: { type: String, default: 'ap-south-1 (Mumbai)' },
-    monthlyPricePaise: { type: Number },
-    subscriptionId: { type: Schema.Types.ObjectId, ref: 'Subscription' },
     provisionedAt: { type: Date },
     suspendedAt: { type: Date },
     suspensionReason: { type: String },
-    temporaryCredentialExpiresAt: { type: Date },
-    passwordChangeRequired: { type: Boolean, default: false },
+    terminatedAt: { type: Date },
+    terminationReason: { type: String },
     adminNotes: { type: String },
     providerDeploymentId: { type: String },
   },

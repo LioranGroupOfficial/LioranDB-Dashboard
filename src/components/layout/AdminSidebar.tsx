@@ -5,12 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  FileText,
   Users,
   Server,
   CreditCard,
-  LifeBuoy,
+  TicketPercent,
   Shield,
+  LifeBuoy,
   Scale,
   LogOut,
   PanelLeftClose,
@@ -20,13 +20,13 @@ import {
 } from 'lucide-react';
 
 const NAV = [
-  { label: 'Overview', href: '/admin', icon: LayoutDashboard },
-  { label: 'Applications', href: '/admin/applications', icon: FileText },
+  { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Customers', href: '/admin/customers', icon: Users },
-  { label: 'Provisioning', href: '/admin/provisioning', icon: Server },
-  { label: 'Billing & Payments', href: '/admin/billing', icon: CreditCard },
-  { label: 'Support Tickets', href: '/admin/support', icon: LifeBuoy },
-  { label: 'Audit Log', href: '/admin/audit', icon: Shield },
+  { label: 'Instances', href: '/admin/instances', icon: Server },
+  { label: 'Billing', href: '/admin/billing', icon: CreditCard },
+  { label: 'Coupons', href: '/admin/coupons', icon: TicketPercent },
+  { label: 'Audit', href: '/admin/audit', icon: Shield },
+  { label: 'Support', href: '/admin/support', icon: LifeBuoy },
   { label: 'Policies', href: '/admin/policies', icon: Scale },
 ];
 
@@ -36,16 +36,14 @@ interface Props {
   onMobileClose?: () => void;
 }
 
-export default function AdminSidebar({ email, mobileOpen, onMobileClose }: Props) {
+export default function AdminSidebar({ email: _email, mobileOpen, onMobileClose }: Props) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('lioran_admin_sidebar_collapsed');
-    if (saved !== null) {
-      setCollapsed(saved === 'true');
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lioran_admin_sidebar_collapsed') === 'true';
     }
-  }, []);
+    return false;
+  });
 
   function toggleCollapsed() {
     const next = !collapsed;
@@ -57,41 +55,6 @@ export default function AdminSidebar({ email, mobileOpen, onMobileClose }: Props
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.href = '/login';
   }
-
-  const NavLinks = ({ isMobile = false }: { isMobile?: boolean }) => (
-    <nav className="flex-1 overflow-y-auto p-2 space-y-1">
-      {NAV.map((item) => {
-        const active =
-          item.href === '/admin'
-            ? pathname === '/admin'
-            : pathname.startsWith(item.href);
-        const Icon = item.icon;
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => {
-              if (isMobile && onMobileClose) onMobileClose();
-            }}
-            title={!isMobile && collapsed ? item.label : undefined}
-            className={`sidebar-link ${active ? 'active' : ''} ${
-              !isMobile && collapsed ? 'justify-center px-0' : 'px-3.5'
-            }`}
-          >
-            <Icon
-              className={`w-4 h-4 shrink-0 transition-colors ${
-                active ? 'text-[var(--primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
-              }`}
-            />
-            {(isMobile || !collapsed) && (
-              <span className="text-xs font-medium truncate">{item.label}</span>
-            )}
-          </Link>
-        );
-      })}
-    </nav>
-  );
 
   return (
     <>
@@ -149,14 +112,43 @@ export default function AdminSidebar({ email, mobileOpen, onMobileClose }: Props
           </div>
         )}
 
-        <NavLinks />
+        {/* Navigation Links */}
+        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+          {NAV.map((item) => {
+            const active =
+              item.href === '/admin'
+                ? pathname === '/admin'
+                : pathname.startsWith(item.href);
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                className={`sidebar-link ${active ? 'active' : ''} ${
+                  collapsed ? 'justify-center px-0' : 'px-3.5'
+                }`}
+              >
+                <Icon
+                  className={`w-4 h-4 shrink-0 transition-colors ${
+                    active ? 'text-[var(--primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
+                  }`}
+                />
+                {!collapsed && (
+                  <span className="text-xs font-medium truncate">{item.label}</span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
 
         {/* Sticky Bottom Actions */}
         <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
           <button
             onClick={handleLogout}
             title={collapsed ? 'Sign out' : undefined}
-            className={`sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-lg ${
+            className={`sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-lg cursor-pointer ${
               collapsed ? 'justify-center px-0' : 'px-3.5'
             }`}
           >
@@ -203,12 +195,36 @@ export default function AdminSidebar({ email, mobileOpen, onMobileClose }: Props
               </button>
             </div>
 
-            <NavLinks isMobile />
+            <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+              {NAV.map((item) => {
+                const active =
+                  item.href === '/admin'
+                    ? pathname === '/admin'
+                    : pathname.startsWith(item.href);
+                const Icon = item.icon;
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onMobileClose}
+                    className={`sidebar-link ${active ? 'active' : ''} px-3.5`}
+                  >
+                    <Icon
+                      className={`w-4 h-4 shrink-0 transition-colors ${
+                        active ? 'text-[var(--primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
+                      }`}
+                    />
+                    <span className="text-xs font-medium truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
 
             <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
               <button
                 onClick={handleLogout}
-                className="sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3.5 rounded-lg"
+                className="sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3.5 rounded-lg cursor-pointer"
               >
                 <LogOut className="w-4 h-4 shrink-0 text-red-500" />
                 <span className="text-xs font-medium">Sign Out</span>

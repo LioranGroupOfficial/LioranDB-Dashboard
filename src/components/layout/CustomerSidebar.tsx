@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Database,
+  Activity,
   CreditCard,
   LifeBuoy,
   Settings,
@@ -13,11 +14,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
-  Wallet as WalletIcon,
-  Plus,
 } from 'lucide-react';
 import type { OnboardingStage, UserRole } from '@/lib/db/models/User';
-import AddCreditsModal from '@/components/wallet/AddCreditsModal';
 
 interface NavItem {
   label: string;
@@ -26,11 +24,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Databases', href: '/database', icon: Database },
-  { label: 'Billing & Credits', href: '/billing', icon: CreditCard },
-  { label: 'Developer Support', href: '/support', icon: LifeBuoy },
-  { label: 'Account Settings', href: '/account', icon: Settings },
+  { label: 'Usage', href: '/usage', icon: Activity },
+  { label: 'Billing & Invoices', href: '/billing', icon: CreditCard },
+  { label: 'Support', href: '/support', icon: LifeBuoy },
+  { label: 'Account', href: '/account', icon: Settings },
 ];
 
 interface Props {
@@ -42,24 +41,28 @@ interface Props {
 
 export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const [balancePaise, setBalancePaise] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('lioran_sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
+  const [estimatedPaise, setEstimatedPaise] = useState<number | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem('lioran_sidebar_collapsed');
-    if (saved !== null) {
-      setCollapsed(saved === 'true');
-    }
-
-    // Fetch live wallet balance
-    fetch('/api/wallet')
+    let mounted = true;
+    fetch('/api/billing/estimate')
       .then((r) => r.json())
       .then((d) => {
-        if (typeof d.balancePaise === 'number') {
-          setBalancePaise(d.balancePaise);
+        if (mounted && typeof d.totalEstimatedPaise === 'number') {
+          setEstimatedPaise(d.totalEstimatedPaise);
         }
       })
       .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
   }, [pathname]);
 
   function toggleCollapsed() {
@@ -72,41 +75,6 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
     await fetch('/api/auth/logout', { method: 'POST' });
     window.location.href = '/login';
   }
-
-  const NavLinks = ({ isMobile = false }: { isMobile?: boolean }) => (
-    <nav className="flex-1 overflow-y-auto p-2 space-y-1">
-      {NAV_ITEMS.map((item) => {
-        const active =
-          item.href === '/dashboard'
-            ? pathname === '/dashboard'
-            : pathname.startsWith(item.href);
-        const Icon = item.icon;
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => {
-              if (isMobile && onMobileClose) onMobileClose();
-            }}
-            title={!isMobile && collapsed ? item.label : undefined}
-            className={`sidebar-link ${active ? 'active' : ''} ${
-              !isMobile && collapsed ? 'justify-center px-0' : 'px-3.5'
-            }`}
-          >
-            <Icon
-              className={`w-4 h-4 shrink-0 transition-colors ${
-                active ? 'text-[var(--primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
-              }`}
-            />
-            {(isMobile || !collapsed) && (
-              <span className="text-xs font-medium truncate">{item.label}</span>
-            )}
-          </Link>
-        );
-      })}
-    </nav>
-  );
 
   return (
     <>
@@ -159,35 +127,52 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
           </div>
         )}
 
-        <NavLinks />
+        {/* Navigation Links */}
+        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+          {NAV_ITEMS.map((item) => {
+            const active =
+              item.href === '/dashboard'
+                ? pathname === '/dashboard'
+                : pathname.startsWith(item.href);
+            const Icon = item.icon;
 
-        {/* Compact Wallet Credits Section */}
-        {!collapsed ? (
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                className={`sidebar-link ${active ? 'active' : ''} ${
+                  collapsed ? 'justify-center px-0' : 'px-3.5'
+                }`}
+              >
+                <Icon
+                  className={`w-4 h-4 shrink-0 transition-colors ${
+                    active ? 'text-[var(--primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
+                  }`}
+                />
+                {!collapsed && (
+                  <span className="text-xs font-medium truncate">{item.label}</span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Current Month Estimated Usage Pill */}
+        {!collapsed && estimatedPaise !== null && (
           <div className="p-3 mx-2 mb-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border)] shadow-2xs">
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1">
-                <WalletIcon className="w-3 h-3 text-[var(--primary)]" />
-                Credits
+                <Activity className="w-3 h-3 text-[var(--primary)]" />
+                Month Estimate
               </span>
-              <AddCreditsModal
-                buttonText="+ Add"
-                className="text-[11px] font-mono text-[var(--primary)] hover:underline cursor-pointer bg-transparent border-0 p-0 shadow-none font-semibold"
-                onSuccess={(newBal) => setBalancePaise(newBal)}
-              />
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--muted)] font-mono">
+                Postpaid
+              </span>
             </div>
-            <p className="font-serif text-base font-bold text-[var(--text-primary)]">
-              {balancePaise !== null
-                ? `₹${(balancePaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                : '...'}
+            <p className="font-serif text-sm font-bold text-[var(--text-primary)]">
+              ₹{(estimatedPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-          </div>
-        ) : (
-          <div className="py-2 flex justify-center border-t border-[var(--border)]">
-            <AddCreditsModal
-              buttonText=""
-              className="p-2 rounded-lg text-[var(--primary)] hover:bg-[var(--surface-card)] transition-colors cursor-pointer bg-transparent border-0 shadow-none"
-              onSuccess={(newBal) => setBalancePaise(newBal)}
-            />
           </div>
         )}
 
@@ -209,14 +194,12 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
       {/* Mobile Drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
-          {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={onMobileClose}
             aria-hidden="true"
           />
 
-          {/* Drawer Panel */}
           <aside className="relative w-64 max-w-[80vw] bg-[var(--sidebar-bg)] border-r border-[var(--border)] flex flex-col h-full z-50 select-none shadow-2xl">
             <div className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-[var(--border)]">
               <Link
@@ -241,26 +224,48 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
               </button>
             </div>
 
-            <NavLinks isMobile />
+            <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+              {NAV_ITEMS.map((item) => {
+                const active =
+                  item.href === '/dashboard'
+                    ? pathname === '/dashboard'
+                    : pathname.startsWith(item.href);
+                const Icon = item.icon;
 
-            <div className="p-3 mx-3 mb-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border)]">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1">
-                  <WalletIcon className="w-3 h-3 text-[var(--primary)]" />
-                  Credits
-                </span>
-                <AddCreditsModal
-                  buttonText="+ Add"
-                  className="text-[11px] font-mono text-[var(--primary)] hover:underline cursor-pointer bg-transparent border-0 p-0 shadow-none font-semibold"
-                  onSuccess={(newBal) => setBalancePaise(newBal)}
-                />
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onMobileClose}
+                    className={`sidebar-link ${active ? 'active' : ''} px-3.5`}
+                  >
+                    <Icon
+                      className={`w-4 h-4 shrink-0 transition-colors ${
+                        active ? 'text-[var(--primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
+                      }`}
+                    />
+                    <span className="text-xs font-medium truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {estimatedPaise !== null && (
+              <div className="p-3 mx-3 mb-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border)]">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1">
+                    <Activity className="w-3 h-3 text-[var(--primary)]" />
+                    Month Estimate
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--muted)] font-mono">
+                    Postpaid
+                  </span>
+                </div>
+                <p className="font-serif text-sm font-bold text-[var(--text-primary)]">
+                  ₹{(estimatedPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
               </div>
-              <p className="font-serif text-base font-bold text-[var(--text-primary)]">
-                {balancePaise !== null
-                  ? `₹${(balancePaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                  : '...'}
-              </p>
-            </div>
+            )}
 
             <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
               <button

@@ -4,95 +4,78 @@ import {
   getAllPlans,
   calculatePlanPrice,
   formatPaiseToRupees,
-  REGISTRATION_FEE_PAISE,
-  REGISTRATION_FEE_RUPEES,
-  BACKUP_ADDON_MONTHLY_PAISE,
-  BACKUP_ADDON_MONTHLY_RUPEES,
+  formatPaiseToInr,
+  BACKUP_MONTHLY_PAISE,
+  BACKUP_MONTHLY_RUPEES,
 } from '@/lib/plans';
 
-describe('LioranDB Plans & Pricing Configuration', () => {
-  test('Registration fee is configured as exactly ₹100 / 10,000 paise', () => {
-    expect(REGISTRATION_FEE_RUPEES).toBe(100);
-    expect(REGISTRATION_FEE_PAISE).toBe(10000);
+describe('LioranDB Usage-Based Plans & Pricing Configuration', () => {
+  test('Backup add-on is configured as ₹200 / 20,000 paise per month', () => {
+    expect(BACKUP_MONTHLY_RUPEES).toBe(200);
+    expect(BACKUP_MONTHLY_PAISE).toBe(20000);
   });
 
-  test('Backup add-on is configured as ₹500 / 50,000 paise', () => {
-    expect(BACKUP_ADDON_MONTHLY_RUPEES).toBe(500);
-    expect(BACKUP_ADDON_MONTHLY_PAISE).toBe(50000);
-  });
-
-  test('Developer Shared plan specifications', () => {
-    const plan = getPlan('developer_shared');
+  test('Shared plan specifications', () => {
+    const plan = getPlan('shared');
     expect(plan).toBeDefined();
-    expect(plan?.priceRupees).toBe(299);
-    expect(plan?.pricePaise).toBe(29900);
+    expect(plan?.name).toBe('Shared');
+    expect(plan?.hourlyRateRupees).toBe(1);
+    expect(plan?.hourlyRatePaise).toBe(100);
     expect(plan?.type).toBe('shared');
-    expect(plan?.documentLimit).toBe(50000);
+    expect(plan?.documentLimit).toBe(1000);
+    expect(plan?.opsPerSecondLimit).toBe(3000);
     expect(plan?.backupIncluded).toBe(false);
     expect(plan?.optionalBackupAllowed).toBe(true);
+    expect(plan?.isSelfService).toBe(true);
   });
 
-  test('Starter Dedicated plan specifications', () => {
-    const plan = getPlan('starter');
+  test('Dedicated plan specifications', () => {
+    const plan = getPlan('dedicated');
     expect(plan).toBeDefined();
-    expect(plan?.priceRupees).toBe(1499);
-    expect(plan?.pricePaise).toBe(149900);
+    expect(plan?.name).toBe('Dedicated');
+    expect(plan?.hourlyRateRupees).toBe(8);
+    expect(plan?.hourlyRatePaise).toBe(800);
     expect(plan?.type).toBe('dedicated');
-    expect(plan?.documentLimit).toBe(100000);
     expect(plan?.backupIncluded).toBe(false);
     expect(plan?.optionalBackupAllowed).toBe(true);
+    expect(plan?.isSelfService).toBe(true);
   });
 
-  test('Growth Dedicated includes backups and charges ₹0 for backup add-on', () => {
-    const plan = getPlan('growth');
+  test('High Capacity Enterprise plan specifications', () => {
+    const plan = getPlan('high-capacity');
     expect(plan).toBeDefined();
-    expect(plan?.priceRupees).toBe(2499);
-    expect(plan?.pricePaise).toBe(249900);
-    expect(plan?.type).toBe('dedicated');
-    expect(plan?.documentLimit).toBe(500000);
-    expect(plan?.backupIncluded).toBe(true);
-
-    const priceWithBackup = calculatePlanPrice('growth', true);
-    expect(priceWithBackup.backupPriceRupees).toBe(0);
-    expect(priceWithBackup.backupPricePaise).toBe(0);
-    expect(priceWithBackup.totalPriceRupees).toBe(2499);
-    expect(priceWithBackup.totalPricePaise).toBe(249900);
+    expect(plan?.name).toBe('High Capacity');
+    expect(plan?.hourlyRateRupees).toBe(250);
+    expect(plan?.hourlyRatePaise).toBe(25000);
+    expect(plan?.isSelfService).toBe(false);
+    expect(plan?.contactEmail).toBe('support@liorandb.com');
   });
 
-  test('Pro Dedicated includes backups and charges ₹0 for backup add-on', () => {
-    const plan = getPlan('pro');
-    expect(plan).toBeDefined();
-    expect(plan?.priceRupees).toBe(5000);
-    expect(plan?.pricePaise).toBe(500000);
-    expect(plan?.type).toBe('dedicated');
-    expect(plan?.documentLimit).toBe(1000000);
-    expect(plan?.backupIncluded).toBe(true);
+  test('calculatePlanPrice calculates hourly rate and optional backup', () => {
+    const sharedWithoutBackup = calculatePlanPrice('shared', false);
+    expect(sharedWithoutBackup.hourlyRateRupees).toBe(1);
+    expect(sharedWithoutBackup.hourlyRatePaise).toBe(100);
+    expect(sharedWithoutBackup.backupMonthlyRupees).toBe(0);
+    expect(sharedWithoutBackup.backupMonthlyPaise).toBe(0);
 
-    const priceWithBackup = calculatePlanPrice('pro', true);
-    expect(priceWithBackup.backupPriceRupees).toBe(0);
-    expect(priceWithBackup.totalPriceRupees).toBe(5000);
+    const sharedWithBackup = calculatePlanPrice('shared', true);
+    expect(sharedWithBackup.hourlyRateRupees).toBe(1);
+    expect(sharedWithBackup.hourlyRatePaise).toBe(100);
+    expect(sharedWithBackup.backupMonthlyRupees).toBe(200);
+    expect(sharedWithBackup.backupMonthlyPaise).toBe(20000);
+
+    const dedicatedWithBackup = calculatePlanPrice('dedicated', true);
+    expect(dedicatedWithBackup.hourlyRateRupees).toBe(8);
+    expect(dedicatedWithBackup.hourlyRatePaise).toBe(800);
+    expect(dedicatedWithBackup.backupMonthlyRupees).toBe(200);
+    expect(dedicatedWithBackup.backupMonthlyPaise).toBe(20000);
   });
 
-  test('Starter Dedicated with optional backup calculates ₹1,999 / 199,900 paise', () => {
-    const priceWithBackup = calculatePlanPrice('starter', true);
-    expect(priceWithBackup.basePriceRupees).toBe(1499);
-    expect(priceWithBackup.backupPriceRupees).toBe(500);
-    expect(priceWithBackup.totalPriceRupees).toBe(1999);
-    expect(priceWithBackup.totalPricePaise).toBe(199900);
-    expect(priceWithBackup.backupAddon).toBe(true);
-  });
-
-  test('Developer Shared with optional backup calculates ₹799 / 79,900 paise', () => {
-    const priceWithBackup = calculatePlanPrice('developer_shared', true);
-    expect(priceWithBackup.basePriceRupees).toBe(299);
-    expect(priceWithBackup.backupPriceRupees).toBe(500);
-    expect(priceWithBackup.totalPriceRupees).toBe(799);
-    expect(priceWithBackup.totalPricePaise).toBe(79900);
-  });
-
-  test('formatPaiseToRupees correctly formats integer paise to INR string', () => {
-    const formatted = formatPaiseToRupees(10000);
-    expect(formatted).toContain('100');
+  test('formatPaiseToRupees and formatPaiseToInr format integer paise accurately', () => {
+    expect(formatPaiseToRupees(100)).toContain('1');
+    expect(formatPaiseToRupees(800)).toContain('8');
+    expect(formatPaiseToRupees(20000)).toContain('200');
+    expect(formatPaiseToInr(100)).toContain('1.00');
+    expect(formatPaiseToInr(68240)).toContain('682.40');
   });
 });
-

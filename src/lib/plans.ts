@@ -3,128 +3,135 @@ export type PlanType = 'shared' | 'dedicated';
 export interface PlanConfig {
   id: string;
   name: string;
-  priceRupees: number;
-  pricePaise: number;
+  hourlyRateRupees: number;
+  hourlyRatePaise: number;
+  priceRupees?: number;
+  pricePaise?: number;
   type: PlanType;
   purpose: string;
   resourceModel: string;
-  cpu: string;
-  memory: string;
-  memoryMb: number;
   documentGuideline: string;
-  documentLimit: number;
+  documentLimit?: number;
+  maxDocuments?: number;
+  opsLimitGuideline: string;
+  opsPerSecondLimit?: number;
+  maxOpsPerSec?: number;
   backupIncluded: boolean;
   optionalBackupAllowed: boolean;
-  backupPriceRupees: number;
-  backupPricePaise: number;
-  isSharedNotice?: string;
+  backupPriceMonthlyRupees: number;
+  backupPriceMonthlyPaise: number;
+  isSelfService: boolean;
+  selfService?: boolean;
+  contactEmail?: string;
   badge?: string;
+  description?: string;
 }
 
-export const REGISTRATION_FEE_RUPEES = 100;
-export const REGISTRATION_FEE_PAISE = 10000;
-export const BACKUP_ADDON_MONTHLY_RUPEES = 500;
-export const BACKUP_ADDON_MONTHLY_PAISE = 50000;
+export const BACKUP_MONTHLY_RUPEES = 200;
+export const BACKUP_MONTHLY_PAISE = 20000;
+export const SUPPORT_CONTACT_EMAIL = 'support@liorandb.com';
 
 export const PLANS: Record<string, PlanConfig> = {
-  developer_shared: {
-    id: 'developer_shared',
-    name: 'Developer Shared',
-    priceRupees: 299,
-    pricePaise: 29900,
+  shared: {
+    id: 'shared',
+    name: 'Shared',
+    hourlyRateRupees: 1,
+    hourlyRatePaise: 100,
+    priceRupees: 1,
+    pricePaise: 100,
     type: 'shared',
-    purpose: 'Individual developers, testing, side projects and small development workloads.',
-    resourceModel: 'Shared infrastructure with other developers.',
-    cpu: 'Shared vCPU',
-    memory: 'Shared RAM',
-    memoryMb: 512,
-    documentGuideline: 'Up to 50,000 documents',
-    documentLimit: 50000,
+    purpose: 'Developers, MVPs, prototypes, small applications, early-stage startups, and testing.',
+    resourceModel: 'Shared infrastructure',
+    documentGuideline: 'Up to 1,000 documents',
+    documentLimit: 1000,
+    maxDocuments: 1000,
+    opsLimitGuideline: 'Up to 3,000 ops/sec (~1,500 writes/sec & ~2,000 reads/sec target workload)',
+    opsPerSecondLimit: 3000,
+    maxOpsPerSec: 3000,
     backupIncluded: false,
     optionalBackupAllowed: true,
-    backupPriceRupees: BACKUP_ADDON_MONTHLY_RUPEES,
-    backupPricePaise: BACKUP_ADDON_MONTHLY_PAISE,
-    isSharedNotice: 'CPU and RAM are shared with other workloads and not guaranteed dedicated resources.',
+    backupPriceMonthlyRupees: BACKUP_MONTHLY_RUPEES,
+    backupPriceMonthlyPaise: BACKUP_MONTHLY_PAISE,
+    isSelfService: true,
+    selfService: true,
+    badge: 'Popular for Devs',
+    description: 'Cost-effective entry point for lightweight applications with zero upfront commitment.',
   },
-  starter: {
-    id: 'starter',
-    name: 'Starter Dedicated',
-    priceRupees: 1499,
-    pricePaise: 149900,
+  dedicated: {
+    id: 'dedicated',
+    name: 'Dedicated',
+    hourlyRateRupees: 8,
+    hourlyRatePaise: 800,
+    priceRupees: 8,
+    pricePaise: 800,
     type: 'dedicated',
-    purpose: 'Small applications, production backends, and predictable performance.',
-    resourceModel: 'Dedicated 1 vCPU, 1 GB RAM instance.',
-    cpu: '1 vCPU',
-    memory: '1 GB RAM',
-    memoryMb: 1024,
-    documentGuideline: 'Up to 100,000 documents',
-    documentLimit: 100000,
+    purpose: 'Production workloads requiring dedicated managed database resources and predictable performance.',
+    resourceModel: 'Dedicated managed database instance',
+    documentGuideline: 'Custom production capacity',
+    opsLimitGuideline: 'Dedicated compute throughput',
     backupIncluded: false,
     optionalBackupAllowed: true,
-    backupPriceRupees: BACKUP_ADDON_MONTHLY_RUPEES,
-    backupPricePaise: BACKUP_ADDON_MONTHLY_PAISE,
-    badge: 'Popular',
+    backupPriceMonthlyRupees: BACKUP_MONTHLY_RUPEES,
+    backupPriceMonthlyPaise: BACKUP_MONTHLY_PAISE,
+    isSelfService: true,
+    selfService: true,
+    badge: 'Production Ready',
+    description: 'Fully isolated managed database compute designed for high availability and production systems.',
   },
-  growth: {
-    id: 'growth',
-    name: 'Growth Dedicated',
-    priceRupees: 2499,
-    pricePaise: 249900,
+  'high-capacity': {
+    id: 'high-capacity',
+    name: 'High Capacity',
+    hourlyRateRupees: 250,
+    hourlyRatePaise: 25000,
+    priceRupees: 250,
+    pricePaise: 25000,
     type: 'dedicated',
-    purpose: 'Growing businesses, APIs, and mission-critical production data.',
-    resourceModel: 'Dedicated 2 vCPU, 2 GB RAM instance.',
-    cpu: '2 vCPU',
-    memory: '2 GB RAM',
-    memoryMb: 2048,
-    documentGuideline: 'Up to 500,000 documents',
-    documentLimit: 500000,
+    purpose: 'High-throughput and specialized mission-critical workloads.',
+    resourceModel: 'Custom cluster architecture / Enterprise compute',
+    documentGuideline: 'Enterprise scale',
+    opsLimitGuideline: 'Custom high-throughput capacity',
     backupIncluded: true,
     optionalBackupAllowed: false,
-    backupPriceRupees: 0,
-    backupPricePaise: 0,
-    badge: 'Recommended',
-  },
-  pro: {
-    id: 'pro',
-    name: 'Pro Dedicated',
-    priceRupees: 5000,
-    pricePaise: 500000,
-    type: 'dedicated',
-    purpose: 'High-scale workloads requiring heavy throughput and dedicated resources.',
-    resourceModel: 'Dedicated 2 vCPU, 4 GB RAM instance.',
-    cpu: '2 vCPU',
-    memory: '4 GB RAM',
-    memoryMb: 4096,
-    documentGuideline: 'Up to 1,000,000 documents',
-    documentLimit: 1000000,
-    backupIncluded: true,
-    optionalBackupAllowed: false,
-    backupPriceRupees: 0,
-    backupPricePaise: 0,
+    backupPriceMonthlyRupees: 0,
+    backupPriceMonthlyPaise: 0,
+    isSelfService: false,
+    selfService: false,
+    contactEmail: SUPPORT_CONTACT_EMAIL,
+    badge: 'Enterprise',
+    description: 'Contact LioranDB for provisioning specialized high-throughput clusters.',
   },
 };
 
-export const DEFAULT_PLAN_ID = 'starter';
+export const DEFAULT_PLAN_ID = 'shared';
 
 export function getPlan(planId: string): PlanConfig | undefined {
-  return PLANS[planId] || (planId === 'managed-v1' ? PLANS.starter : undefined);
+  if (!planId) return undefined;
+  if (PLANS[planId]) return PLANS[planId];
+  // Backward-compatibility aliases
+  if (planId === 'developer_shared') return PLANS.shared;
+  if (planId === 'starter' || planId === 'growth' || planId === 'pro' || planId === 'managed-v1') {
+    return PLANS.dedicated;
+  }
+  if (planId === 'high_capacity' || planId === 'enterprise') return PLANS['high-capacity'];
+  return undefined;
 }
 
 export function getAllPlans(): PlanConfig[] {
   return Object.values(PLANS);
 }
 
+export function getSelfServicePlans(): PlanConfig[] {
+  return Object.values(PLANS).filter((p) => p.isSelfService);
+}
+
 export interface PlanPriceBreakdown {
   planId: string;
   planName: string;
-  basePriceRupees: number;
-  basePricePaise: number;
+  hourlyRateRupees: number;
+  hourlyRatePaise: number;
   backupAddon: boolean;
-  backupPriceRupees: number;
-  backupPricePaise: number;
-  totalPriceRupees: number;
-  totalPricePaise: number;
-  isDailyBackupIncluded: boolean;
+  backupMonthlyRupees: number;
+  backupMonthlyPaise: number;
 }
 
 export function calculatePlanPrice(planId: string, backupAddon: boolean = false): PlanPriceBreakdown {
@@ -133,46 +140,45 @@ export function calculatePlanPrice(planId: string, backupAddon: boolean = false)
     throw new Error(`Invalid plan id: ${planId}`);
   }
 
-  // Growth & Pro include backups already; never add backup price
-  const effectivelyHasBackup = plan.backupIncluded || backupAddon;
-  const backupPricePaise = plan.backupIncluded
-    ? 0
-    : backupAddon && plan.optionalBackupAllowed
-    ? BACKUP_ADDON_MONTHLY_PAISE
-    : 0;
-
-  const backupPriceRupees = Math.floor(backupPricePaise / 100);
-  const totalPricePaise = plan.pricePaise + backupPricePaise;
-  const totalPriceRupees = plan.priceRupees + backupPriceRupees;
+  const backupMonthlyPaise = backupAddon && plan.optionalBackupAllowed ? BACKUP_MONTHLY_PAISE : 0;
+  const backupMonthlyRupees = backupMonthlyPaise / 100;
 
   return {
     planId: plan.id,
     planName: plan.name,
-    basePriceRupees: plan.priceRupees,
-    basePricePaise: plan.pricePaise,
-    backupAddon: effectivelyHasBackup,
-    backupPriceRupees,
-    backupPricePaise,
-    totalPriceRupees,
-    totalPricePaise,
-    isDailyBackupIncluded: plan.backupIncluded,
+    hourlyRateRupees: plan.hourlyRateRupees,
+    hourlyRatePaise: plan.hourlyRatePaise,
+    backupAddon: backupAddon && plan.optionalBackupAllowed,
+    backupMonthlyRupees,
+    backupMonthlyPaise,
   };
 }
 
-export function formatPaiseToRupees(paise: number): string {
+export function formatPaiseToRupees(paise: number, showDecimals: boolean = true): string {
   const rupees = paise / 100;
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: showDecimals && paise % 100 !== 0 ? 2 : 0,
+    maximumFractionDigits: 2,
   }).format(rupees);
 }
 
-export function formatRupees(rupees: number): string {
+export function formatPaiseToInr(paise: number): string {
+  const rupees = paise / 100;
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(rupees);
 }
 
+export function formatRupees(rupees: number, showDecimals: boolean = true): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: showDecimals && rupees % 1 !== 0 ? 2 : 0,
+    maximumFractionDigits: 2,
+  }).format(rupees);
+}

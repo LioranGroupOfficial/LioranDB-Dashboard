@@ -4,12 +4,6 @@ export type UserRole = 'customer' | 'admin' | 'support';
 
 export type OnboardingStage =
   | 'EMAIL_VERIFICATION'
-  | 'APPLICATION_REQUIRED'
-  | 'APPLICATION_PENDING'
-  | 'APPLICATION_APPROVED'
-  | 'APPLICATION_REJECTED'
-  | 'TERMS_REQUIRED'
-  | 'PROVISIONING'
   | 'ACTIVE'
   | 'SUSPENDED';
 
@@ -29,7 +23,7 @@ export interface IUser extends Document {
   emailVerifiedAt?: Date;
   profile: IUserProfile;
   onboardingStage: OnboardingStage;
-  accountRegistrationPaid: boolean;
+  accountRegistrationPaid?: boolean;
   accountRegistrationPaidAt?: Date;
   razorpayCustomerId?: string;
   isActive: boolean;
@@ -72,17 +66,7 @@ const UserSchema = new Schema<IUser>(
     razorpayCustomerId: { type: String },
     onboardingStage: {
       type: String,
-      enum: [
-        'EMAIL_VERIFICATION',
-        'APPLICATION_REQUIRED',
-        'APPLICATION_PENDING',
-        'APPLICATION_APPROVED',
-        'APPLICATION_REJECTED',
-        'TERMS_REQUIRED',
-        'PROVISIONING',
-        'ACTIVE',
-        'SUSPENDED',
-      ],
+      enum: ['EMAIL_VERIFICATION', 'ACTIVE', 'SUSPENDED'],
       default: 'EMAIL_VERIFICATION',
     },
     isActive: { type: Boolean, default: true },

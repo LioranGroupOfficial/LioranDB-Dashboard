@@ -50,44 +50,29 @@ export const ResetPasswordSchema = z
     path: ['confirmPassword'],
   });
 
-export const ApplicationSchema = z.object({
-  fullName: z.string().min(2, 'Full name is required').max(100),
-  workEmail: emailSchema,
-  phone: z.string().optional(),
-  country: z.string().min(1, 'Country is required'),
-  companyName: z.string().min(1, 'Company/project name is required').max(200),
-  website: z.string().url('Must be a valid URL').optional().or(z.literal('')),
-  description: z.string().min(20, 'Please provide a description (min 20 characters)').max(1000),
-  stage: z.enum([
-    'Idea',
-    'Prototype',
-    'Pre-revenue',
-    'Early revenue',
-    'Growth',
-    'Established business',
-    'Personal project',
-    'Other',
-  ]),
-  githubUrl: z.string().url().optional().or(z.literal('')),
-  linkedinUrl: z.string().url().optional().or(z.literal('')),
-  twitterUrl: z.string().url().optional().or(z.literal('')),
-  productUrl: z.string().url().optional().or(z.literal('')),
-  demoUrl: z.string().url().optional().or(z.literal('')),
-  whyLioranDB: z
+export const CreateInstanceSchema = z.object({
+  name: z
     .string()
-    .min(50, 'Please provide more detail (min 50 characters)')
-    .max(2000),
-  appDescription: z
+    .min(3, 'Instance name must be at least 3 characters')
+    .max(32, 'Instance name cannot exceed 32 characters')
+    .regex(/^[a-z0-9-]+$/, 'Instance name can only contain lowercase letters, numbers, and hyphens'),
+  planId: z.enum(['shared', 'dedicated']),
+  backupEnabled: z.boolean().default(false),
+  couponCode: z.string().optional(),
+});
+
+export const CreateDatabaseUserSchema = z.object({
+  username: z
     .string()
-    .min(50, 'Please describe your application in detail (min 50 characters)')
-    .max(2000),
-  expectedDocumentCount: z.string().min(1, 'Required'),
-  expectedMonthlyUsers: z.string().min(1, 'Required'),
-  readTrafficLevel: z.string().min(1, 'Required'),
-  writeTrafficLevel: z.string().min(1, 'Required'),
-  estimatedStorage: z.string().min(1, 'Required'),
-  isProduction: z.boolean(),
-  pricingResponse: z.enum(['yes', 'discuss', 'no']),
+    .min(3, 'Username must be at least 3 characters')
+    .max(32, 'Username cannot exceed 32 characters')
+    .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain alphanumeric characters and underscores'),
+  role: z.enum(['readWrite', 'read', 'dbAdmin']).default('readWrite'),
+});
+
+export const CouponValidationSchema = z.object({
+  code: z.string().min(1, 'Coupon code is required'),
+  planId: z.string().optional(),
 });
 
 export const SupportTicketSchema = z.object({
@@ -118,7 +103,7 @@ export const ChangePasswordSchema = z
 
 export type SignupInput = z.infer<typeof SignupSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
-export type ApplicationInput = z.infer<typeof ApplicationSchema>;
+export type CreateInstanceInput = z.infer<typeof CreateInstanceSchema>;
 export type SupportTicketInput = z.infer<typeof SupportTicketSchema>;
 
 export function getZodErrorMessage(error: z.ZodError): string {

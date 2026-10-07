@@ -12,31 +12,33 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function applyTheme(newTheme: Theme) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (newTheme === 'dark') {
+    root.classList.add('dark');
+    root.setAttribute('data-theme', 'dark');
+  } else {
+    root.classList.remove('dark');
+    root.setAttribute('data-theme', 'light');
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('light');
-  const [mounted, setMounted] = useState(false);
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return (localStorage.getItem('lioran_theme') as Theme) || 'light';
+      } catch {
+        return 'light';
+      }
+    }
+    return 'light';
+  });
 
   useEffect(() => {
-    try {
-      const savedTheme = (localStorage.getItem('lioran_theme') as Theme) || 'light';
-      setThemeState(savedTheme);
-      applyTheme(savedTheme);
-    } catch {
-      applyTheme('light');
-    }
-    setMounted(true);
-  }, []);
-
-  function applyTheme(newTheme: Theme) {
-    const root = document.documentElement;
-    if (newTheme === 'dark') {
-      root.classList.add('dark');
-      root.setAttribute('data-theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      root.setAttribute('data-theme', 'light');
-    }
-  }
+    applyTheme(theme);
+  }, [theme]);
 
   function setTheme(newTheme: Theme) {
     setThemeState(newTheme);
@@ -65,4 +67,3 @@ export function useTheme() {
   }
   return context;
 }
-

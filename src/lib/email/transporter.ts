@@ -78,7 +78,7 @@ export interface SendEmailParams {
 
 export async function sendEmail(params: SendEmailParams): Promise<void> {
   const { to, subject, html, text } = params;
-  let transporter = createTransporter(false);
+  const transporter = createTransporter(false);
 
   if (!transporter) {
     console.info(`\n📧 [DEV EMAIL CONSOLE]\nTo: ${to}\nSubject: ${subject}\n---\n${text || 'HTML content'}\n---\n`);

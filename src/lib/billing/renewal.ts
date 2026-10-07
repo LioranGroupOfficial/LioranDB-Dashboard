@@ -1,162 +1,87 @@
-import { connectToDatabase, Subscription, ManagedDatabase, User } from '../db';
-import { debitWallet, InsufficientBalanceError } from '../wallet';
+import { connectToDatabase, User, Invoice } from '../db';
+import { getPreviousMonthPeriod, generateMonthlyInvoice } from './index';
 import { createNotification } from '../notifications';
-import { createAuditLog } from '../audit';
+import { sendEmail } from '../email';
 import { formatPaiseToRupees } from '../plans';
 
-export const DEFAULT_GRACE_PERIOD_DAYS = 3;
-
-export interface RenewalResult {
-  renewedCount: number;
-  gracePeriodCount: number;
-  suspendedCount: number;
-  errors: Array<{ subscriptionId: string; error: string }>;
+export interface MonthlyBillingResult {
+  invoicesGenerated: number;
+  overdueInvoicesCount: number;
+  errors: Array<{ customerId: string; error: string }>;
 }
 
 /**
- * Scheduled/Triggered job to process recurring monthly renewals using LioranDB Credits.
+ * Scheduled cron job to generate usage-based monthly invoices for all customers.
  */
-export async function processSubscriptionRenewals(): Promise<RenewalResult> {
+export async function processMonthlyBillingInvoices(): Promise<MonthlyBillingResult> {
   await connectToDatabase();
   const now = new Date();
+  const period = getPreviousMonthPeriod(now);
 
-  const result: RenewalResult = {
-    renewedCount: 0,
-    gracePeriodCount: 0,
-    suspendedCount: 0,
+  const result: MonthlyBillingResult = {
+    invoicesGenerated: 0,
+    overdueInvoicesCount: 0,
     errors: [],
   };
 
-  // 1. Find subscriptions due for renewal
-  const dueSubscriptions = await Subscription.find({
-    status: { $in: ['ACTIVE', 'PAYMENT_DUE', 'GRACE_PERIOD'] },
-    autoRenew: true,
-    $or: [
-      { nextBillingAt: { $lte: now } },
-      { nextPaymentDate: { $lte: now } },
-      { status: 'GRACE_PERIOD' },
-    ],
-  });
+  // 1. Generate invoices for previous month
+  const customers = await User.find({ role: 'customer' }).lean();
 
-  for (const sub of dueSubscriptions) {
+  for (const customer of customers) {
     try {
-      const pricePaise =
-        sub.totalPricePaise ||
-        sub.monthlyPricePaise ||
-        Math.round(sub.amount * 100);
+      // Check if invoice already generated for this customer & period
+      const existing = await Invoice.findOne({
+        customerId: customer._id,
+        'billingPeriod.start': period.start,
+        'billingPeriod.end': period.end,
+      });
 
-      const periodKey = `${sub._id.toString()}_${now.getFullYear()}_${now.getMonth() + 1}`;
-      const idempotencyKey = `renew_${periodKey}`;
+      if (!existing) {
+        const invoice = await generateMonthlyInvoice(customer._id, period);
+        if (invoice) {
+          result.invoicesGenerated++;
 
-      // Try debiting from wallet
-      try {
-        await debitWallet({
-          userId: sub.userId,
-          amountPaise: pricePaise,
-          category: 'subscription_renewal',
-          description: `Monthly renewal for ${sub.planName}`,
-          subscriptionId: sub._id,
-          instanceId: sub.instanceId || sub.databaseId,
-          idempotencyKey,
-        });
-
-        // Renewal succeeded
-        const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-        sub.status = 'ACTIVE';
-        sub.lastChargedAt = now;
-        sub.currentPeriodStart = now;
-        sub.currentPeriodEnd = nextMonth;
-        sub.nextBillingAt = nextMonth;
-        sub.nextPaymentDate = nextMonth;
-        sub.gracePeriodEndsAt = undefined;
-        await sub.save();
-
-        if (sub.instanceId || sub.databaseId) {
-          await ManagedDatabase.findByIdAndUpdate(sub.instanceId || sub.databaseId, {
-            status: 'ACTIVE',
-            suspendedAt: undefined,
-            suspensionReason: undefined,
+          await createNotification({
+            userId: customer._id.toString(),
+            type: 'PAYMENT_DUE',
+            title: 'Monthly Usage Invoice Generated',
+            body: `Your invoice ${invoice.invoiceNumber} for ${formatPaiseToRupees(
+              invoice.totalPaise
+            )} has been generated. Due date: ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}.`,
+            link: `/billing`,
           });
-        }
 
-        await createNotification({
-          userId: sub.userId.toString(),
-          type: 'PAYMENT_RECEIVED',
-          title: 'Subscription Renewed',
-          body: `Your subscription for ${sub.planName} has been successfully renewed (${formatPaiseToRupees(
-            pricePaise
-          )} credits deducted).`,
-          link: '/billing',
-        });
-
-        result.renewedCount++;
-      } catch (err: unknown) {
-        if (err instanceof InsufficientBalanceError) {
-          // Check if already in grace period
-          if (sub.status === 'GRACE_PERIOD' && sub.gracePeriodEndsAt) {
-            if (sub.gracePeriodEndsAt < now) {
-              // Grace period expired -> Suspend instance without deleting data
-              sub.status = 'SUSPENDED';
-              sub.suspendedAt = now;
-              sub.suspensionReason =
-                'Subscription renewal failed due to insufficient credits after grace period.';
-              await sub.save();
-
-              if (sub.instanceId || sub.databaseId) {
-                await ManagedDatabase.findByIdAndUpdate(
-                  sub.instanceId || sub.databaseId,
-                  {
-                    status: 'SUSPENDED',
-                    suspendedAt: now,
-                    suspensionReason:
-                      'Cluster suspended due to unpaid renewal. Please add credits to resume.',
-                  }
-                );
-              }
-
-              await createNotification({
-                userId: sub.userId.toString(),
-                type: 'SERVICE_SUSPENDED',
-                title: 'Instance Suspended',
-                body: `Your instance was suspended because credits were not added during the ${DEFAULT_GRACE_PERIOD_DAYS}-day grace period. Your data is preserved. Add credits to restore service.`,
-                link: '/billing',
-              });
-
-              result.suspendedCount++;
-            }
-          } else {
-            // First failure -> enter grace period
-            const graceEnd = new Date(
-              now.getTime() + DEFAULT_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000
-            );
-            sub.status = 'GRACE_PERIOD';
-            sub.gracePeriodEndsAt = graceEnd;
-            await sub.save();
-
-            await createNotification({
-              userId: sub.userId.toString(),
-              type: 'PAYMENT_OVERDUE',
-              title: 'Subscription Renewal Due',
-              body: `We couldn't renew ${sub.planName} (${formatPaiseToRupees(
-                pricePaise
-              )}). You have a ${DEFAULT_GRACE_PERIOD_DAYS}-day grace period until ${graceEnd.toLocaleDateString(
-                'en-IN'
-              )} to add credits before service suspension.`,
-              link: '/billing',
-            });
-
-            result.gracePeriodCount++;
-          }
-        } else {
-          throw err;
+          await sendEmail({
+            to: customer.email,
+            subject: `LioranDB Monthly Invoice: ${invoice.invoiceNumber}`,
+            html: `<div style="font-family: sans-serif; padding: 20px;">
+              <h2>LioranDB Usage Invoice</h2>
+              <p>Hello ${invoice.customerName},</p>
+              <p>Your monthly usage invoice <strong>${invoice.invoiceNumber}</strong> is ready.</p>
+              <p><strong>Total Amount:</strong> ${formatPaiseToRupees(invoice.totalPaise)}</p>
+              <p><strong>Due Date:</strong> ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}</p>
+              <p><a href="${process.env.APP_URL || 'https://app.liorandb.com'}/billing" style="display:inline-block;padding:10px 20px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:6px;">View & Pay Invoice</a></p>
+            </div>`,
+          });
         }
       }
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : 'Unknown renewal error';
-      result.errors.push({ subscriptionId: sub._id.toString(), error: errMsg });
+      const errMsg = err instanceof Error ? err.message : 'Unknown billing generation error';
+      result.errors.push({ customerId: customer._id.toString(), error: errMsg });
     }
+  }
+
+  // 2. Mark past-due OPEN invoices as OVERDUE
+  const overdueInvoices = await Invoice.find({
+    status: 'OPEN',
+    dueDate: { $lt: now },
+  });
+
+  for (const inv of overdueInvoices) {
+    inv.status = 'OVERDUE';
+    await inv.save();
+    result.overdueInvoicesCount++;
   }
 
   return result;
 }
-
