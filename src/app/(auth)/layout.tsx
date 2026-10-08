@@ -27,7 +27,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </span>
         </Link>
         <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--surface-card)] border border-[var(--border)]">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-[7px] bg-[var(--surface-card)] border border-[var(--border)]">
             <ShieldCheck className="w-3.5 h-3.5 text-[var(--primary)]" />
             <span className="font-medium">Enterprise TLS &amp; ACID</span>
           </div>

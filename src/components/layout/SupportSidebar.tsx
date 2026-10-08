@@ -162,10 +162,10 @@ export default function SupportSidebar({ email: _email, mobileOpen, onMobileClos
                   <Database className="w-4 h-4 text-[var(--on-primary)]" />
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-base font-normal font-serif tracking-tight text-[var(--text-primary)]">
-                    Lioran<span className="text-[var(--primary)] italic">DB</span>
+                  <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
+                    Lioran<span className="text-[var(--text-strong)]">DB</span><span className="text-[var(--text-muted)] font-mono text-xs ml-1 font-normal">Cloud</span>
                   </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-cream-strong)] text-[var(--text-strong)] border border-[var(--border)] font-sans font-semibold">
+                  <span className="badge badge-default text-[9px] py-0 px-1">
                     SUPPORT
                   </span>
                 </div>

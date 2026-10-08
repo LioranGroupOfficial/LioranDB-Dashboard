@@ -227,12 +227,12 @@ export default function InvoicesList({ initialInvoices }: Props) {
                     </td>
                     <td className="py-3 px-4">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        className={`badge ${
                           isPaid
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                            ? 'badge-active'
                             : isOverdue
-                            ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
-                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                            ? 'badge-suspended'
+                            : 'badge-default'
                         }`}
                       >
                         {inv.status}
@@ -298,10 +298,10 @@ export default function InvoicesList({ initialInvoices }: Props) {
 
               <div className="flex items-center gap-3">
                 <span
-                  className={`px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider ${
+                  className={`badge text-xs ${
                     selectedInvoice.status === 'PAID'
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                      ? 'badge-active'
+                      : 'badge-default'
                   }`}
                 >
                   {selectedInvoice.status}

@@ -86,7 +86,7 @@ export default function SubmitPaymentProofModal({ payment }: { payment: PaymentD
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-[var(--muted)] hover:text-[var(--text-primary)] text-sm p-1 rounded-full hover:bg-[var(--surface-card)]"
+                className="text-[var(--muted)] hover:text-[var(--text-primary)] text-sm p-1 rounded-[5px] hover:bg-[var(--surface-card)] cursor-pointer"
               >
                 ✕
               </button>

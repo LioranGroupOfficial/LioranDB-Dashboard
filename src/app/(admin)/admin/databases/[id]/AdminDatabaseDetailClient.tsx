@@ -611,8 +611,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="card p-4">
               <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">Server Health</span>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[var(--primary)] animate-pulse" />
+              <div className="mt-2">
                 <span className="text-lg font-bold text-[var(--text-strong)] font-mono">
                   {data.serverStatus.status}
                 </span>
@@ -1418,7 +1417,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
             className="bg-[var(--surface)] border border-rose-500/30 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl"
           >
             <div>
-              <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[10px] font-mono font-bold uppercase">
+              <span className="badge badge-default text-[10px] font-mono font-bold uppercase tracking-wider">
                 Super Admin Operation
               </span>
               <h3 className="text-lg font-bold text-[var(--text-strong)] mt-1">Reset Database Instance</h3>
@@ -1428,8 +1427,8 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               </p>
             </div>
 
-            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3.5 text-xs text-rose-600 dark:text-rose-400 space-y-1">
-              <p className="font-semibold">Destructive Action Confirmation</p>
+            <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl p-3.5 text-xs text-[var(--text-secondary)] space-y-1">
+              <p className="font-semibold text-[var(--text-strong)]">Destructive Action Confirmation</p>
               <p className="text-[11px]">
                 To proceed, type the instance name <strong className="font-mono text-[var(--text-strong)]">{data.name}</strong> below:
               </p>
@@ -1476,10 +1475,10 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <form
             onSubmit={handleTerminateInstance}
-            className="bg-[var(--surface)] border border-rose-500/30 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl"
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl"
           >
             <div>
-              <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20 text-[10px] font-mono font-bold uppercase">
+              <span className="badge badge-default text-[10px] font-mono font-bold uppercase tracking-wider">
                 Permanent Termination
               </span>
               <h3 className="text-lg font-bold text-[var(--text-strong)] mt-1">Terminate Managed Database</h3>

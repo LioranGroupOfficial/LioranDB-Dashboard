@@ -80,7 +80,7 @@ export default function ProvisionModal({ customer }: { customer: Customer }) {
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-full hover:bg-[var(--surface-2)]"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded-[5px] hover:bg-[var(--surface-2)] cursor-pointer"
               >
                 ✕
               </button>

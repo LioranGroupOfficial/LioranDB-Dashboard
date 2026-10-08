@@ -80,49 +80,19 @@ export default function AdminDatabasesClient({ initialDatabases }: Props) {
     switch (status) {
       case 'ACTIVE':
       case 'RUNNING':
-        return (
-          <span className="badge badge-active">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            ACTIVE
-          </span>
-        );
+        return <span className="badge badge-active">ACTIVE</span>;
       case 'PROVISIONING':
-        return (
-          <span className="badge badge-info">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-strong)] animate-spin" />
-            PROVISIONING
-          </span>
-        );
+        return <span className="badge badge-info">PROVISIONING</span>;
       case 'SUSPENDED':
-        return (
-          <span className="badge badge-suspended">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            SUSPENDED
-          </span>
-        );
+        return <span className="badge badge-suspended">SUSPENDED</span>;
       case 'RESETTING':
-        return (
-          <span className="badge badge-info">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-strong)] animate-pulse" />
-            RESETTING
-          </span>
-        );
+        return <span className="badge badge-info">RESETTING</span>;
       case 'FAILED':
-        return (
-          <span className="badge badge-default">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]" />
-            FAILED
-          </span>
-        );
+        return <span className="badge badge-default">FAILED</span>;
       case 'TERMINATED':
       case 'DELETED':
       default:
-        return (
-          <span className="badge badge-default">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]" />
-            {status}
-          </span>
-        );
+        return <span className="badge badge-default">{status}</span>;
     }
   }
 

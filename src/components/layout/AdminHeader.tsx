@@ -22,7 +22,7 @@ export default function AdminHeader({ email, onMenuToggle }: Props) {
             <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         )}
-        <div className="flex items-center gap-1.5 sm:gap-2 px-3 py-1 rounded-full bg-[var(--surface-card)] border border-[var(--border)] shadow-xs shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 px-3 py-1 rounded-[7px] bg-[var(--surface-card)] border border-[var(--border)] shadow-xs shrink-0">
           <ShieldAlert className="w-3.5 h-3.5 text-[var(--primary)] shrink-0" />
           <p className="text-[11px] sm:text-xs font-medium text-[var(--text-primary)] hidden sm:inline">
             Admin Control Center
@@ -36,8 +36,8 @@ export default function AdminHeader({ email, onMenuToggle }: Props) {
       <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         <ThemeToggle />
 
-        <div className="flex items-center gap-2 p-1 sm:px-3 sm:py-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] text-xs text-[var(--text-primary)] shrink-0">
-          <div className="w-6 h-6 sm:w-5 sm:h-5 rounded-full bg-[var(--primary)] text-[var(--on-primary)] flex items-center justify-center font-bold text-[10px] shrink-0">
+        <div className="flex items-center gap-2 p-1 sm:px-3 sm:py-1.5 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] text-xs text-[var(--text-primary)] shrink-0">
+          <div className="w-6 h-6 sm:w-5 sm:h-5 rounded-[5px] bg-[var(--primary)] text-[var(--on-primary)] flex items-center justify-center font-bold text-[10px] shrink-0">
             A
           </div>
           <span className="font-sans text-xs max-w-[120px] sm:max-w-[180px] truncate text-[var(--text-secondary)] hidden sm:inline">

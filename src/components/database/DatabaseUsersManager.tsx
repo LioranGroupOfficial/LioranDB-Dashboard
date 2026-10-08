@@ -306,7 +306,7 @@ export default function DatabaseUsersManager({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] max-w-lg w-full p-6 shadow-2xl space-y-5">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-[var(--surface-soft)] text-[var(--text-strong)] flex items-center justify-center shrink-0 border border-[var(--border)]">
+              <div className="w-10 h-10 rounded-[7px] bg-[var(--surface-soft)] text-[var(--text-strong)] flex items-center justify-center shrink-0 border border-[var(--border)]">
                 <KeyRound className="w-5 h-5" />
               </div>
               <div className="flex-1">

@@ -207,8 +207,7 @@ export default async function DashboardPage() {
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[var(--primary)] shrink-0 animate-pulse"></span>
+                      <div className="min-w-0">
                         <h3 className="text-base font-bold text-[var(--text-strong)] truncate">
                           {inst.name}
                         </h3>
