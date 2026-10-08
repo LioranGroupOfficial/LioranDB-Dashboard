@@ -441,14 +441,47 @@ export async function provisionInstance(
     }
   }
 
-  // 1. Atomically reserve an available hosting node if not already assigned
+  // 1. Reconcile orphan nodes that have no active instances
+  const activeInstances = await ManagedDatabase.find({
+    status: { $nin: ['TERMINATED', 'DELETED'] },
+    hostingNodeId: { $exists: true, $ne: null },
+  })
+    .select('hostingNodeId')
+    .lean();
+
+  const occupiedNodeIds = activeInstances
+    .map((inst) => inst.hostingNodeId?.toString())
+    .filter((id): id is string => Boolean(id));
+
+  const occupiedSet = new Set(occupiedNodeIds);
+
+  await HostingNode.updateMany(
+    {
+      _id: { $nin: Array.from(occupiedSet) },
+      $or: [{ currentAssignedCount: { $gt: 0 } }, { status: 'PROVISIONING' }, { status: 'ASSIGNED' }],
+      status: { $ne: 'DISABLED' },
+    },
+    {
+      $set: {
+        currentAssignedCount: 0,
+        status: 'AVAILABLE',
+      },
+    }
+  );
+
+  // 2. Atomically reserve an available hosting node if not already assigned
   let node: IHostingNode | null = null;
 
   if (instance.hostingNodeId) {
     node = await HostingNode.findById(instance.hostingNodeId);
+    if (node) {
+      node.status = 'PROVISIONING';
+      node.currentAssignedCount = 1;
+      await node.save();
+    }
   }
 
-  if (!node || node.status === 'ASSIGNED') {
+  if (!node) {
     // Atomically find and reserve an AVAILABLE node
     node = await HostingNode.findOneAndUpdate(
       {
