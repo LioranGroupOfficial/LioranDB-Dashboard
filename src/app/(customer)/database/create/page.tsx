@@ -317,25 +317,31 @@ export default function CreateInstancePage() {
 
         {/* Step 3: Managed Backups */}
         <div className="card space-y-3">
-          <label className="block text-sm font-semibold text-[var(--text-primary)]">
-            3. Optional Managed Backups
-          </label>
-          <label className="flex items-start gap-3 p-3.5 rounded-[7px] bg-[var(--surface-2)] border border-[var(--border)] cursor-pointer">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-semibold text-[var(--text-primary)]">
+              3. Optional Managed Backups
+            </label>
+            <span className="badge badge-default text-[9px] py-0 px-1.5">
+              CURRENTLY DISABLED
+            </span>
+          </div>
+          <div className="flex items-start gap-3 p-3.5 rounded-[7px] bg-[var(--surface-2)]/60 border border-[var(--border)] opacity-60 cursor-not-allowed select-none">
             <input
               type="checkbox"
-              className="mt-0.5"
-              checked={backupEnabled}
-              onChange={(e) => setBackupEnabled(e.target.checked)}
+              className="mt-0.5 cursor-not-allowed"
+              checked={false}
+              disabled
+              readOnly
             />
             <div className="space-y-0.5 text-xs">
-              <span className="font-semibold text-[var(--text-primary)]">
+              <span className="font-semibold text-[var(--text-muted)]">
                 Enable Automated Managed Backups (+₹200/month)
               </span>
               <p className="text-[11px] text-[var(--text-muted)]">
-                Continuous point-in-time recovery and snapshot archives. Prorated to active running instance duration.
+                Continuous point-in-time recovery and snapshot archives. Managed backups are currently unavailable for instant self-service provisioning.
               </p>
             </div>
-          </label>
+          </div>
         </div>
 
         {/* Step 4: Optional Coupon */}
