@@ -19,6 +19,7 @@ import { createAuditLog } from '@/lib/audit';
 import { clearSession } from '@/lib/auth/session';
 import { createApiError } from '@/lib/errors';
 import { formatPaiseToRupees } from '@/lib/plans';
+import { getCustomerMonthEstimate } from '@/lib/billing';
 
 export async function DELETE(_req: NextRequest) {
   try {
@@ -26,7 +27,24 @@ export async function DELETE(_req: NextRequest) {
 
     await connectToDatabase();
 
-    // Check for any unpaid OPEN or OVERDUE invoices
+    // 1. Check for active/running databases
+    const activeDatabases = await ManagedDatabase.find({
+      $or: [{ userId: sessionUser.userId }, { customerId: sessionUser.userId }],
+      status: { $nin: ['TERMINATED', 'DELETED'] },
+    }).lean();
+
+    if (activeDatabases.length > 0) {
+      const dbNames = activeDatabases.map((db) => db.name).join(', ');
+      return NextResponse.json(
+        {
+          error: `Account deletion blocked: You have ${activeDatabases.length} active database instance(s) running (${dbNames}). You must terminate all databases before deleting your account.`,
+          activeDatabasesCount: activeDatabases.length,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 2. Check for any unpaid OPEN or OVERDUE invoices
     const unpaidInvoices = await Invoice.find({
       customerId: sessionUser.userId,
       status: { $in: ['OPEN', 'OVERDUE'] },
@@ -41,6 +59,35 @@ export async function DELETE(_req: NextRequest) {
           )}. Please settle all outstanding invoices before deleting your account.`,
           unpaidCount: unpaidInvoices.length,
           unpaidPaise,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 3. Check for unbilled accrued usage
+    const accruedEstimate = await getCustomerMonthEstimate(sessionUser.userId);
+    if (accruedEstimate.totalEstimatedPaise > 0) {
+      return NextResponse.json(
+        {
+          error: `Account deletion blocked: You have ${formatPaiseToRupees(
+            accruedEstimate.totalEstimatedPaise
+          )} in unbilled database runtime usage. Please settle all usage before deleting your account.`,
+          unbilledAccruedPaise: accruedEstimate.totalEstimatedPaise,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 4. Check for pending payments in-flight
+    const pendingPayments = await Payment.find({
+      userId: sessionUser.userId,
+      status: { $in: ['PENDING', 'SUBMITTED'] },
+    }).lean();
+
+    if (pendingPayments.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Account deletion blocked: You have ${pendingPayments.length} payment(s) currently being processed. Please wait for settlement before deleting your account.`,
         },
         { status: 400 }
       );

@@ -1,5 +1,6 @@
 import { requireVerifiedUser } from '@/lib/auth/guards';
-import { connectToDatabase, User, Notification, PolicyAcceptance, Payment } from '@/lib/db';
+import { connectToDatabase, User, Notification, PolicyAcceptance, Payment, Invoice, ManagedDatabase } from '@/lib/db';
+import { getCustomerMonthEstimate } from '@/lib/billing';
 import AccountSettingsForm from '@/components/account/AccountSettingsForm';
 import PasswordChangeForm from '@/components/account/PasswordChangeForm';
 import NotificationList from '@/components/account/NotificationList';
@@ -12,7 +13,15 @@ export default async function AccountPage() {
   const sessionUser = await requireVerifiedUser();
   await connectToDatabase();
 
-  const [user, notifications, acceptances, unpaidPayments] = await Promise.all([
+  const [
+    user,
+    notifications,
+    acceptances,
+    unpaidPayments,
+    unpaidInvoices,
+    activeDatabases,
+    accruedEstimate,
+  ] = await Promise.all([
     User.findById(sessionUser.userId).lean(),
     Notification.find({ userId: sessionUser.userId })
       .sort({ createdAt: -1 })
@@ -25,6 +34,17 @@ export default async function AccountPage() {
       userId: sessionUser.userId,
       status: { $in: ['PENDING', 'SUBMITTED'] },
     }).lean(),
+    Invoice.find({
+      customerId: sessionUser.userId,
+      status: { $in: ['OPEN', 'OVERDUE'] },
+    }).lean(),
+    ManagedDatabase.find({
+      $or: [{ userId: sessionUser.userId }, { customerId: sessionUser.userId }],
+      status: { $nin: ['TERMINATED', 'DELETED'] },
+    })
+      .select('name status planId')
+      .lean(),
+    getCustomerMonthEstimate(sessionUser.userId),
   ]);
 
   if (!user) return null;
@@ -59,8 +79,13 @@ export default async function AccountPage() {
     acceptedAt: a.acceptedAt.toISOString(),
   }));
 
-  const hasPendingPayments = unpaidPayments.length > 0;
-  const pendingTotal = unpaidPayments.reduce((acc, p) => acc + p.amount, 0);
+  const unpaidInvoicesTotalPaise = unpaidInvoices.reduce(
+    (acc, inv) => acc + (inv.totalPaise || 0),
+    0
+  );
+  const activeDatabaseNames = activeDatabases.map((db) => db.name);
+  const unbilledAccruedPaise = accruedEstimate.totalEstimatedPaise || 0;
+  const pendingPaymentsTotal = unpaidPayments.reduce((acc, p) => acc + p.amount, 0);
 
   return (
     <div className="space-y-6">
@@ -123,9 +148,13 @@ export default async function AccountPage() {
 
       {/* Danger Zone: Delete Account */}
       <DeleteAccountSection
-        hasPendingPayments={hasPendingPayments}
-        pendingCount={unpaidPayments.length}
-        pendingTotal={pendingTotal}
+        unpaidInvoicesCount={unpaidInvoices.length}
+        unpaidInvoicesTotalPaise={unpaidInvoicesTotalPaise}
+        activeDatabasesCount={activeDatabases.length}
+        activeDatabaseNames={activeDatabaseNames}
+        unbilledAccruedPaise={unbilledAccruedPaise}
+        pendingPaymentsCount={unpaidPayments.length}
+        pendingPaymentsTotal={pendingPaymentsTotal}
       />
     </div>
   );
