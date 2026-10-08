@@ -91,8 +91,10 @@ AuditLogSchema.index({ actorId: 1, createdAt: -1 });
 AuditLogSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 AuditLogSchema.index({ createdAt: -1 });
 
-const AuditLog: Model<IAuditLog> =
-  mongoose.models.AuditLog ||
-  mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
+if (mongoose.models.AuditLog) {
+  delete (mongoose.models as Record<string, unknown>).AuditLog;
+}
+
+const AuditLog: Model<IAuditLog> = mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
 
 export default AuditLog;

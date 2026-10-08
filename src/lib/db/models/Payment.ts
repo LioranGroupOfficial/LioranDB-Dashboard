@@ -82,7 +82,10 @@ PaymentSchema.index({ userId: 1, status: 1 });
 PaymentSchema.index({ userId: 1, type: 1, status: 1 });
 PaymentSchema.index({ invoiceId: 1, createdAt: -1 });
 
-const Payment: Model<IPayment> =
-  mongoose.models.Payment || mongoose.model<IPayment>('Payment', PaymentSchema);
+if (mongoose.models.Payment) {
+  delete (mongoose.models as Record<string, unknown>).Payment;
+}
+
+const Payment: Model<IPayment> = mongoose.model<IPayment>('Payment', PaymentSchema);
 
 export default Payment;
