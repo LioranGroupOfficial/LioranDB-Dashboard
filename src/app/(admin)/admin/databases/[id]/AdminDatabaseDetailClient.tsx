@@ -631,8 +631,8 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">Estimated Current Bill</span>
                 {data.couponDiscountPercentage && data.couponDiscountPercentage > 0 ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">
-                    <Tag className="w-2.5 h-2.5" />
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-[var(--surface-soft)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-strong)] font-semibold">
+                    <Tag className="w-2.5 h-2.5 text-[var(--text-muted)]" />
                     <span>-{data.couponDiscountPercentage}%</span>
                   </span>
                 ) : null}
@@ -687,7 +687,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                       {data.planName || (data.planId === 'dedicated' ? 'Dedicated' : 'Shared')}
                     </span>
                     {data.couponDiscountPercentage && data.couponDiscountPercentage > 0 ? (
-                      <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                      <span className="font-mono text-xs font-bold text-[var(--text-strong)]">
                         {formatPaiseToRupees(Math.round(data.hourlyRatePaise * (1 - data.couponDiscountPercentage / 100)))}/hr
                       </span>
                     ) : (
@@ -698,12 +698,12 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                   </div>
                 </div>
                 {data.couponDiscountPercentage && data.couponDiscountPercentage > 0 ? (
-                  <div className="flex justify-between items-center py-1 border-b border-[var(--border)] bg-emerald-500/5 -mx-2 px-2 rounded">
-                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
-                      <Tag className="w-3 h-3" />
+                  <div className="flex justify-between items-center py-1 border-b border-[var(--border)] bg-[var(--surface-soft)] -mx-2 px-2 rounded">
+                    <span className="text-[var(--text-strong)] font-semibold flex items-center gap-1.5">
+                      <Tag className="w-3 h-3 text-[var(--text-muted)]" />
                       <span>Coupon Applied</span>
                     </span>
-                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                    <span className="font-mono text-[var(--text-strong)] font-bold">
                       {data.couponCode || 'PROMO'} (-{data.couponDiscountPercentage}% / ₹{((data.hourlyRatePaise * data.couponDiscountPercentage) / 10000).toFixed(2)} off per hr)
                     </span>
                   </div>

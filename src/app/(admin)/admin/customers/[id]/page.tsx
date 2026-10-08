@@ -286,8 +286,8 @@ export default async function AdminCustomerDetailPage({
                             {inst.planName || (inst.planId === 'dedicated' ? 'Dedicated' : 'Shared')}
                           </span>
                           {inst.couponDiscountPercentage && inst.couponDiscountPercentage > 0 ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">
-                              <Tag className="w-2.5 h-2.5" />
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-[var(--surface-soft)] border border-[var(--border)] font-mono text-[10px] text-[var(--text-strong)] font-semibold">
+                              <Tag className="w-2.5 h-2.5 text-[var(--text-muted)]" />
                               <span>{inst.couponCode ? `${inst.couponCode} ` : ''}-{inst.couponDiscountPercentage}%</span>
                             </span>
                           ) : null}
@@ -295,10 +295,10 @@ export default async function AdminCustomerDetailPage({
                         <div className="mt-0.5">
                           {inst.couponDiscountPercentage && inst.couponDiscountPercentage > 0 ? (
                             <div className="flex items-center gap-1 text-[11px] font-mono">
-                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                              <span className="font-bold text-[var(--text-strong)]">
                                 {formatPaiseToRupees(Math.round((inst.hourlyRatePaise || 100) * (1 - inst.couponDiscountPercentage / 100)))}/hr
                               </span>
-                              <span className="line-through text-[var(--muted)] text-[10px]">
+                              <span className="line-through text-[var(--text-muted)] text-[10px]">
                                 {formatPaiseToRupees(inst.hourlyRatePaise || 100)}/hr
                               </span>
                             </div>
