@@ -20,6 +20,7 @@ import type { IHostingNode } from '../db/models/HostingNode';
 import { LioranDBAdminClient } from '../liorandb-admin/client';
 import { buildLioranDBConnectionUri } from '../liorandb-admin/uri';
 import { LioranDBAdminError, LioranDBUnreachableError } from '../liorandb-admin/errors';
+import { reconcileHostingNodes } from './reconciliation';
 
 export interface DeploymentParams {
   customerId: string;
@@ -402,6 +403,7 @@ export async function provisionInstance(
   customerEmail?: string
 ): Promise<IManagedDatabase> {
   await connectToDatabase();
+  await reconcileHostingNodes();
 
   const instance =
     typeof instanceOrId === 'string'
@@ -412,64 +414,7 @@ export async function provisionInstance(
     throw new Error('Database instance not found');
   }
 
-  // If 0 hosting nodes exist in total, automatically seed the default development node
-  const totalNodesCount = await HostingNode.countDocuments();
-  if (totalNodesCount === 0) {
-    try {
-      await HostingNode.create({
-        name: 'Localhost Node (127.0.0.1)',
-        slug: 'localhost-node-01',
-        region: 'Localhost / Development',
-        dbUrl: '127.0.0.1',
-        port: 27018,
-        protocol: 'http',
-        httpPort: 27018,
-        grpcUrl: '127.0.0.1',
-        grpcPort: 27019,
-        controlPlaneEndpoint: 'http://127.0.0.1:27018',
-        allocationMode: 'DEDICATED',
-        status: 'AVAILABLE',
-        healthStatus: 'HEALTHY',
-        maxCapacity: 1,
-        currentAssignedCount: 0,
-        defaultRootUsername: 'admin',
-        isDefault: true,
-        notes: 'Auto-seeded default development node',
-      });
-    } catch {
-      // Ignore if concurrent create
-    }
-  }
-
-  // 1. Reconcile orphan nodes that have no active instances
-  const activeInstances = await ManagedDatabase.find({
-    status: { $nin: ['TERMINATED', 'DELETED'] },
-    hostingNodeId: { $exists: true, $ne: null },
-  })
-    .select('hostingNodeId')
-    .lean();
-
-  const occupiedNodeIds = activeInstances
-    .map((inst) => inst.hostingNodeId?.toString())
-    .filter((id): id is string => Boolean(id));
-
-  const occupiedSet = new Set(occupiedNodeIds);
-
-  await HostingNode.updateMany(
-    {
-      _id: { $nin: Array.from(occupiedSet) },
-      $or: [{ currentAssignedCount: { $gt: 0 } }, { status: 'PROVISIONING' }, { status: 'ASSIGNED' }],
-      status: { $ne: 'DISABLED' },
-    },
-    {
-      $set: {
-        currentAssignedCount: 0,
-        status: 'AVAILABLE',
-      },
-    }
-  );
-
-  // 2. Atomically reserve an available hosting node if not already assigned
+  // 1. Atomically reserve an available hosting node if not already assigned
   let node: IHostingNode | null = null;
 
   if (instance.hostingNodeId) {

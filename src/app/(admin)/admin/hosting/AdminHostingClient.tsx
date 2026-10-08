@@ -21,6 +21,7 @@ import {
   Globe,
   Radio,
   Check,
+  Activity,
 } from 'lucide-react';
 
 export interface AdminHostingNodeItem {
@@ -71,6 +72,18 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   const [editingNode, setEditingNode] = useState<AdminHostingNodeItem | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Testing & Diagnostics
+  const [testingNodeId, setTestingNodeId] = useState<string | null>(null);
+  const [testingForm, setTestingForm] = useState(false);
+  const [formTestResult, setFormTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [diagnosticModal, setDiagnosticModal] = useState<{
+    open: boolean;
+    nodeName: string;
+    loading: boolean;
+    data?: any;
+    error?: string;
+  } | null>(null);
+
   // Form State
   const [formName, setFormName] = useState('');
   const [formSlug, setFormSlug] = useState('');
@@ -102,6 +115,94 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       // ignore
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Live Node Diagnostic Test
+  async function handleTestNode(node: AdminHostingNodeItem) {
+    setTestingNodeId(node._id);
+    setDiagnosticModal({
+      open: true,
+      nodeName: node.name,
+      loading: true,
+    });
+    try {
+      const res = await fetch(`/api/admin/hosting/${node._id}/test`, { method: 'POST' });
+      const data = await res.json();
+      if (data.healthy || (data.success && data.healthStatus === 'HEALTHY')) {
+        setDiagnosticModal({
+          open: true,
+          nodeName: node.name,
+          loading: false,
+          data,
+        });
+        setFeedbackMsg({
+          type: 'success',
+          text: `Node "${node.name}" is healthy and connected (${data.latencyMs ?? 0}ms).`,
+        });
+      } else {
+        setDiagnosticModal({
+          open: true,
+          nodeName: node.name,
+          loading: false,
+          error: data.error || 'Connection check failed',
+          data,
+        });
+        setFeedbackMsg({
+          type: 'error',
+          text: `Node "${node.name}" test failed: ${data.error || 'Unknown error'}`,
+        });
+      }
+      await refreshNodes();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Network error testing node';
+      setDiagnosticModal({
+        open: true,
+        nodeName: node.name,
+        loading: false,
+        error: msg,
+      });
+      setFeedbackMsg({ type: 'error', text: msg });
+    } finally {
+      setTestingNodeId(null);
+    }
+  }
+
+  // Live Endpoint Test in Form
+  async function handleTestFormEndpoint() {
+    setTestingForm(true);
+    setFormTestResult(null);
+    try {
+      const res = await fetch('/api/admin/hosting/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: formControlPlaneEndpoint.trim() || undefined,
+          host: formDbUrl.trim(),
+          port: Number(formPort),
+          protocol: formProtocol,
+          token: formControlPlaneToken.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.healthy || data.success) {
+        setFormTestResult({
+          success: true,
+          message: `Connected successfully! Instance: ${data.serverIdentity || 'node-1'} (v${data.serverVersion || '2.4.1'}) in ${data.latencyMs}ms`,
+        });
+      } else {
+        setFormTestResult({
+          success: false,
+          message: data.error || 'Connection failed to control plane',
+        });
+      }
+    } catch (err: unknown) {
+      setFormTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Network error testing endpoint',
+      });
+    } finally {
+      setTestingForm(false);
     }
   }
 
@@ -575,6 +676,16 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
+                            onClick={() => handleTestNode(node)}
+                            disabled={testingNodeId === node._id}
+                            title="Run live diagnostic health test against Rust control plane"
+                            className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1 text-[var(--text-strong)]"
+                          >
+                            <Activity className={`w-3 h-3 ${testingNodeId === node._id ? 'animate-spin text-amber-500' : 'text-emerald-500'}`} />
+                            <span>{testingNodeId === node._id ? 'Testing...' : 'Test'}</span>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => openEditModal(node)}
                             className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1"
                           >
@@ -863,6 +974,31 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                     />
                   </div>
                 </div>
+
+                {/* Live Test Endpoint Action */}
+                <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[var(--border)]">
+                  <button
+                    type="button"
+                    disabled={testingForm || !formDbUrl}
+                    onClick={handleTestFormEndpoint}
+                    className="btn-secondary py-1.5 px-3 text-xs inline-flex items-center gap-1.5 self-start sm:self-auto disabled:opacity-40"
+                  >
+                    <Activity className={`w-3.5 h-3.5 ${testingForm ? 'animate-spin text-amber-500' : 'text-emerald-500'}`} />
+                    <span>{testingForm ? 'Testing Connection...' : 'Test Endpoint Connection'}</span>
+                  </button>
+
+                  {formTestResult && (
+                    <div
+                      className={`text-[11px] font-mono px-2 py-1 rounded-[4px] border ${
+                        formTestResult.success
+                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+                          : 'bg-rose-500/10 text-rose-500 border-rose-500/30'
+                      }`}
+                    >
+                      {formTestResult.message}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Credentials & Options */}
@@ -916,6 +1052,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                   onClick={() => {
                     setAddModalOpen(false);
                     setEditingNode(null);
+                    setFormTestResult(null);
                   }}
                   className="btn-secondary text-xs py-2 px-4"
                 >
@@ -931,6 +1068,106 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DIAGNOSTIC TEST MODAL */}
+      {diagnosticModal && diagnosticModal.open && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="card max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <div className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-emerald-500" />
+                <h3 className="text-sm font-bold text-[var(--text-strong)]">
+                  Live Diagnostic: {diagnosticModal.nodeName}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDiagnosticModal(null)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {diagnosticModal.loading ? (
+              <div className="py-8 flex flex-col items-center justify-center gap-3">
+                <RotateCw className="w-6 h-6 animate-spin text-emerald-500" />
+                <p className="text-xs text-[var(--text-muted)] font-mono">
+                  Probing Rust control plane `/v1/admin/status`...
+                </p>
+              </div>
+            ) : diagnosticModal.error ? (
+              <div className="space-y-3">
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-[7px] text-xs text-rose-500">
+                  <div className="flex items-center gap-2 font-bold mb-1">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>Connection Failed</span>
+                  </div>
+                  <p className="font-mono text-[11px]">{diagnosticModal.error}</p>
+                </div>
+                {diagnosticModal.data?.endpoint && (
+                  <p className="text-[11px] text-[var(--text-muted)] font-mono">
+                    Target Endpoint: {diagnosticModal.data.endpoint}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-[7px] text-xs text-emerald-500">
+                  <div className="flex items-center gap-2 font-bold">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>LioranDB Rust Server Healthy &amp; Online</span>
+                  </div>
+                  <p className="text-[11px] mt-1 text-emerald-400/90 font-mono">
+                    Response received in {diagnosticModal.data?.latencyMs}ms. Node status has been restored to AVAILABLE.
+                  </p>
+                </div>
+
+                <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-3 space-y-2 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Server Identity:</span>
+                    <span className="font-bold text-[var(--text-strong)]">{diagnosticModal.data?.serverIdentity || 'node-1'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Engine Version:</span>
+                    <span className="font-bold text-[var(--text-strong)]">v{diagnosticModal.data?.serverVersion || '2.4.1'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Health Status:</span>
+                    <span className="text-emerald-500 font-bold">{diagnosticModal.data?.healthStatus || 'HEALTHY'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Allocation Status:</span>
+                    <span className="font-bold text-[var(--text-strong)]">{diagnosticModal.data?.status || 'AVAILABLE'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Endpoint:</span>
+                    <span className="text-[var(--text-secondary)]">{diagnosticModal.data?.endpoint}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Databases Count:</span>
+                    <span className="text-[var(--text-strong)]">{diagnosticModal.data?.databaseCount ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Uptime:</span>
+                    <span className="text-[var(--text-strong)]">{diagnosticModal.data?.uptimeSeconds ?? 0}s</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t border-[var(--border)]">
+              <button
+                type="button"
+                onClick={() => setDiagnosticModal(null)}
+                className="btn-secondary text-xs py-1.5 px-4"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

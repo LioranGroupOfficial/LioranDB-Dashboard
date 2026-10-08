@@ -1,6 +1,7 @@
 import React from 'react';
 import { requireAdmin } from '@/lib/auth/guards';
 import { connectToDatabase, HostingNode, ManagedDatabase, IHostingNode } from '@/lib/db';
+import { reconcileHostingNodes } from '@/lib/providers/reconciliation';
 import AdminHostingClient, { AdminHostingNodeItem } from './AdminHostingClient';
 
 export const metadata = { title: 'Database Hosting Nodes — Admin' };
@@ -8,6 +9,7 @@ export const metadata = { title: 'Database Hosting Nodes — Admin' };
 export default async function AdminHostingPage() {
   await requireAdmin();
   await connectToDatabase();
+  await reconcileHostingNodes();
 
   const nodes = await HostingNode.find().sort({ createdAt: -1 }).lean<IHostingNode[]>();
 
@@ -28,11 +30,11 @@ export default async function AdminHostingPage() {
         slug: n.slug,
         region: n.region || 'Asia (Mumbai)',
         dbUrl: n.dbUrl,
-        port: n.port || 27017,
-        protocol: n.protocol || 'https',
-        httpPort: n.httpPort || 443,
+        port: n.port || 27018,
+        protocol: n.protocol || 'http',
+        httpPort: n.httpPort || 27018,
         grpcUrl: n.grpcUrl,
-        grpcPort: n.grpcPort || 50051,
+        grpcPort: n.grpcPort || 27019,
         defaultRootUsername: n.defaultRootUsername || 'admin',
         controlPlaneEndpoint: n.controlPlaneEndpoint || `${n.protocol || 'http'}://${n.dbUrl}:${n.httpPort || 27018}`,
         healthStatus: n.healthStatus || 'UNKNOWN',

@@ -263,16 +263,16 @@ export class LioranDBAdminClient {
       method: 'GET',
     });
 
+    const stateUpper = String(rawData.state || rawData.status || '').toUpperCase();
     const isHealthy =
-      rawData.state === 'Ready' ||
-      rawData.state === 'ACTIVE' ||
-      rawData.state === 'Active' ||
-      rawData.status === 'Ready' ||
-      rawData.status === 'HEALTHY';
+      stateUpper === 'READY' ||
+      stateUpper === 'ACTIVE' ||
+      stateUpper === 'OK' ||
+      stateUpper === 'HEALTHY';
     const isMaintenance =
-      rawData.state === 'Maintenance' ||
-      rawData.state === 'Resetting' ||
-      rawData.state === 'Restoring';
+      stateUpper === 'MAINTENANCE' ||
+      stateUpper === 'RESETTING' ||
+      stateUpper === 'RESTORING';
 
     return {
       status: isHealthy ? 'HEALTHY' : isMaintenance ? 'MAINTENANCE' : 'DEGRADED',

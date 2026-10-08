@@ -4,12 +4,14 @@ import { connectToDatabase, HostingNode, ManagedDatabase } from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
 import { encrypt } from '@/lib/crypto';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin/client';
+import { reconcileHostingNodes } from '@/lib/providers/reconciliation';
 import type { HostingAllocationMode, HostingNodeHealthStatus, HostingNodeStatus } from '@/lib/db/models/HostingNode';
 
 export async function GET(_req: NextRequest) {
   try {
     await requireAdminAPI();
     await connectToDatabase();
+    await reconcileHostingNodes();
 
     const nodes = await HostingNode.find().sort({ createdAt: -1 }).lean();
 
