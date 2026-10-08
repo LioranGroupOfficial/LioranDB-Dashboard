@@ -83,7 +83,7 @@ export async function PUT(
     if (body.defaultRootUsername !== undefined) node.defaultRootUsername = body.defaultRootUsername.trim();
     if (body.defaultRootPassword !== undefined) node.defaultRootPassword = body.defaultRootPassword.trim();
     if (body.status !== undefined) node.status = body.status;
-    if (body.maxCapacity !== undefined) node.maxCapacity = Number(body.maxCapacity);
+    node.maxCapacity = 1;
     if (body.notes !== undefined) node.notes = body.notes;
     if (body.isDefault !== undefined) node.isDefault = Boolean(body.isDefault);
 

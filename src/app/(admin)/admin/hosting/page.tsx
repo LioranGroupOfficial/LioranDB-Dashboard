@@ -13,10 +13,14 @@ export default async function AdminHostingPage() {
 
   const formattedNodes: AdminHostingNodeItem[] = await Promise.all(
     nodes.map(async (n) => {
-      const assignedCount = await ManagedDatabase.countDocuments({
+      const activeInstance = await ManagedDatabase.findOne({
         hostingNodeId: n._id,
         status: { $nin: ['TERMINATED', 'DELETED'] },
-      });
+      })
+        .select('name status _id')
+        .lean();
+
+      const assignedCount = activeInstance ? 1 : 0;
 
       return {
         _id: n._id.toString(),
@@ -32,8 +36,11 @@ export default async function AdminHostingPage() {
         defaultRootUsername: n.defaultRootUsername || 'admin',
         defaultRootPassword: n.defaultRootPassword || '',
         status: n.status,
-        maxCapacity: n.maxCapacity || 50,
+        maxCapacity: 1,
         currentAssignedCount: assignedCount,
+        assignedInstanceName: activeInstance?.name || undefined,
+        assignedInstanceStatus: activeInstance?.status || undefined,
+        assignedDatabaseId: activeInstance?._id?.toString() || undefined,
         notes: n.notes || '',
         isDefault: Boolean(n.isDefault),
         createdAt: n.createdAt ? new Date(n.createdAt).toISOString() : new Date().toISOString(),

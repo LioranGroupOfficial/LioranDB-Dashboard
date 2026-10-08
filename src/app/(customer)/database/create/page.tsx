@@ -13,13 +13,22 @@ export default async function CreateInstancePage() {
   await connectToDatabase();
 
   const MAX_DATABASES = 2;
-  const [activeDatabasesCount, availableHostingNodes] = await Promise.all([
+  const [activeDatabasesCount, allActiveHostingNodes, occupiedNodes] = await Promise.all([
     ManagedDatabase.countDocuments({
       $or: [{ customerId: sessionUser.userId }, { userId: sessionUser.userId }],
       status: { $nin: ['TERMINATED', 'DELETED'] },
     }),
     HostingNode.find({ status: 'ACTIVE' }).lean(),
+    ManagedDatabase.find({
+      status: { $nin: ['TERMINATED', 'DELETED'] },
+      hostingNodeId: { $exists: true, $ne: null },
+    })
+      .select('hostingNodeId')
+      .lean(),
   ]);
+
+  const occupiedNodeIds = new Set(occupiedNodes.map((d) => d.hostingNodeId?.toString()));
+  const availableUnassignedNodes = allActiveHostingNodes.filter((n) => !occupiedNodeIds.has(n._id.toString()));
 
   const isLimitReached = sessionUser.role !== 'admin' && activeDatabasesCount >= MAX_DATABASES;
 
@@ -71,8 +80,8 @@ export default async function CreateInstancePage() {
     );
   }
 
-  // 2. Check if 0 hosting nodes are available
-  if (availableHostingNodes.length === 0) {
+  // 2. Check if 0 dedicated hosting servers are available
+  if (availableUnassignedNodes.length === 0) {
     return (
       <div className="max-w-2xl mx-auto py-8 space-y-6">
         <div className="card p-6 sm:p-8 space-y-6">
@@ -82,18 +91,18 @@ export default async function CreateInstancePage() {
             </div>
             <div className="space-y-1">
               <h1 className="text-lg font-bold text-[var(--text-strong)]">
-                No Hosting Capacity Available
+                Dedicated Hosting Servers Occupied
               </h1>
               <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                There are currently no active hosting database nodes available for instant provisioning.
+                All dedicated database hosting servers are currently allocated. In our 1-server-per-database architecture, each database is hosted on its own dedicated server node.
               </p>
             </div>
           </div>
 
           <div className="p-4 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border)] text-xs text-[var(--text-secondary)] space-y-2">
-            <p className="font-semibold text-[var(--text-strong)]">Request Database Provisioning:</p>
+            <p className="font-semibold text-[var(--text-strong)]">Request a Dedicated Server:</p>
             <p>
-              Please mail <strong className="text-[var(--text-strong)] font-mono">{SUPPORT_CONTACT_EMAIL}</strong> with your required deployment specifications to allocate a dedicated hosting slot.
+              Please mail <strong className="text-[var(--text-strong)] font-mono">{SUPPORT_CONTACT_EMAIL}</strong> to provision and bring a new dedicated hosting server online for your account.
             </p>
           </div>
 
@@ -107,7 +116,7 @@ export default async function CreateInstancePage() {
             </Link>
 
             <a
-              href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=Database%20Hosting%20Capacity%20Inquiry`}
+              href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=Dedicated%20Database%20Server%20Allocation%20Request`}
               className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5"
             >
               <Mail className="w-3.5 h-3.5" />

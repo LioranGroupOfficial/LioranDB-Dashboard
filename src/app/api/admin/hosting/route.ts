@@ -10,16 +10,23 @@ export async function GET(_req: NextRequest) {
 
     const nodes = await HostingNode.find().sort({ createdAt: -1 }).lean();
 
-    // Reconcile current assigned count dynamically
+    // Reconcile current assigned server 1:1 allocation dynamically
     const enrichedNodes = await Promise.all(
       nodes.map(async (node) => {
-        const count = await ManagedDatabase.countDocuments({
+        const activeInstance = await ManagedDatabase.findOne({
           hostingNodeId: node._id,
           status: { $nin: ['TERMINATED', 'DELETED'] },
-        });
+        })
+          .select('name status _id')
+          .lean();
+
         return {
           ...node,
-          currentAssignedCount: count,
+          maxCapacity: 1,
+          currentAssignedCount: activeInstance ? 1 : 0,
+          assignedInstanceName: activeInstance?.name || undefined,
+          assignedInstanceStatus: activeInstance?.status || undefined,
+          assignedDatabaseId: activeInstance?._id?.toString() || undefined,
         };
       })
     );
@@ -77,7 +84,6 @@ export async function POST(req: NextRequest) {
       defaultRootUsername,
       defaultRootPassword,
       status,
-      maxCapacity,
       notes,
       isDefault,
     } = body;
@@ -125,7 +131,7 @@ export async function POST(req: NextRequest) {
       defaultRootUsername: (defaultRootUsername || 'admin').trim(),
       defaultRootPassword: defaultRootPassword ? defaultRootPassword.trim() : undefined,
       status: status || 'ACTIVE',
-      maxCapacity: Number(maxCapacity) || 50,
+      maxCapacity: 1,
       notes: notes || '',
       isDefault: Boolean(isDefault),
     });

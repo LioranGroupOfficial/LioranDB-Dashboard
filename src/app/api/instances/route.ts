@@ -109,39 +109,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Allocate an active hosting node
-    const availableNodes = await HostingNode.find({ status: 'ACTIVE' }).lean();
+    // Allocate a dedicated active hosting node (1 server per user / database instance)
+    const activeInstances = await ManagedDatabase.find({
+      status: { $nin: ['TERMINATED', 'DELETED'] },
+      hostingNodeId: { $exists: true, $ne: null },
+    })
+      .select('hostingNodeId')
+      .lean();
+
+    const occupiedNodeIds = activeInstances
+      .map((inst) => inst.hostingNodeId)
+      .filter((id): id is NonNullable<typeof id> => Boolean(id));
+
+    const availableNodes = await HostingNode.find({
+      status: 'ACTIVE',
+      _id: { $nin: occupiedNodeIds },
+    }).lean();
 
     if (availableNodes.length === 0) {
       return NextResponse.json(
         {
-          error: 'No database hosting capacity is currently available. Please email support@liorandb.com for this query.',
-          code: 'NO_HOSTING_NODES_AVAILABLE',
+          error: 'No dedicated database hosting servers are currently available. Please email support@liorandb.com for this query.',
+          code: 'HOSTING_SERVERS_OCCUPIED',
           contactEmail: 'support@liorandb.com',
         },
         { status: 400 }
       );
     }
 
-    // Select default node if available or the node with the lowest assigned load
-    let selectedNode = availableNodes.find((n) => n.isDefault && n.currentAssignedCount < n.maxCapacity);
-    if (!selectedNode) {
-      const sortedNodes = availableNodes
-        .filter((n) => n.currentAssignedCount < n.maxCapacity)
-        .sort((a, b) => a.currentAssignedCount - b.currentAssignedCount);
-
-      if (sortedNodes.length === 0) {
-        return NextResponse.json(
-          {
-            error: 'All database hosting clusters are currently at maximum capacity. Please email support@liorandb.com for this query.',
-            code: 'HOSTING_CAPACITY_FULL',
-            contactEmail: 'support@liorandb.com',
-          },
-          { status: 400 }
-        );
-      }
-      selectedNode = sortedNodes[0];
-    }
+    // Select default unassigned node if available or the first available unassigned node
+    const selectedNode = availableNodes.find((n) => n.isDefault) || availableNodes[0];
 
     // Check unique name for this customer
     const existing = await ManagedDatabase.findOne({

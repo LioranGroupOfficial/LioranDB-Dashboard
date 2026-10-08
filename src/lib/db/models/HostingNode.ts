@@ -17,7 +17,7 @@ export interface IHostingNode extends Document {
   defaultRootUsername: string; // default root/admin username
   defaultRootPassword?: string;
   status: HostingNodeStatus;
-  maxCapacity: number; // maximum instances that can be hosted on this node
+  maxCapacity?: number; // 1 server per user/database
   currentAssignedCount: number;
   notes?: string;
   isDefault: boolean;
@@ -44,7 +44,7 @@ const HostingNodeSchema = new Schema<IHostingNode>(
       default: 'ACTIVE',
       index: true,
     },
-    maxCapacity: { type: Number, required: true, default: 50 },
+    maxCapacity: { type: Number, default: 1 },
     currentAssignedCount: { type: Number, default: 0 },
     notes: { type: String },
     isDefault: { type: Boolean, default: false },

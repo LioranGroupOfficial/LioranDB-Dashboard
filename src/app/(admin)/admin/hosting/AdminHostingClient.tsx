@@ -37,8 +37,11 @@ export interface AdminHostingNodeItem {
   defaultRootUsername: string;
   defaultRootPassword?: string;
   status: 'ACTIVE' | 'DRAINING' | 'MAINTENANCE' | 'DISABLED';
-  maxCapacity: number;
+  maxCapacity?: number;
   currentAssignedCount: number;
+  assignedInstanceName?: string;
+  assignedInstanceStatus?: string;
+  assignedDatabaseId?: string;
   notes?: string;
   isDefault: boolean;
   createdAt: string;
@@ -72,7 +75,6 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   const [formGrpcPort, setFormGrpcPort] = useState(50051);
   const [formRootUser, setFormRootUser] = useState('admin');
   const [formStatus, setFormStatus] = useState<'ACTIVE' | 'DRAINING' | 'MAINTENANCE' | 'DISABLED'>('ACTIVE');
-  const [formMaxCapacity, setFormMaxCapacity] = useState(50);
   const [formNotes, setFormNotes] = useState('');
   const [formIsDefault, setFormIsDefault] = useState(false);
 
@@ -138,8 +140,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     setFormGrpcPort(27019);
     setFormRootUser('admin');
     setFormStatus('ACTIVE');
-    setFormMaxCapacity(50);
-    setFormNotes('Localhost development database cluster on 127.0.0.1');
+    setFormNotes('Localhost dedicated development database cluster on 127.0.0.1');
     if (nodes.length === 0) setFormIsDefault(true);
   }
 
@@ -156,7 +157,6 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     setFormGrpcPort(50051);
     setFormRootUser('admin');
     setFormStatus('ACTIVE');
-    setFormMaxCapacity(50);
     setFormNotes('');
     setFormIsDefault(nodes.length === 0);
     setAddModalOpen(true);
@@ -176,7 +176,6 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     setFormGrpcPort(node.grpcPort);
     setFormRootUser(node.defaultRootUsername);
     setFormStatus(node.status);
-    setFormMaxCapacity(node.maxCapacity);
     setFormNotes(node.notes || '');
     setFormIsDefault(node.isDefault);
   }
@@ -199,7 +198,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       grpcPort: Number(formGrpcPort),
       defaultRootUsername: formRootUser.trim() || 'admin',
       status: formStatus,
-      maxCapacity: Number(formMaxCapacity),
+      maxCapacity: 1,
       notes: formNotes.trim(),
       isDefault: formIsDefault,
     };
@@ -283,10 +282,10 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   const stats = useMemo(() => {
     const totalNodes = nodes.length;
     const activeNodes = nodes.filter((n) => n.status === 'ACTIVE').length;
-    const totalCapacity = nodes.reduce((sum, n) => sum + n.maxCapacity, 0);
-    const totalAssigned = nodes.reduce((sum, n) => sum + n.currentAssignedCount, 0);
+    const availableNodes = nodes.filter((n) => n.status === 'ACTIVE' && n.currentAssignedCount === 0).length;
+    const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0).length;
 
-    return { totalNodes, activeNodes, totalCapacity, totalAssigned };
+    return { totalNodes, activeNodes, availableNodes, totalAssigned };
   }, [nodes]);
 
   return (
@@ -296,7 +295,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-strong)] tracking-tight">Database Hosting Nodes</h1>
           <p className="text-xs text-[var(--text-muted)] mt-1">
-            Configure authoritative infrastructure clusters, gRPC endpoints, ports, protocols, and default provisioning credentials.
+            Dedicated 1-server-per-user infrastructure: configure authoritative hosts, gRPC endpoints, ports, protocols, and default provisioning credentials.
           </p>
         </div>
 
@@ -347,7 +346,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4">
           <div className="flex items-center justify-between text-[var(--text-muted)]">
-            <span className="text-xs font-mono uppercase tracking-wider">Total Hosting Nodes</span>
+            <span className="text-xs font-mono uppercase tracking-wider">Total Hosting Servers</span>
             <Server className="w-4 h-4 opacity-70" />
           </div>
           <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.totalNodes}</p>
@@ -358,34 +357,34 @@ export default function AdminHostingClient({ initialNodes }: Props) {
 
         <div className="card p-4">
           <div className="flex items-center justify-between text-[var(--text-muted)]">
-            <span className="text-xs font-mono uppercase tracking-wider">Active Nodes</span>
+            <span className="text-xs font-mono uppercase tracking-wider">Active Servers</span>
             <CheckCircle2 className="w-4 h-4 opacity-70" />
           </div>
           <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.activeNodes}</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-            Accepting new user database instances
+            Online infrastructure nodes
           </p>
         </div>
 
         <div className="card p-4">
           <div className="flex items-center justify-between text-[var(--text-muted)]">
-            <span className="text-xs font-mono uppercase tracking-wider">Assigned Databases</span>
+            <span className="text-xs font-mono uppercase tracking-wider">Available (Unassigned)</span>
+            <Layers className="w-4 h-4 opacity-70" />
+          </div>
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.availableNodes}</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
+            Ready for instant user allocation
+          </p>
+        </div>
+
+        <div className="card p-4">
+          <div className="flex items-center justify-between text-[var(--text-muted)]">
+            <span className="text-xs font-mono uppercase tracking-wider">Assigned Dedicated</span>
             <Database className="w-4 h-4 opacity-70" />
           </div>
           <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.totalAssigned}</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-            Live running customer instances
-          </p>
-        </div>
-
-        <div className="card p-4">
-          <div className="flex items-center justify-between text-[var(--text-muted)]">
-            <span className="text-xs font-mono uppercase tracking-wider">Total Capacity</span>
-            <Layers className="w-4 h-4 opacity-70" />
-          </div>
-          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.totalCapacity}</p>
-          <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-            {stats.totalCapacity - stats.totalAssigned} slots remaining
+            1 server dedicated per user db
           </p>
         </div>
       </div>
@@ -433,7 +432,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                 <th className="px-4 py-3 font-medium">gRPC Endpoint</th>
                 <th className="px-4 py-3 font-medium">Control Plane (HTTP)</th>
                 <th className="px-4 py-3 font-medium">Root User</th>
-                <th className="px-4 py-3 font-medium">Capacity</th>
+                <th className="px-4 py-3 font-medium">Server Allocation</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
@@ -450,7 +449,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                 </tr>
               ) : (
                 filteredNodes.map((node) => {
-                  const capacityPercent = Math.min(100, Math.round((node.currentAssignedCount / node.maxCapacity) * 100));
+                  const isAssigned = node.currentAssignedCount > 0;
 
                   return (
                     <tr key={node._id} className="hover:bg-[var(--surface-soft)] transition-colors">
@@ -492,18 +491,27 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       </td>
 
                       <td className="px-4 py-3.5">
-                        <div className="space-y-1 w-28">
-                          <div className="flex justify-between text-[10px] text-[var(--text-muted)] font-mono">
-                            <span>{node.currentAssignedCount}/{node.maxCapacity}</span>
-                            <span>{capacityPercent}%</span>
+                        {isAssigned ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-bold">
+                              <Database className="w-3 h-3" />
+                              ASSIGNED (1/1)
+                            </span>
+                            <div className="text-[11px] text-[var(--text-muted)] truncate max-w-[140px]" title={node.assignedInstanceName || 'Dedicated instance'}>
+                              {node.assignedInstanceName || 'Dedicated Instance'}
+                            </div>
                           </div>
-                          <div className="w-full h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                            <div
-                              className="h-full bg-[var(--text-strong)] transition-all"
-                              style={{ width: `${capacityPercent}%` }}
-                            />
+                        ) : (
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-medium">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                              AVAILABLE (0/1)
+                            </span>
+                            <div className="text-[10px] text-[var(--text-muted)] font-mono">
+                              Unassigned • Ready
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </td>
 
                       <td className="px-4 py-3.5">
@@ -745,7 +753,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Protocol */}
                   <div>
                     <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
@@ -772,23 +780,6 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       value={formHttpPort}
                       onChange={(e) => setFormHttpPort(Number(e.target.value))}
                       placeholder="443"
-                      className="input-field w-full text-xs font-mono"
-                    />
-                  </div>
-
-                  {/* Max Capacity */}
-                  <div>
-                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
-                      Max Database Slots
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      max={1000}
-                      value={formMaxCapacity}
-                      onChange={(e) => setFormMaxCapacity(Number(e.target.value))}
-                      placeholder="50"
                       className="input-field w-full text-xs font-mono"
                     />
                   </div>
