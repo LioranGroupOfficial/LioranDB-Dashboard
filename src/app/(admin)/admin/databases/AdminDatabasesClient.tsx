@@ -14,6 +14,7 @@ import {
   ArrowUpRight,
   ExternalLink,
   Filter,
+  Tag,
 } from 'lucide-react';
 import { formatPaiseToRupees } from '@/lib/plans';
 
@@ -28,6 +29,8 @@ export interface AdminDatabaseItem {
   hourlyRatePaise: number;
   backupEnabled: boolean;
   backupMonthlyPaise: number;
+  couponCode?: string | null;
+  couponDiscountPercentage?: number;
   billingStartedAt?: string | null;
   billingStoppedAt?: string | null;
   databaseUsersCount: number;
@@ -56,6 +59,7 @@ export default function AdminDatabasesClient({ initialDatabases }: Props) {
         inst.name.toLowerCase().includes(q) ||
         inst._id.toLowerCase().includes(q) ||
         inst.host.toLowerCase().includes(q) ||
+        inst.couponCode?.toLowerCase().includes(q) ||
         inst.customer?.email.toLowerCase().includes(q) ||
         inst.customer?.fullName?.toLowerCase().includes(q);
 
@@ -264,12 +268,33 @@ export default function AdminDatabasesClient({ initialDatabases }: Props) {
 
                       <td className="px-4 py-3.5">
                         <div>
-                          <span className="px-1.5 py-0.5 rounded-[4px] bg-[var(--surface-soft)] border border-[var(--border)] font-mono text-[11px] text-[var(--text-secondary)] font-semibold">
-                            {inst.planName || (inst.planId === 'dedicated' ? 'Dedicated' : 'Shared')}
-                          </span>
-                          <span className="text-xs text-[var(--muted)] block mt-1">
-                            {formatPaiseToRupees(inst.hourlyRatePaise)}/hr
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-1.5 py-0.5 rounded-[4px] bg-[var(--surface-soft)] border border-[var(--border)] font-mono text-[11px] text-[var(--text-secondary)] font-semibold">
+                              {inst.planName || (inst.planId === 'dedicated' ? 'Dedicated' : 'Shared')}
+                            </span>
+                            {inst.couponDiscountPercentage && inst.couponDiscountPercentage > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">
+                                <Tag className="w-2.5 h-2.5" />
+                                <span>{inst.couponCode ? `${inst.couponCode} ` : ''}({inst.couponDiscountPercentage}% OFF)</span>
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1">
+                            {inst.couponDiscountPercentage && inst.couponDiscountPercentage > 0 ? (
+                              <div className="flex items-center gap-1.5 text-xs font-mono">
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                  {formatPaiseToRupees(Math.round(inst.hourlyRatePaise * (1 - inst.couponDiscountPercentage / 100)))}/hr
+                                </span>
+                                <span className="line-through text-[var(--muted)] text-[11px]">
+                                  {formatPaiseToRupees(inst.hourlyRatePaise)}/hr
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-[var(--muted)] block font-mono">
+                                {formatPaiseToRupees(inst.hourlyRatePaise)}/hr
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 

@@ -78,6 +78,8 @@ export default async function AdminDatabaseDetailPage({
     hourlyRatePaise: instance.hourlyRatePaise || 100,
     backupEnabled: Boolean(instance.backupEnabled),
     backupMonthlyPaise: instance.backupMonthlyPaise || 0,
+    couponCode: instance.couponCode || null,
+    couponDiscountPercentage: instance.couponDiscountPercentage || 0,
     billingStartedAt: instance.billingStartedAt ? new Date(instance.billingStartedAt).toISOString() : null,
     billingStoppedAt: instance.billingStoppedAt ? new Date(instance.billingStoppedAt).toISOString() : null,
     provisionedAt: instance.provisionedAt ? new Date(instance.provisionedAt).toISOString() : null,

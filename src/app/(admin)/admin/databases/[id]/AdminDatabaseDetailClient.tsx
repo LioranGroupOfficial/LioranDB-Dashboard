@@ -26,6 +26,7 @@ import {
   Plus,
   RefreshCw,
   AlertCircle,
+  Tag,
 } from 'lucide-react';
 import { formatPaiseToRupees } from '@/lib/plans';
 
@@ -42,6 +43,8 @@ export interface DatabaseDetailData {
   hourlyRatePaise: number;
   backupEnabled: boolean;
   backupMonthlyPaise: number;
+  couponCode?: string | null;
+  couponDiscountPercentage?: number;
   billingStartedAt?: string | null;
   billingStoppedAt?: string | null;
   provisionedAt?: string | null;
@@ -625,12 +628,20 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
             </div>
 
             <div className="card p-4">
-              <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">Estimated Current Bill</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">Estimated Current Bill</span>
+                {data.couponDiscountPercentage && data.couponDiscountPercentage > 0 ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">
+                    <Tag className="w-2.5 h-2.5" />
+                    <span>-{data.couponDiscountPercentage}%</span>
+                  </span>
+                ) : null}
+              </div>
               <p className="text-lg font-bold text-[var(--text-strong)] font-mono mt-2">
                 {formatPaiseToRupees(data.estimate.totalPaise)}
               </p>
               <span className="text-[11px] text-[var(--text-muted)] mt-1 block font-mono">
-                {data.estimate.billableHours.toFixed(1)} hrs usage
+                {data.estimate.billableHours.toFixed(1)} hrs usage {data.couponDiscountPercentage ? `(${data.couponDiscountPercentage}% coupon applied)` : ''}
               </span>
             </div>
 
@@ -671,11 +682,32 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               <div className="space-y-2.5 text-xs">
                 <div className="flex justify-between items-center py-1 border-b border-[var(--border)]">
                   <span className="text-[var(--text-muted)]">Plan</span>
-                  <span className="font-mono text-[var(--text-strong)] px-2 py-0.5 rounded-[4px] bg-[var(--surface-soft)] border border-[var(--border)] font-semibold">
-                    {data.planName || (data.planId === 'dedicated' ? 'Dedicated' : 'Shared')} (
-                    {formatPaiseToRupees(data.hourlyRatePaise)}/hr)
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[var(--text-strong)] px-2 py-0.5 rounded-[4px] bg-[var(--surface-soft)] border border-[var(--border)] font-semibold">
+                      {data.planName || (data.planId === 'dedicated' ? 'Dedicated' : 'Shared')}
+                    </span>
+                    {data.couponDiscountPercentage && data.couponDiscountPercentage > 0 ? (
+                      <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                        {formatPaiseToRupees(Math.round(data.hourlyRatePaise * (1 - data.couponDiscountPercentage / 100)))}/hr
+                      </span>
+                    ) : (
+                      <span className="font-mono text-xs text-[var(--text-secondary)]">
+                        {formatPaiseToRupees(data.hourlyRatePaise)}/hr
+                      </span>
+                    )}
+                  </div>
                 </div>
+                {data.couponDiscountPercentage && data.couponDiscountPercentage > 0 ? (
+                  <div className="flex justify-between items-center py-1 border-b border-[var(--border)] bg-emerald-500/5 -mx-2 px-2 rounded">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+                      <Tag className="w-3 h-3" />
+                      <span>Coupon Applied</span>
+                    </span>
+                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                      {data.couponCode || 'PROMO'} (-{data.couponDiscountPercentage}% / ₹{((data.hourlyRatePaise * data.couponDiscountPercentage) / 10000).toFixed(2)} off per hr)
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between items-center py-1 border-b border-[var(--border)]">
                   <span className="text-[var(--text-muted)]">Server Endpoint</span>
                   <span className="font-mono text-[var(--text-primary)] font-medium">{data.host}:{data.port}</span>

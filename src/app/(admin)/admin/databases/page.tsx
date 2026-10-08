@@ -22,6 +22,8 @@ interface DatabaseDoc {
   hourlyRatePaise?: number;
   backupEnabled?: boolean;
   backupMonthlyPaise?: number;
+  couponCode?: string | null;
+  couponDiscountPercentage?: number;
   billingStartedAt?: Date | string | null;
   billingStoppedAt?: Date | string | null;
   databaseUsers?: Array<{ username: string }>;
@@ -51,6 +53,8 @@ export default async function AdminDatabasesPage() {
     hourlyRatePaise: inst.hourlyRatePaise || 100,
     backupEnabled: Boolean(inst.backupEnabled),
     backupMonthlyPaise: inst.backupMonthlyPaise || 0,
+    couponCode: inst.couponCode || null,
+    couponDiscountPercentage: inst.couponDiscountPercentage || 0,
     billingStartedAt: inst.billingStartedAt ? new Date(inst.billingStartedAt).toISOString() : null,
     billingStoppedAt: inst.billingStoppedAt ? new Date(inst.billingStoppedAt).toISOString() : null,
     databaseUsersCount: (inst.databaseUsers || []).length,

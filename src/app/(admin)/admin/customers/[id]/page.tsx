@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Receipt,
+  Tag,
 } from 'lucide-react';
 import { formatPaiseToRupees } from '@/lib/plans';
 
@@ -280,12 +281,33 @@ export default async function AdminCustomerDetailPage({
                         <div className="font-mono text-[11px] text-[var(--muted)]">{inst._id.toString()}</div>
                       </td>
                       <td className="px-4 py-3.5">
-                        <span className="font-mono text-[11px] px-1.5 py-0.5 rounded-[4px] bg-[var(--surface-soft)] border border-[var(--border)] text-[var(--text-secondary)] font-semibold">
-                          {inst.planName || (inst.planId === 'dedicated' ? 'Dedicated' : 'Shared')}
-                        </span>
-                        <span className="text-[11px] text-[var(--muted)] block mt-0.5 font-mono">
-                          {formatPaiseToRupees(inst.hourlyRatePaise || 100)}/hr
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono text-[11px] px-1.5 py-0.5 rounded-[4px] bg-[var(--surface-soft)] border border-[var(--border)] text-[var(--text-secondary)] font-semibold">
+                            {inst.planName || (inst.planId === 'dedicated' ? 'Dedicated' : 'Shared')}
+                          </span>
+                          {inst.couponDiscountPercentage && inst.couponDiscountPercentage > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] font-bold">
+                              <Tag className="w-2.5 h-2.5" />
+                              <span>{inst.couponCode ? `${inst.couponCode} ` : ''}-{inst.couponDiscountPercentage}%</span>
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-0.5">
+                          {inst.couponDiscountPercentage && inst.couponDiscountPercentage > 0 ? (
+                            <div className="flex items-center gap-1 text-[11px] font-mono">
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                                {formatPaiseToRupees(Math.round((inst.hourlyRatePaise || 100) * (1 - inst.couponDiscountPercentage / 100)))}/hr
+                              </span>
+                              <span className="line-through text-[var(--muted)] text-[10px]">
+                                {formatPaiseToRupees(inst.hourlyRatePaise || 100)}/hr
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-[var(--muted)] block font-mono">
+                              {formatPaiseToRupees(inst.hourlyRatePaise || 100)}/hr
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5">
                         <span

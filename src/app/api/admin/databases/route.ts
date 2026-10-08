@@ -88,6 +88,8 @@ export async function GET(req: NextRequest) {
       hourlyRatePaise: inst.hourlyRatePaise || 100,
       backupEnabled: Boolean(inst.backupEnabled),
       backupMonthlyPaise: inst.backupMonthlyPaise || 0,
+      couponCode: (inst as any).couponCode || null,
+      couponDiscountPercentage: (inst as any).couponDiscountPercentage || 0,
       billingStartedAt: inst.billingStartedAt ? new Date(inst.billingStartedAt).toISOString() : null,
       billingStoppedAt: inst.billingStoppedAt ? new Date(inst.billingStoppedAt).toISOString() : null,
       databaseUsersCount: (inst.databaseUsers || []).length,
