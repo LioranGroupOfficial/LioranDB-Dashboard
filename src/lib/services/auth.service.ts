@@ -45,7 +45,17 @@ export async function signupUser(
     passwordHash,
     role: 'customer',
     emailVerified: false,
-    onboardingStage: 'EMAIL_VERIFICATION',
+    accountVerification: {
+      feePaid: false,
+      amountPaid: 0,
+      currency: 'INR',
+      paidAt: null,
+      razorpayOrderId: null,
+      razorpayPaymentId: null,
+      verificationMethod: null,
+      status: 'UNPAID',
+    },
+    accountRegistrationPaid: false,
     profile: {},
   });
 

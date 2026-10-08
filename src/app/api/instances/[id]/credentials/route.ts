@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { decrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
+import { createApiError } from '@/lib/errors';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const sessionUser = await requireUserAPI();
+    const sessionUser = await requireAccountVerifiedUserAPI();
     const { id } = await params;
 
     await connectToDatabase();
@@ -55,8 +56,7 @@ export async function POST(
       username: inst.username,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to retrieve credentials';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createApiError(error);
   }
 }
 

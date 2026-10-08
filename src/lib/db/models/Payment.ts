@@ -1,7 +1,7 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export type PaymentStatus = 'PENDING' | 'SUBMITTED' | 'PAID' | 'FAILED' | 'REFUNDED';
-export type PaymentType = 'invoice' | 'instance_subscription' | 'backup_addon';
+export type PaymentType = 'invoice' | 'instance_subscription' | 'backup_addon' | 'account_verification';
 
 export interface IPayment extends Document {
   _id: mongoose.Types.ObjectId;
@@ -55,7 +55,7 @@ const PaymentSchema = new Schema<IPayment>(
     },
     type: {
       type: String,
-      enum: ['invoice', 'instance_subscription', 'backup_addon'],
+      enum: ['invoice', 'instance_subscription', 'backup_addon', 'account_verification'],
       default: 'invoice',
       index: true,
     },

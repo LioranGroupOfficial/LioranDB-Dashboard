@@ -6,6 +6,7 @@ export interface SessionData {
   email: string;
   role: 'customer' | 'admin' | 'support';
   emailVerified: boolean;
+  accountVerified?: boolean;
 }
 
 const SESSION_OPTIONS = {
@@ -34,6 +35,7 @@ export async function getCurrentUser(): Promise<SessionData | null> {
       email: session.email,
       role: session.role,
       emailVerified: session.emailVerified,
+      accountVerified: session.accountVerified,
     };
   } catch {
     return null;

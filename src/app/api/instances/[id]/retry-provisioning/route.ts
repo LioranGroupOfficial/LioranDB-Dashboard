@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase, User } from '@/lib/db';
 import { provisionInstance } from '@/lib/providers/provisioning';
+import { createApiError } from '@/lib/errors';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const sessionUser = await requireUserAPI();
+    const sessionUser = await requireAccountVerifiedUserAPI();
     const { id } = await params;
 
     await connectToDatabase();
@@ -40,8 +41,7 @@ export async function POST(
       port: provisioned.port,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Retry provisioning failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createApiError(error);
   }
 }
 

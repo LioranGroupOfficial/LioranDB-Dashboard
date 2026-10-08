@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { SupportTicketSchema, getZodErrorMessage } from '@/lib/validation/schemas';
 import { connectToDatabase, SupportTicket, TicketMessage } from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
@@ -14,7 +14,7 @@ async function generateTicketNumber(): Promise<string> {
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireUserAPI();
+    const user = await requireAccountVerifiedUserAPI();
     await connectToDatabase();
 
     const tickets = await SupportTicket.find({ userId: user.userId })
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const sessionUser = await requireUserAPI();
+    const sessionUser = await requireAccountVerifiedUserAPI();
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
 
     const rl = checkRateLimit('ticket_create', sessionUser.userId);

@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { generateDatabasePassword } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
+import { createApiError } from '@/lib/errors';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await requireUserAPI();
+    const session = await requireAccountVerifiedUserAPI();
     const { id } = await params;
     await connectToDatabase();
 
@@ -31,9 +32,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, users });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch database users';
-    const status = message.includes('Unauthorized') || message.includes('Authentication') ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return createApiError(error);
   }
 }
 
@@ -42,7 +41,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await requireUserAPI();
+    const session = await requireAccountVerifiedUserAPI();
     const { id } = await params;
     const body = await req.json();
     const { username } = body;
@@ -101,9 +100,7 @@ export async function POST(
       message: 'Database user created. Copy this password now; it will not be displayed again.',
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to create database user';
-    const status = message.includes('Unauthorized') || message.includes('Authentication') ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return createApiError(error);
   }
 }
 

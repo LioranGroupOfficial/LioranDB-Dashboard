@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, SupportTicket, TicketMessage } from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
 import { getZodErrorMessage } from '@/lib/validation/schemas';
@@ -15,7 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const sessionUser = await requireUserAPI();
+    const sessionUser = await requireAccountVerifiedUserAPI();
     const { id } = await params;
     const json = await req.json();
     const parsed = MessageSchema.safeParse(json);

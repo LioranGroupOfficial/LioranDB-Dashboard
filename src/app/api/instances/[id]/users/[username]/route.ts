@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { generateDatabasePassword } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
+import { createApiError } from '@/lib/errors';
 
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; username: string }> }
 ) {
   try {
-    const session = await requireUserAPI();
+    const session = await requireAccountVerifiedUserAPI();
     const { id, username } = await params;
     await connectToDatabase();
 
@@ -44,9 +45,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: `User ${username} deleted successfully` });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to delete database user';
-    const status = message.includes('Unauthorized') || message.includes('Authentication') ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return createApiError(error);
   }
 }
 
@@ -55,7 +54,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string; username: string }> }
 ) {
   try {
-    const session = await requireUserAPI();
+    const session = await requireAccountVerifiedUserAPI();
     const { id, username } = await params;
     await connectToDatabase();
 
@@ -96,9 +95,7 @@ export async function POST(
       message: 'Password reset successfully. Copy this new password now; it will not be displayed again.',
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to reset database user password';
-    const status = message.includes('Unauthorized') || message.includes('Authentication') ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return createApiError(error);
   }
 }
 

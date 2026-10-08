@@ -74,7 +74,7 @@ export default function VerifyEmailPage() {
         return;
       }
 
-      router.push('/');
+      router.push('/verify-account');
       router.refresh();
     } catch {
       setError('An unexpected error occurred. Please try again.');

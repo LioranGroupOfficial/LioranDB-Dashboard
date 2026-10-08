@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, User, ManagedDatabase } from '@/lib/db';
 import { getPlan, formatPaiseToRupees, formatPaiseToInr, PLANS } from '@/lib/plans';
 import { validateCoupon, incrementCouponRedemption } from '@/lib/billing/coupons';
@@ -9,11 +9,12 @@ import { createNotification } from '@/lib/notifications';
 import { generateDatabasePassword } from '@/lib/crypto';
 import { CreateInstanceSchema, getZodErrorMessage } from '@/lib/validation/schemas';
 import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
+import { createApiError } from '@/lib/errors';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 
 export async function GET() {
   try {
-    const sessionUser = await requireUserAPI();
+    const sessionUser = await requireAccountVerifiedUserAPI();
     await connectToDatabase();
 
     const instances = await ManagedDatabase.find({
@@ -49,26 +50,18 @@ export async function GET() {
 
     return NextResponse.json({ instances: enriched });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch instances';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createApiError(error);
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const sessionUser = await requireUserAPI();
+    const sessionUser = await requireAccountVerifiedUserAPI();
     await connectToDatabase();
 
     const user = await User.findById(sessionUser.userId);
     if (!user) {
       return NextResponse.json({ error: 'User account not found.' }, { status: 404 });
-    }
-
-    if (!user.emailVerified) {
-      return NextResponse.json(
-        { error: 'Email verification is required before creating database instances.' },
-        { status: 403 }
-      );
     }
 
     const body = await req.json();
@@ -219,7 +212,6 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Instance creation failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createApiError(error);
   }
 }

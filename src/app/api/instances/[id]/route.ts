@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase, BillingInterval } from '@/lib/db';
 import { PLANS, formatPaiseToInr } from '@/lib/plans';
 import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
+import { createApiError } from '@/lib/errors';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 
 export async function GET(
@@ -12,7 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const sessionUser = await requireUserAPI();
+    const sessionUser = await requireAccountVerifiedUserAPI();
     const { id } = await params;
     await connectToDatabase();
 
@@ -59,8 +60,7 @@ export async function GET(
       },
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch instance';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createApiError(error);
   }
 }
 
@@ -69,7 +69,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const sessionUser = await requireUserAPI();
+    const sessionUser = await requireAccountVerifiedUserAPI();
     const { id } = await params;
     await connectToDatabase();
 
@@ -140,8 +140,7 @@ export async function DELETE(
       message: `Database instance "${instance.name}" has been terminated. Usage billing stopped.`,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to terminate instance';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createApiError(error);
   }
 }
 

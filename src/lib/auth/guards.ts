@@ -1,12 +1,29 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser, SessionData } from './session';
-import type { UserRole } from '../db/models/User';
+import type { UserRole, IUser } from '../db/models/User';
+import { connectToDatabase, User } from '../db';
+import { AccountVerificationRequiredError } from '../errors';
 
 export class AuthorizationError extends Error {
   constructor(message = 'Unauthorized') {
     super(message);
     this.name = 'AuthorizationError';
   }
+}
+
+/**
+ * Check whether a user has completed the mandatory account verification.
+ * Admins and support staff are exempt.
+ * Existing customers with accountRegistrationPaid or accountVerification.feePaid are verified.
+ */
+export function isAccountVerified(
+  user: Partial<IUser> | { role?: string; accountVerification?: { feePaid?: boolean }; accountRegistrationPaid?: boolean } | null | undefined
+): boolean {
+  if (!user) return false;
+  if (user.role === 'admin' || user.role === 'support') return true;
+  if (user.accountVerification?.feePaid === true) return true;
+  if (user.accountRegistrationPaid === true) return true;
+  return false;
 }
 
 /**
@@ -23,7 +40,6 @@ export async function requireUser(): Promise<SessionData> {
 
 /**
  * Requires a logged-in user with a verified email.
- * Verified users have full dashboard and database creation access.
  */
 export async function requireVerifiedUser(): Promise<SessionData> {
   const user = await requireUser();
@@ -34,10 +50,26 @@ export async function requireVerifiedUser(): Promise<SessionData> {
 }
 
 /**
- * Standard customer guard: verified email required.
+ * Requires a logged-in user with verified email AND paid account verification fee.
+ * Redirects to /verify-account if the ₹30 fee has not been paid.
+ */
+export async function requireAccountVerifiedUser(): Promise<SessionData> {
+  const user = await requireVerifiedUser();
+  if (user.role === 'customer') {
+    await connectToDatabase();
+    const dbUser = await User.findById(user.userId).select('accountVerification accountRegistrationPaid role').lean();
+    if (!isAccountVerified(dbUser as unknown as IUser)) {
+      redirect('/verify-account');
+    }
+  }
+  return user;
+}
+
+/**
+ * Standard customer guard: verified email and account verification required.
  */
 export async function requireRegisteredUser(): Promise<SessionData> {
-  return requireVerifiedUser();
+  return requireAccountVerifiedUser();
 }
 
 /**
@@ -84,8 +116,24 @@ export async function requireVerifiedUserAPI(): Promise<SessionData> {
   return user;
 }
 
+/**
+ * For API Route Handlers - throws if account verification fee is unpaid.
+ * Returns 403 with structured payload.
+ */
+export async function requireAccountVerifiedUserAPI(): Promise<SessionData> {
+  const user = await requireVerifiedUserAPI();
+  if (user.role === 'customer') {
+    await connectToDatabase();
+    const dbUser = await User.findById(user.userId).select('accountVerification accountRegistrationPaid role').lean();
+    if (!isAccountVerified(dbUser as unknown as IUser)) {
+      throw new AccountVerificationRequiredError('Complete the one-time ₹30 account verification payment.');
+    }
+  }
+  return user;
+}
+
 export async function requireRegisteredUserAPI(): Promise<SessionData> {
-  return requireVerifiedUserAPI();
+  return requireAccountVerifiedUserAPI();
 }
 
 export async function requireRoleAPI(role: UserRole): Promise<SessionData> {

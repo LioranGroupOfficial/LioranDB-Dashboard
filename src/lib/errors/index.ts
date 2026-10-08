@@ -37,7 +37,25 @@ export class ForbiddenError extends AppError {
   }
 }
 
+export class AccountVerificationRequiredError extends AppError {
+  public redirectTo = '/verify-account';
+  constructor(message = 'Complete the one-time ₹30 account verification payment.') {
+    super(message, 403, 'ACCOUNT_VERIFICATION_REQUIRED');
+    this.name = 'AccountVerificationRequiredError';
+  }
+}
+
 export function createApiError(error: unknown): Response {
+  if (error instanceof AccountVerificationRequiredError) {
+    return Response.json(
+      {
+        error: error.code,
+        message: error.message,
+        redirectTo: error.redirectTo,
+      },
+      { status: error.statusCode }
+    );
+  }
   if (error instanceof AppError) {
     return Response.json(
       { error: error.message, code: error.code },

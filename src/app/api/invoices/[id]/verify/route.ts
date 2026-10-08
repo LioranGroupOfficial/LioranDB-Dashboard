@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, Invoice, Payment } from '@/lib/db';
 import { verifyRazorpaySignature } from '@/lib/razorpay';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { sendEmail } from '@/lib/email';
 import { formatPaiseToRupees } from '@/lib/plans';
+import { createApiError } from '@/lib/errors';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await requireUserAPI();
+    const session = await requireAccountVerifiedUserAPI();
     const { id } = await params;
     const body = await req.json();
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
@@ -109,9 +110,7 @@ export async function POST(
       message: 'Payment verified and invoice marked as paid',
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Payment verification failed';
-    const status = message.includes('Unauthorized') || message.includes('Authentication') ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return createApiError(error);
   }
 }
 

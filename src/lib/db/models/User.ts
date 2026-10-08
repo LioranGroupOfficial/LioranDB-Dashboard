@@ -7,6 +7,17 @@ export type OnboardingStage =
   | 'ACTIVE'
   | 'SUSPENDED';
 
+export interface IAccountVerification {
+  feePaid: boolean;
+  amountPaid: number;
+  currency: 'INR';
+  paidAt: Date | null;
+  razorpayOrderId: string | null;
+  razorpayPaymentId: string | null;
+  verificationMethod: 'RAZORPAY' | null;
+  status: 'UNPAID' | 'PENDING' | 'VERIFIED';
+}
+
 export interface IUserProfile {
   fullName?: string;
   company?: string;
@@ -23,6 +34,7 @@ export interface IUser extends Document {
   emailVerifiedAt?: Date;
   profile: IUserProfile;
   onboardingStage: OnboardingStage;
+  accountVerification: IAccountVerification;
   accountRegistrationPaid?: boolean;
   accountRegistrationPaidAt?: Date;
   razorpayCustomerId?: string;
@@ -38,6 +50,24 @@ const UserProfileSchema = new Schema<IUserProfile>(
     company: { type: String, trim: true },
     phone: { type: String, trim: true },
     country: { type: String, trim: true },
+  },
+  { _id: false }
+);
+
+const AccountVerificationSchema = new Schema<IAccountVerification>(
+  {
+    feePaid: { type: Boolean, default: false },
+    amountPaid: { type: Number, default: 0 },
+    currency: { type: String, default: 'INR' },
+    paidAt: { type: Date, default: null },
+    razorpayOrderId: { type: String, default: null },
+    razorpayPaymentId: { type: String, default: null },
+    verificationMethod: { type: String, default: null },
+    status: {
+      type: String,
+      enum: ['UNPAID', 'PENDING', 'VERIFIED'],
+      default: 'UNPAID',
+    },
   },
   { _id: false }
 );
@@ -61,6 +91,19 @@ const UserSchema = new Schema<IUser>(
     emailVerified: { type: Boolean, default: false },
     emailVerifiedAt: { type: Date },
     profile: { type: UserProfileSchema, default: () => ({}) },
+    accountVerification: {
+      type: AccountVerificationSchema,
+      default: () => ({
+        feePaid: false,
+        amountPaid: 0,
+        currency: 'INR',
+        paidAt: null,
+        razorpayOrderId: null,
+        razorpayPaymentId: null,
+        verificationMethod: null,
+        status: 'UNPAID',
+      }),
+    },
     accountRegistrationPaid: { type: Boolean, default: false },
     accountRegistrationPaidAt: { type: Date },
     razorpayCustomerId: { type: String },

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUserAPI } from '@/lib/auth/guards';
+import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, Invoice } from '@/lib/db';
+import { createApiError } from '@/lib/errors';
 
 export async function GET(_req: NextRequest) {
   try {
-    const session = await requireUserAPI();
+    const session = await requireAccountVerifiedUserAPI();
     await connectToDatabase();
 
     const invoices = await Invoice.find({ customerId: session.userId })
@@ -16,9 +17,7 @@ export async function GET(_req: NextRequest) {
       invoices,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch invoices';
-    const status = message.includes('Unauthorized') || message.includes('Authentication') ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return createApiError(error);
   }
 }
 

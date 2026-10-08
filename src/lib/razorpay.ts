@@ -109,3 +109,39 @@ export function verifyWebhookSignature(bodyString: string, signature: string): b
   }
 }
 
+export interface RazorpayPaymentEntity {
+  id: string;
+  order_id?: string;
+  amount: number;
+  currency: string;
+  status: string;
+  method?: string;
+  captured?: boolean;
+  notes?: Record<string, string>;
+  error_code?: string | null;
+  error_description?: string | null;
+}
+
+export async function fetchRazorpayPayment(paymentId: string): Promise<RazorpayPaymentEntity> {
+  const razorpay = getRazorpayClient();
+  const payment = await razorpay.payments.fetch(paymentId);
+  return payment as unknown as RazorpayPaymentEntity;
+}
+
+export async function fetchRazorpayOrder(orderId: string): Promise<RazorpayOrderResult> {
+  const razorpay = getRazorpayClient();
+  const order = await razorpay.orders.fetch(orderId);
+  return {
+    id: order.id,
+    amount: typeof order.amount === 'number' ? order.amount : Number(order.amount),
+    currency: order.currency,
+    receipt: order.receipt,
+    status: order.status,
+  };
+}
+
+export async function fetchRazorpayOrderPayments(orderId: string): Promise<{ items: RazorpayPaymentEntity[] }> {
+  const razorpay = getRazorpayClient();
+  const res = await razorpay.orders.fetchPayments(orderId);
+  return res as unknown as { items: RazorpayPaymentEntity[] };
+}
