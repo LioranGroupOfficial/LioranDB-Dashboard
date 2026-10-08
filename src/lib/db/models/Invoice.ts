@@ -112,7 +112,10 @@ const InvoiceSchema = new Schema<IInvoice>(
 InvoiceSchema.index({ customerId: 1, status: 1 });
 InvoiceSchema.index({ status: 1, dueDate: 1 });
 
-const Invoice: Model<IInvoice> =
-  mongoose.models.Invoice || mongoose.model<IInvoice>('Invoice', InvoiceSchema);
+if (mongoose.models.Invoice) {
+  delete (mongoose.models as Record<string, unknown>).Invoice;
+}
+
+const Invoice: Model<IInvoice> = mongoose.model<IInvoice>('Invoice', InvoiceSchema);
 
 export default Invoice;

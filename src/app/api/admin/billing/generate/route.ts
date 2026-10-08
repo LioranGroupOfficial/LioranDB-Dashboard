@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAPI } from '@/lib/auth/guards';
 import { processMonthlyBillingInvoices } from '@/lib/billing/renewal';
+import { formatPaiseToRupees } from '@/lib/plans';
 
-export async function POST(_req: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     await requireAdminAPI();
-    const result = await processMonthlyBillingInvoices();
+    const body = await req.json().catch(() => ({}));
+    const result = await processMonthlyBillingInvoices(body);
 
+    const amountStr = formatPaiseToRupees(result.totalAmountPaise);
     return NextResponse.json({
       success: true,
       result,
-      message: `Generated ${result.invoicesGenerated} invoices, marked ${result.overdueInvoicesCount} overdue.`,
+      message: `Generated ${result.invoicesGenerated} invoices (${amountStr}), marked ${result.overdueInvoicesCount} overdue.`,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Batch invoice generation failed';

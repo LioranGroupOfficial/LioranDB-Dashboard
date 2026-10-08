@@ -240,7 +240,7 @@ export async function getCustomerMonthEstimate(
   const instances = await ManagedDatabase.find({
     $and: [
       { $or: [{ customerId }, { userId: customerId }] },
-      { billingStartedAt: { $exists: true, $ne: null, $lt: period.end } },
+      { billingStartedAt: { $exists: true, $ne: null, $lte: period.end } },
       { $or: [{ billingStoppedAt: { $exists: false } }, { billingStoppedAt: null }, { billingStoppedAt: { $gte: period.start } }] },
     ],
   }).lean();
@@ -279,6 +279,103 @@ export async function getCustomerMonthEstimate(
   };
 }
 
+export interface CustomerLiveUsageSummary {
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  activeInstancesCount: number;
+  totalInstancesCount: number;
+  instances: Array<{
+    id: string;
+    name: string;
+    planName: string;
+    hourlyRatePaise: number;
+    status: string;
+    billableHours: number;
+    usageAmountPaise: number;
+    backupAmountPaise: number;
+    discountPaise: number;
+    totalPaise: number;
+  }>;
+  totalComputePaise: number;
+  totalBackupPaise: number;
+  totalDiscountPaise: number;
+  totalUnbilledPaise: number;
+  lastInvoiceNumber?: string;
+  lastInvoiceDate?: string;
+}
+
+/**
+ * Calculates live real-time accrued unbilled usage for all customers with instances.
+ */
+export async function getAllCustomersLiveUsage(referenceDate: Date = new Date()): Promise<CustomerLiveUsageSummary[]> {
+  await connectToDatabase();
+  const period = getCurrentMonthPeriod(referenceDate);
+
+  const customers = await User.find({ role: 'customer' }).sort({ createdAt: -1 }).lean();
+  const summaries: CustomerLiveUsageSummary[] = [];
+
+  for (const customer of customers) {
+    const instances = await ManagedDatabase.find({
+      $or: [{ customerId: customer._id }, { userId: customer._id }],
+    }).lean();
+
+    if (instances.length === 0) continue;
+
+    let totalComputePaise = 0;
+    let totalBackupPaise = 0;
+    let totalDiscountPaise = 0;
+    let totalUnbilledPaise = 0;
+    let activeCount = 0;
+
+    const instanceList = instances.map((inst) => {
+      const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, period, referenceDate);
+      if (inst.status === 'ACTIVE' || inst.status === 'RUNNING') {
+        activeCount++;
+      }
+      totalComputePaise += calc.usageAmountPaise;
+      totalBackupPaise += calc.backupAmountPaise;
+      totalDiscountPaise += calc.discountPaise;
+      totalUnbilledPaise += calc.totalPaise;
+
+      return {
+        id: inst._id.toString(),
+        name: inst.name,
+        planName: calc.planName,
+        hourlyRatePaise: calc.hourlyRatePaise,
+        status: inst.status,
+        billableHours: parseFloat(calc.billableHours.toFixed(2)),
+        usageAmountPaise: calc.usageAmountPaise,
+        backupAmountPaise: calc.backupAmountPaise,
+        discountPaise: calc.discountPaise,
+        totalPaise: calc.totalPaise,
+      };
+    });
+
+    const lastInvoice = await Invoice.findOne({ customerId: customer._id })
+      .sort({ createdAt: -1 })
+      .select('invoiceNumber createdAt')
+      .lean();
+
+    summaries.push({
+      customerId: customer._id.toString(),
+      customerName: customer.profile?.fullName || customer.email.split('@')[0],
+      customerEmail: customer.email,
+      activeInstancesCount: activeCount,
+      totalInstancesCount: instances.length,
+      instances: instanceList,
+      totalComputePaise,
+      totalBackupPaise,
+      totalDiscountPaise,
+      totalUnbilledPaise,
+      lastInvoiceNumber: lastInvoice?.invoiceNumber,
+      lastInvoiceDate: lastInvoice?.createdAt ? new Date(lastInvoice.createdAt).toISOString() : undefined,
+    });
+  }
+
+  return summaries;
+}
+
 /**
  * Generates an immutable snapshot Invoice for a customer's usage in a given period.
  */
@@ -296,7 +393,7 @@ export async function generateMonthlyInvoice(
   const instances = await ManagedDatabase.find({
     $and: [
       { $or: [{ customerId }, { userId: customerId }] },
-      { billingStartedAt: { $exists: true, $ne: null, $lt: period.end } },
+      { billingStartedAt: { $exists: true, $ne: null, $lte: period.end } },
       { $or: [{ billingStoppedAt: { $exists: false } }, { billingStoppedAt: null }, { billingStoppedAt: { $gte: period.start } }] },
     ],
   }).lean();
@@ -313,6 +410,12 @@ export async function generateMonthlyInvoice(
       period.end
     );
     if (calc.billableSeconds > 0) {
+      // If active for even a few seconds on a paid plan, ensure at least 1 paise compute
+      const computePaise = calc.usageAmountPaise > 0 ? calc.usageAmountPaise : (calc.hourlyRatePaise > 0 ? 1 : 0);
+      const itemSubtotal = computePaise + calc.backupAmountPaise;
+      const discount = Math.round((itemSubtotal * (calc.couponDiscountPercentage || 0)) / 100);
+      const itemTotal = Math.max(0, itemSubtotal - discount);
+
       lineItems.push({
         instanceId: inst._id as unknown as mongoose.Types.ObjectId,
         instanceName: inst.name,
@@ -320,18 +423,18 @@ export async function generateMonthlyInvoice(
         planName: calc.planName,
         hourlyRatePaise: calc.hourlyRatePaise,
         billableHours: parseFloat(calc.billableHours.toFixed(2)),
-        usageAmountPaise: calc.usageAmountPaise,
+        usageAmountPaise: computePaise,
         backupAmountPaise: calc.backupAmountPaise,
-        discountPaise: calc.discountPaise,
-        subtotalPaise: calc.totalPaise,
+        discountPaise: discount,
+        subtotalPaise: itemTotal,
         description: `${calc.planName} Database: ${calc.billableHours.toFixed(1)} hrs @ ${formatPaiseToRupees(calc.hourlyRatePaise)}/hr${
           calc.backupAmountPaise > 0 ? ` + Backup: ${formatPaiseToRupees(calc.backupAmountPaise)}` : ''
-        }${calc.discountPaise > 0 ? ` (Coupon: -${formatPaiseToRupees(calc.discountPaise)})` : ''}`,
+        }${discount > 0 ? ` (Coupon: -${formatPaiseToRupees(discount)})` : ''}`,
       });
 
-      subtotalPaise += calc.subtotalPaise;
-      discountPaise += calc.discountPaise;
-      totalPaise += calc.totalPaise;
+      subtotalPaise += itemSubtotal;
+      discountPaise += discount;
+      totalPaise += itemTotal;
     }
   }
 
