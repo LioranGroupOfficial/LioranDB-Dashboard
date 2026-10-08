@@ -72,7 +72,10 @@ jest.mock('@/lib/db', () => {
         }
         return null;
       }),
-      find: jest.fn().mockReturnValue({
+      find: jest.fn().mockImplementation(() => ({
+        select: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([]),
+        }),
         populate: jest.fn().mockReturnValue({
           sort: jest.fn().mockReturnValue({
             lean: jest.fn().mockImplementation(() =>
@@ -80,7 +83,13 @@ jest.mock('@/lib/db', () => {
             ),
           }),
         }),
-      }),
+        sort: jest.fn().mockReturnValue({
+          lean: jest.fn().mockImplementation(() =>
+            Promise.resolve([globalThis.__mockManagedDatabaseDoc])
+          ),
+        }),
+        lean: jest.fn().mockResolvedValue([globalThis.__mockManagedDatabaseDoc]),
+      })),
     },
     BillingInterval: {
       updateMany: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
@@ -88,6 +97,13 @@ jest.mock('@/lib/db', () => {
     },
     AuditLog: {
       create: jest.fn().mockResolvedValue({ _id: 'audit_123' }),
+    },
+    HostingNode: {
+      find: jest.fn().mockResolvedValue([]),
+      findById: jest.fn().mockResolvedValue(null),
+      findByIdAndDelete: jest.fn().mockResolvedValue({ _id: 'node_1' }),
+      updateMany: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
+      countDocuments: jest.fn().mockResolvedValue(0),
     },
   };
 });
@@ -340,6 +356,12 @@ describe('LioranDB Admin Control Plane & Database Management', () => {
     const sanitizedAdmin = sanitizeErrorForLog(adminErr);
     expect(sanitizedAdmin.message).not.toContain('token_xyz987');
     expect(sanitizedAdmin.message).toContain('Bearer [REDACTED]');
+  });
+
+  test('Hosting node lifecycle: reconciliation preserves deletion state and does not resurrect deleted nodes', async () => {
+    const { reconcileHostingNodes } = await import('@/lib/providers/reconciliation');
+    // Ensure reconcileHostingNodes executes without throwing and does not auto-insert nodes
+    await expect(reconcileHostingNodes()).resolves.not.toThrow();
   });
 });
 

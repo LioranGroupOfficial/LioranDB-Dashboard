@@ -9,37 +9,7 @@ import { isLocalhost, resolveControlPlaneEndpoint } from '@/lib/liorandb-admin/u
 export async function reconcileHostingNodes(): Promise<void> {
   await connectToDatabase();
 
-  // 1. Auto-seed default localhost node if zero hosting nodes exist
-  const totalNodesCount = await HostingNode.countDocuments();
-  if (totalNodesCount === 0) {
-    try {
-      const defaultEndpoint = resolveControlPlaneEndpoint(null);
-      await HostingNode.create({
-        name: 'Localhost Node (127.0.0.1)',
-        slug: 'localhost-node-01',
-        region: 'Localhost / Development',
-        dbUrl: '127.0.0.1',
-        port: 27018,
-        protocol: 'http',
-        httpPort: 27018,
-        grpcUrl: '127.0.0.1',
-        grpcPort: 27019,
-        controlPlaneEndpoint: defaultEndpoint,
-        allocationMode: 'DEDICATED',
-        status: 'AVAILABLE',
-        healthStatus: 'HEALTHY',
-        maxCapacity: 1,
-        currentAssignedCount: 0,
-        defaultRootUsername: 'admin',
-        isDefault: true,
-        notes: 'Auto-seeded default development node',
-      });
-    } catch {
-      // Ignore concurrent seed race
-    }
-  }
-
-  // 2. Auto-migrate any stale localhost port 8080 entries to 27018
+  // 1. Auto-migrate any stale localhost port 8080 entries to 27018
   const staleNodes = await HostingNode.find({
     $or: [
       { controlPlaneEndpoint: /:8080/ },

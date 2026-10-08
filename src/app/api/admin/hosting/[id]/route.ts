@@ -161,6 +161,12 @@ export async function DELETE(
       );
     }
 
+    // Clean up any references in terminated/deleted instances
+    await ManagedDatabase.updateMany(
+      { hostingNodeId: node._id },
+      { $unset: { hostingNodeId: 1 } }
+    );
+
     await HostingNode.findByIdAndDelete(id);
 
     await createAuditLog({
