@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Database,
@@ -126,6 +126,36 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
   const [resetConfirmationText, setResetConfirmationText] = useState('');
   const [showTerminateModal, setShowTerminateModal] = useState(false);
   const [terminateConfirmationText, setTerminateConfirmationText] = useState('');
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  function formatDateTime(isoString: string | Date | null | undefined): string {
+    if (!isoString) return '—';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  }
+
+  function formatDateOnly(isoString: string | Date | null | undefined): string {
+    if (!isoString) return '—';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }
 
   async function copyToClipboard(text: string, fieldKey: string) {
     await navigator.clipboard.writeText(text);
@@ -658,12 +688,12 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                 </div>
                 <div className="flex justify-between items-center py-1 border-b border-[var(--border)]">
                   <span className="text-[var(--text-muted)]">Created At</span>
-                  <span className="text-[var(--text-secondary)] font-mono">{new Date(data.createdAt).toLocaleString()}</span>
+                  <span suppressHydrationWarning className="text-[var(--text-secondary)] font-mono">{formatDateTime(data.createdAt)}</span>
                 </div>
                 <div className="flex justify-between items-center py-1">
                   <span className="text-[var(--text-muted)]">Billing Started</span>
-                  <span className="text-[var(--text-secondary)] font-mono">
-                    {data.billingStartedAt ? new Date(data.billingStartedAt).toLocaleString() : 'Not started'}
+                  <span suppressHydrationWarning className="text-[var(--text-secondary)] font-mono">
+                    {data.billingStartedAt ? formatDateTime(data.billingStartedAt) : 'Not started'}
                   </span>
                 </div>
               </div>
@@ -728,7 +758,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                 title="Copy connection string"
               >
                 {copiedField === 'overview_uri' ? (
-                  <Check className="w-4 h-4 text-emerald-500" />
+                  <Check className="w-4 h-4 text-[var(--text-strong)]" />
                 ) : (
                   <Copy className="w-4 h-4" />
                 )}
@@ -796,11 +826,11 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                             {u.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 text-xs text-[var(--text-muted)]">
-                          {new Date(u.createdAt).toLocaleDateString()}
+                        <td suppressHydrationWarning className="px-4 py-3.5 text-xs text-[var(--text-muted)]">
+                          {formatDateOnly(u.createdAt)}
                         </td>
-                        <td className="px-4 py-3.5 text-xs text-[var(--text-muted)]">
-                          {u.updatedAt ? new Date(u.updatedAt).toLocaleDateString() : '—'}
+                        <td suppressHydrationWarning className="px-4 py-3.5 text-xs text-[var(--text-muted)]">
+                          {u.updatedAt ? formatDateOnly(u.updatedAt) : '—'}
                         </td>
                         <td className="px-4 py-3.5 text-right space-x-2">
                           <button
@@ -871,15 +901,14 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               </div>
               <div className="bg-[var(--surface-soft)] p-3.5 rounded-lg border border-[var(--border)]">
                 <span className="text-[var(--text-muted)] block text-[11px]">Credential Status</span>
-                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-500 font-mono mt-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="font-mono text-xs text-[var(--text-strong)] font-semibold mt-1 block tracking-wider">
                   ACTIVE / ROTATABLE
                 </span>
               </div>
               <div className="bg-[var(--surface-soft)] p-3.5 rounded-lg border border-[var(--border)]">
                 <span className="text-[var(--text-muted)] block text-[11px]">Last Rotated</span>
-                <span className="text-xs text-[var(--text-primary)] mt-1 block">
-                  {data.rootRotatedAt ? new Date(data.rootRotatedAt).toLocaleString() : 'Initial Provisioning'}
+                <span suppressHydrationWarning className="text-xs text-[var(--text-primary)] mt-1 block">
+                  {data.rootRotatedAt ? formatDateTime(data.rootRotatedAt) : 'Initial Provisioning'}
                 </span>
               </div>
             </div>
@@ -912,9 +941,9 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Suspend / Resume */}
-              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-lg p-4 flex flex-col justify-between">
+              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-4 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-strong)]">
+                  <h4 className="text-xs font-bold text-[var(--text-strong)]">
                     {data.status === 'SUSPENDED' ? 'Resume Database Instance' : 'Suspend Database Instance'}
                   </h4>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
@@ -939,7 +968,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                       type="button"
                       onClick={handleSuspend}
                       disabled={actionLoading}
-                      className="btn-secondary !text-amber-500 !border-amber-500/30 hover:!bg-amber-500/10 text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
+                      className="btn-secondary text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
                     >
                       <Pause className="w-3.5 h-3.5" />
                       <span>Suspend Instance</span>
@@ -949,9 +978,9 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               </div>
 
               {/* Restart Daemon */}
-              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-lg p-4 flex flex-col justify-between">
+              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-4 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-strong)]">Restart Instance Daemon</h4>
+                  <h4 className="text-xs font-bold text-[var(--text-strong)]">Restart Instance Daemon</h4>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
                     Gracefully restart the LioranDB engine process on the host server.
                   </p>
@@ -970,9 +999,9 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               </div>
 
               {/* Trigger Snapshot Backup */}
-              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-lg p-4 flex flex-col justify-between">
+              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-4 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-strong)]">Trigger On-Demand Backup</h4>
+                  <h4 className="text-xs font-bold text-[var(--text-strong)]">Trigger On-Demand Backup</h4>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
                     Capture an immediate point-in-time snapshot of the database storage.
                   </p>
@@ -991,9 +1020,9 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               </div>
 
               {/* Rotate Root Password shortcut */}
-              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-lg p-4 flex flex-col justify-between">
+              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-4 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-strong)]">Rotate Root Password</h4>
+                  <h4 className="text-xs font-bold text-[var(--text-strong)]">Rotate Root Password</h4>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
                     Invalidate existing superuser credentials and generate a new random password.
                   </p>
@@ -1003,7 +1032,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                     type="button"
                     onClick={() => setConfirmRotateRoot(true)}
                     disabled={actionLoading}
-                    className="btn-secondary !text-amber-500 !border-amber-500/30 hover:!bg-amber-500/10 text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
+                    className="btn-secondary text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
                   >
                     <Key className="w-3.5 h-3.5" />
                     <span>Rotate Credentials</span>
@@ -1014,17 +1043,17 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
           </div>
 
           {/* Danger Zone */}
-          <div className="border border-rose-500/30 bg-rose-500/5 rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-rose-500 border-b border-rose-500/20 pb-3 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-500" />
+          <div className="card space-y-4">
+            <h3 className="text-sm font-bold text-[var(--text-strong)] border-b border-[var(--border)] pb-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-[var(--text-strong)]" />
               <span>Danger Zone</span>
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Reset Instance */}
-              <div className="bg-[var(--surface)] border border-rose-500/20 rounded-lg p-4 flex flex-col justify-between">
+              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-4 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-strong)]">Reset Database Instance</h4>
+                  <h4 className="text-xs font-bold text-[var(--text-strong)]">Reset Database Instance</h4>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
                     Super Admin action. Safely wipes all customer collections, documents, indexes, and database users.
                     Re-initializes fresh root credentials and returns the server to an active clean state.
@@ -1035,7 +1064,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                     type="button"
                     onClick={() => setShowResetInstanceModal(true)}
                     disabled={actionLoading}
-                    className="btn-secondary !text-rose-500 !border-rose-500/30 hover:!bg-rose-500/10 text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
+                    className="btn-secondary text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>Reset Instance...</span>
@@ -1044,9 +1073,9 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               </div>
 
               {/* Terminate Instance */}
-              <div className="bg-[var(--surface)] border border-rose-500/20 rounded-lg p-4 flex flex-col justify-between">
+              <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-4 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold text-[var(--text-strong)]">Terminate Instance</h4>
+                  <h4 className="text-xs font-bold text-[var(--text-strong)]">Terminate Instance</h4>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
                     Permanently terminate service, stop customer access, close billing intervals, and wipe database
                     contents while preserving financial records and audit logs.
@@ -1103,8 +1132,8 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                   ) : (
                     data.auditLogs.map((log) => (
                       <tr key={log._id} className="hover:bg-[var(--surface-card)] transition-colors text-xs">
-                        <td className="px-5 py-3 font-mono text-[var(--text-muted)] whitespace-nowrap">
-                          {new Date(log.createdAt).toLocaleString()}
+                        <td suppressHydrationWarning className="px-5 py-3 font-mono text-[var(--text-muted)] whitespace-nowrap">
+                          {formatDateTime(log.createdAt)}
                         </td>
                         <td className="px-5 py-3">
                           <span className="font-mono px-2 py-0.5 rounded bg-[var(--surface-soft)] border border-[var(--border)] text-[11px] text-[var(--text-strong)]">
@@ -1141,7 +1170,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in duration-150">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10px] font-mono font-bold tracking-wider uppercase">
+                <span className="badge badge-active text-[10px] font-mono uppercase tracking-wider">
                   Write-Only Secret
                 </span>
                 <h3 className="text-lg font-bold text-[var(--text-strong)] mt-1">{secretModal.title}</h3>
@@ -1159,10 +1188,10 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                   <button
                     type="button"
                     onClick={() => copyToClipboard(secretModal.username, 'modal_user')}
-                    className="text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                    className="text-[var(--text-muted)] hover:text-[var(--text-strong)] cursor-pointer"
                   >
                     {copiedField === 'modal_user' ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      <Check className="w-3.5 h-3.5 text-[var(--text-strong)]" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
                     )}
@@ -1176,21 +1205,21 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                   <button
                     type="button"
                     onClick={() => setShowPasswordSecret(!showPasswordSecret)}
-                    className="inline-flex items-center gap-1 text-[11px] text-[var(--text-primary)] hover:underline"
+                    className="inline-flex items-center gap-1 text-[11px] text-[var(--text-primary)] hover:underline cursor-pointer"
                   >
                     {showPasswordSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                     <span>{showPasswordSecret ? 'Hide' : 'Show'}</span>
                   </button>
                 </div>
-                <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs font-mono text-emerald-600 dark:text-emerald-400 font-bold tracking-wide">
+                <div className="flex items-center justify-between bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-xs font-mono text-[var(--text-strong)] font-bold tracking-wide">
                   <span>{showPasswordSecret ? secretModal.password : '••••••••••••••••••••••••'}</span>
                   <button
                     type="button"
                     onClick={() => copyToClipboard(secretModal.password, 'modal_pwd')}
-                    className="text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+                    className="text-[var(--text-muted)] hover:text-[var(--text-strong)] cursor-pointer"
                   >
                     {copiedField === 'modal_pwd' ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      <Check className="w-3.5 h-3.5 text-[var(--text-strong)]" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
                     )}
@@ -1208,10 +1237,10 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                     <button
                       type="button"
                       onClick={() => copyToClipboard(secretModal.connectionDetails!, 'modal_conn')}
-                      className="text-[var(--text-muted)] hover:text-[var(--text-strong)] shrink-0"
+                      className="text-[var(--text-muted)] hover:text-[var(--text-strong)] shrink-0 cursor-pointer"
                     >
                       {copiedField === 'modal_conn' ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        <Check className="w-3.5 h-3.5 text-[var(--text-strong)]" />
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}

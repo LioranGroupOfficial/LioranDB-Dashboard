@@ -344,7 +344,7 @@ export default function DatabaseUsersManager({
                 >
                   {copied ? (
                     <>
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      <Check className="w-3.5 h-3.5 text-[var(--text-strong)]" />
                       <span>Copied</span>
                     </>
                   ) : (

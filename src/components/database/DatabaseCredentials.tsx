@@ -119,7 +119,7 @@ export default function DatabaseCredentials({ db }: Props) {
             className="p-1.5 rounded bg-[var(--surface-card)] hover:bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border)] transition-colors shrink-0 cursor-pointer"
             title="Copy URI"
           >
-            {copied === 'uri' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied === 'uri' ? <Check className="w-3.5 h-3.5 text-[var(--text-primary)]" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
         </div>
 
