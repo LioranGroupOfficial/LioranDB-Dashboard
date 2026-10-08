@@ -25,13 +25,21 @@ export default async function DatabasePage() {
   const instances = rawInstances.map((inst) => {
     const plan = PLANS[inst.planId] || { name: inst.planId, hourlyRatePaise: inst.hourlyRatePaise || 100 };
     const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, period);
+    const baseHourlyRatePaise = inst.hourlyRatePaise || plan.hourlyRatePaise || 100;
+    const couponDiscountPercentage = inst.couponDiscountPercentage || 0;
+    const effectiveHourlyRatePaise = calc.effectiveHourlyRatePaise;
+
     return {
       id: inst._id.toString(),
       name: inst.name,
       status: inst.status,
       planName: plan.name,
-      hourlyRatePaise: inst.hourlyRatePaise || plan.hourlyRatePaise || 100,
-      hourlyRateFormatted: formatPaiseToInr(inst.hourlyRatePaise || plan.hourlyRatePaise || 100) + '/hr',
+      hourlyRatePaise: baseHourlyRatePaise,
+      effectiveHourlyRatePaise,
+      couponDiscountPercentage,
+      couponCode: inst.couponCode,
+      hourlyRateFormatted: formatPaiseToInr(effectiveHourlyRatePaise) + '/hr',
+      baseHourlyRateFormatted: formatPaiseToInr(baseHourlyRatePaise) + '/hr',
       backupEnabled: Boolean(inst.backupEnabled),
       host: inst.host,
       port: inst.port,
@@ -121,9 +129,20 @@ export default async function DatabasePage() {
                 </div>
 
                 <div className="space-y-1.5 text-xs bg-[var(--surface-soft)] p-3 rounded-[7px] border border-[var(--border)] font-mono">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-[var(--text-muted)]">Rate:</span>
-                    <span className="font-semibold text-[var(--text-strong)]">{inst.hourlyRateFormatted}</span>
+                    <div className="text-right">
+                      {inst.couponDiscountPercentage > 0 ? (
+                        <div>
+                          <span className="font-semibold text-[var(--text-strong)]">{inst.hourlyRateFormatted}</span>
+                          <span className="text-[10px] text-[var(--text-muted)] line-through ml-1.5 font-normal">
+                            {inst.baseHourlyRateFormatted}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-[var(--text-strong)]">{inst.hourlyRateFormatted}</span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[var(--text-muted)]">Month Usage:</span>

@@ -49,6 +49,8 @@ export default async function InstanceDetailsPage({
 
   const plan = getPlan(instance.planId);
   const hourlyRatePaise = instance.hourlyRatePaise || plan?.hourlyRatePaise || 100;
+  const couponDiscountPercentage = instance.couponDiscountPercentage || 0;
+  const effectiveHourlyRatePaise = Math.round(hourlyRatePaise * (1 - couponDiscountPercentage / 100));
 
   // Decrypt connection string server-side safely
   let connectionUri: string | null = null;
@@ -153,8 +155,13 @@ export default async function InstanceDetailsPage({
             <span>Hourly Rate</span>
           </div>
           <p className="font-mono text-lg font-bold text-[var(--text-strong)]">
-            {formatPaiseToRupees(hourlyRatePaise)}/hr
+            {formatPaiseToRupees(effectiveHourlyRatePaise)}/hr
           </p>
+          {couponDiscountPercentage > 0 && (
+            <p className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5">
+              Base: <span className="line-through">{formatPaiseToRupees(hourlyRatePaise)}/hr</span> (-{couponDiscountPercentage}%)
+            </p>
+          )}
         </div>
 
         <div className="card p-4">

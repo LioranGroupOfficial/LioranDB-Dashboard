@@ -108,7 +108,18 @@ export default async function UsagePage() {
                       {inst.planName}
                     </td>
                     <td className="py-3 px-4 text-right text-[var(--text-secondary)]">
-                      ₹{inst.hourlyRatePaise / 100}/hr
+                      {inst.couponDiscountPercentage > 0 ? (
+                        <div>
+                          <span className="font-bold text-[var(--text-primary)]">
+                            {formatPaiseToRupees(inst.effectiveHourlyRatePaise)}/hr
+                          </span>
+                          <span className="line-through text-[var(--muted)] text-[10px] block font-normal">
+                            {formatPaiseToRupees(inst.hourlyRatePaise)}/hr (-{inst.couponDiscountPercentage}%)
+                          </span>
+                        </div>
+                      ) : (
+                        <span>{formatPaiseToRupees(inst.hourlyRatePaise)}/hr</span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-right text-[var(--text-primary)] font-bold">
                       {inst.billableHours.toFixed(1)} hrs

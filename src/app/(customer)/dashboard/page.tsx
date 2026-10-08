@@ -210,6 +210,8 @@ export default async function DashboardPage() {
             {instances.slice(0, 6).map((inst) => {
               const plan = getPlan(inst.planId);
               const ratePaise = inst.hourlyRatePaise || plan?.hourlyRatePaise || 100;
+              const discountPct = inst.couponDiscountPercentage || 0;
+              const effectiveRatePaise = Math.round(ratePaise * (1 - discountPct / 100));
               return (
                 <div
                   key={inst._id.toString()}
@@ -238,7 +240,20 @@ export default async function DashboardPage() {
                         {inst.planName || plan?.name || 'Shared'}
                       </span>
                       <span>•</span>
-                      <span className="font-mono font-medium text-[var(--text-secondary)]">{formatPaiseToRupees(ratePaise)}/hr</span>
+                      {discountPct > 0 ? (
+                        <div className="inline-flex items-center gap-1">
+                          <span className="font-mono font-semibold text-[var(--text-strong)]">
+                            {formatPaiseToRupees(effectiveRatePaise)}/hr
+                          </span>
+                          <span className="font-mono text-[10px] text-[var(--text-muted)] line-through">
+                            {formatPaiseToRupees(ratePaise)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="font-mono font-medium text-[var(--text-secondary)]">
+                          {formatPaiseToRupees(ratePaise)}/hr
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-xs text-[var(--text-secondary)] space-y-1.5 border-t border-[var(--border)] pt-3">

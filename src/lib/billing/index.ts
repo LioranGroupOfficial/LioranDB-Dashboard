@@ -76,6 +76,7 @@ export interface InstanceUsageCalculation {
   planId: string;
   planName: string;
   hourlyRatePaise: number;
+  effectiveHourlyRatePaise: number;
   billableSeconds: number;
   billableHours: number;
   usageAmountPaise: number;
@@ -119,6 +120,14 @@ export function calculateInstanceUsage(
       : plan?.hourlyRatePaise || 100;
   const planName = instance.planName || plan?.name || 'Shared';
 
+  const effectiveDiscountPercentage = Math.min(
+    100,
+    Math.max(0, instance.couponDiscountPercentage || 0)
+  );
+  const effectiveHourlyRatePaise = Math.round(
+    hourlyRatePaise * (1 - effectiveDiscountPercentage / 100)
+  );
+
   // If billing has not started yet (e.g. still PROVISIONING or PENDING), usage is 0
   if (!instance.billingStartedAt) {
     return {
@@ -127,6 +136,7 @@ export function calculateInstanceUsage(
       planId: instance.planId,
       planName,
       hourlyRatePaise,
+      effectiveHourlyRatePaise,
       billableSeconds: 0,
       billableHours: 0,
       usageAmountPaise: 0,
@@ -134,7 +144,7 @@ export function calculateInstanceUsage(
       backupSeconds: 0,
       backupAmountPaise: 0,
       couponCode: instance.couponCode,
-      couponDiscountPercentage: instance.couponDiscountPercentage || 0,
+      couponDiscountPercentage: effectiveDiscountPercentage,
       discountPaise: 0,
       subtotalPaise: 0,
       totalPaise: 0,
@@ -190,11 +200,7 @@ export function calculateInstanceUsage(
   }
 
   const grossSubtotalPaise = usageAmountPaise + backupAmountPaise;
-  const couponDiscountPercentage = Math.min(
-    100,
-    Math.max(0, instance.couponDiscountPercentage || 0)
-  );
-  const discountPaise = Math.round((grossSubtotalPaise * couponDiscountPercentage) / 100);
+  const discountPaise = Math.round((grossSubtotalPaise * effectiveDiscountPercentage) / 100);
   const totalPaise = Math.max(0, grossSubtotalPaise - discountPaise);
 
   return {
@@ -203,6 +209,7 @@ export function calculateInstanceUsage(
     planId: instance.planId,
     planName,
     hourlyRatePaise,
+    effectiveHourlyRatePaise,
     billableSeconds,
     billableHours,
     usageAmountPaise,
@@ -210,7 +217,7 @@ export function calculateInstanceUsage(
     backupSeconds,
     backupAmountPaise,
     couponCode: instance.couponCode,
-    couponDiscountPercentage,
+    couponDiscountPercentage: effectiveDiscountPercentage,
     discountPaise,
     subtotalPaise: grossSubtotalPaise,
     totalPaise,
@@ -496,9 +503,9 @@ export async function generateMonthlyInvoice(
         backupAmountPaise: calc.backupAmountPaise,
         discountPaise: discount,
         subtotalPaise: itemTotal,
-        description: `${calc.planName} Database: ${calc.billableHours.toFixed(1)} hrs @ ${formatPaiseToRupees(calc.hourlyRatePaise)}/hr${
-          calc.backupAmountPaise > 0 ? ` + Backup: ${formatPaiseToRupees(calc.backupAmountPaise)}` : ''
-        }${discount > 0 ? ` (Coupon: -${formatPaiseToRupees(discount)})` : ''}`,
+        description: `${calc.planName} Database: ${calc.billableHours.toFixed(1)} hrs @ ${formatPaiseToRupees(calc.effectiveHourlyRatePaise)}/hr${
+          calc.couponDiscountPercentage > 0 ? ` (Base: ${formatPaiseToRupees(calc.hourlyRatePaise)}/hr, -${calc.couponDiscountPercentage}% Coupon: -${formatPaiseToRupees(discount)})` : ''
+        }${calc.backupAmountPaise > 0 ? ` + Backup: ${formatPaiseToRupees(calc.backupAmountPaise)}` : ''}`,
       });
 
       subtotalPaise += itemSubtotal;

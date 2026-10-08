@@ -276,11 +276,11 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
                   {appliedCoupon ? (
                     <div>
                       <span className="text-xs line-through text-[var(--text-muted)] mr-1.5 font-mono">
-                        {formatPaiseToRupees(selectedPlan.hourlyRatePaise)}/hr
+                        {formatPaiseToRupees(PLANS.shared.hourlyRatePaise)}/hr
                       </span>
                       <span className="text-xs font-mono font-bold text-[var(--text-strong)]">
                         {formatPaiseToRupees(
-                          Math.round(selectedPlan.hourlyRatePaise * (1 - appliedCoupon.discountPercentage / 100))
+                          Math.round(PLANS.shared.hourlyRatePaise * (1 - appliedCoupon.discountPercentage / 100))
                         )}/hour
                       </span>
                       <span className="block text-[10px] font-mono text-[var(--text-muted)]">
@@ -288,7 +288,9 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
                       </span>
                     </div>
                   ) : (
-                    <span className="text-xs font-mono font-bold text-[var(--text-strong)]">₹1/hour</span>
+                    <span className="text-xs font-mono font-bold text-[var(--text-strong)]">
+                      {formatPaiseToRupees(PLANS.shared.hourlyRatePaise)}/hour
+                    </span>
                   )}
                 </div>
               </div>
@@ -322,7 +324,27 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
                     ON-DEMAND
                   </span>
                 </div>
-                <span className="text-xs font-mono font-bold text-[var(--text-muted)]">₹8/hour</span>
+                <div className="text-right">
+                  {appliedCoupon ? (
+                    <div>
+                      <span className="text-xs line-through text-[var(--text-muted)] mr-1.5 font-mono">
+                        {formatPaiseToRupees(PLANS.dedicated.hourlyRatePaise)}/hr
+                      </span>
+                      <span className="text-xs font-mono font-bold text-[var(--text-strong)]">
+                        {formatPaiseToRupees(
+                          Math.round(PLANS.dedicated.hourlyRatePaise * (1 - appliedCoupon.discountPercentage / 100))
+                        )}/hour
+                      </span>
+                      <span className="block text-[10px] font-mono text-[var(--text-muted)]">
+                        ({appliedCoupon.discountPercentage}% off applied)
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-mono font-bold text-[var(--text-muted)]">
+                      {formatPaiseToRupees(PLANS.dedicated.hourlyRatePaise)}/hour
+                    </span>
+                  )}
+                </div>
               </div>
               <p className="text-xs text-[var(--text-secondary)] mb-3">
                 Production workloads requiring dedicated managed compute.
