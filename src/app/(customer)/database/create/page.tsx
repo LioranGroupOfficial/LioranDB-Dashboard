@@ -60,20 +60,20 @@ export default async function CreateInstancePage() {
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t border-[var(--border)]">
             <Link
               href="/dashboard"
-              className="btn-secondary text-xs py-2 px-3.5 inline-flex items-center gap-1.5"
+              className="btn-secondary text-xs py-2.5 sm:py-2 px-3.5 inline-flex items-center justify-center gap-1.5 w-full sm:w-auto text-center"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
               <span>Dashboard</span>
             </Link>
 
             <Link
               href="/database"
-              className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5"
+              className="btn-primary text-xs py-2.5 sm:py-2 px-4 inline-flex items-center justify-center gap-1.5 w-full sm:w-auto text-center"
             >
-              <Database className="w-3.5 h-3.5" />
+              <Database className="w-3.5 h-3.5 shrink-0" />
               <span>Manage Databases ({activeDatabasesCount}/2)</span>
             </Link>
           </div>
@@ -85,8 +85,8 @@ export default async function CreateInstancePage() {
   // 2. Check if 0 dedicated hosting servers are available
   if (availableUnassignedNodes.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto py-8 space-y-6">
-        <div className="card p-6 sm:p-8 space-y-6">
+      <div className="max-w-2xl mx-auto py-8 space-y-6 px-3 sm:px-0">
+        <div className="card p-5 sm:p-8 space-y-6">
           <div className="flex items-start gap-3.5">
             <div className="w-10 h-10 rounded-[8px] bg-[var(--surface-soft)] border border-[var(--border-strong)] flex items-center justify-center shrink-0">
               <Server className="w-5 h-5 text-[var(--text-strong)]" />
@@ -104,25 +104,25 @@ export default async function CreateInstancePage() {
           <div className="p-4 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border)] text-xs text-[var(--text-secondary)] space-y-2">
             <p className="font-semibold text-[var(--text-strong)]">Request a Dedicated Server:</p>
             <p>
-              Please mail <strong className="text-[var(--text-strong)] font-mono">{SUPPORT_CONTACT_EMAIL}</strong> to provision and bring a new dedicated hosting server online for your account.
+              Please mail <strong className="text-[var(--text-strong)] font-mono break-all">{SUPPORT_CONTACT_EMAIL}</strong> to provision and bring a new dedicated hosting server online for your account.
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t border-[var(--border)]">
             <Link
               href="/dashboard"
-              className="btn-secondary text-xs py-2 px-3.5 inline-flex items-center gap-1.5"
+              className="btn-secondary text-xs py-2.5 sm:py-2 px-3.5 inline-flex items-center justify-center gap-1.5 w-full sm:w-auto text-center"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
               <span>Back to Dashboard</span>
             </Link>
 
             <a
               href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=Dedicated%20Database%20Server%20Allocation%20Request`}
-              className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5"
+              className="btn-primary text-xs py-2.5 sm:py-2 px-4 inline-flex items-center justify-center gap-1.5 w-full sm:w-auto text-center"
             >
-              <Mail className="w-3.5 h-3.5" />
-              <span>Mail {SUPPORT_CONTACT_EMAIL}</span>
+              <Mail className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Mail {SUPPORT_CONTACT_EMAIL}</span>
             </a>
           </div>
         </div>
