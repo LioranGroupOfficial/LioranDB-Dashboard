@@ -213,18 +213,41 @@ export default function CreateInstancePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Shared Plan */}
+            {/* Shared Plan - Self Service */}
             <div
               onClick={() => setSelectedPlanId('shared')}
-              className={`p-4 rounded-xl border cursor-pointer transition-all ${
+              className={`p-4 rounded-[10px] border-2 cursor-pointer transition-all ${
                 selectedPlanId === 'shared'
-                  ? 'border-[var(--primary)] bg-[var(--primary)]/5 ring-1 ring-[var(--primary)]'
-                  : 'border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--text-muted)]'
+                  ? 'border-[var(--primary)] bg-[var(--surface)] shadow-xs ring-1 ring-[var(--primary)]'
+                  : 'border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--hairline-strong)]'
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm text-[var(--text-primary)]">Shared</span>
-                <span className="text-xs font-mono font-bold text-[var(--primary)]">₹1/hour</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-[var(--text-primary)]">Shared</span>
+                  <span className="badge badge-default text-[9px] py-0 px-1.5">
+                    SELF-SERVICE
+                  </span>
+                </div>
+                <div className="text-right">
+                  {appliedCoupon ? (
+                    <div>
+                      <span className="text-xs line-through text-[var(--text-muted)] mr-1.5 font-mono">
+                        {formatPaiseToRupees(selectedPlan.hourlyRatePaise)}/hr
+                      </span>
+                      <span className="text-xs font-mono font-bold text-emerald-400">
+                        {formatPaiseToRupees(
+                          Math.round(selectedPlan.hourlyRatePaise * (1 - appliedCoupon.discountPercentage / 100))
+                        )}/hour
+                      </span>
+                      <span className="block text-[10px] font-mono text-emerald-400 font-semibold">
+                        ({appliedCoupon.discountPercentage}% off applied)
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-mono font-bold text-[var(--primary)]">₹1/hour</span>
+                  )}
+                </div>
               </div>
               <p className="text-xs text-[var(--text-secondary)] mb-3">
                 Developers, MVPs, prototypes, small applications, and testing.
@@ -249,58 +272,46 @@ export default function CreateInstancePage() {
               </div>
             </div>
 
-            {/* Dedicated Plan */}
+            {/* Dedicated Plan - Disabled for self-service, Contact via email */}
             <div
-              onClick={() => setSelectedPlanId('dedicated')}
-              className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                selectedPlanId === 'dedicated'
-                  ? 'border-[var(--primary)] bg-[var(--primary)]/5 ring-1 ring-[var(--primary)]'
-                  : 'border-[var(--border)] bg-[var(--surface-card)] hover:border-[var(--text-muted)]'
-              }`}
+              className="p-4 rounded-[10px] border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)]/60 opacity-80 cursor-not-allowed select-none relative"
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-sm text-[var(--text-primary)]">Dedicated</span>
-                <span className="text-xs font-mono font-bold text-[var(--primary)]">₹8/hour</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-[var(--text-primary)]">Dedicated</span>
+                  <span className="badge badge-default text-[9px] py-0 px-1.5">
+                    ON-DEMAND
+                  </span>
+                </div>
+                <span className="text-xs font-mono font-bold text-[var(--text-muted)]">₹8/hour</span>
               </div>
               <p className="text-xs text-[var(--text-secondary)] mb-3">
                 Production workloads requiring dedicated managed compute.
               </p>
+              <div className="p-3 rounded-[7px] bg-[var(--surface)] border border-[var(--border)] mb-3 text-xs space-y-2">
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  Dedicated instances are provisioned on demand. Please contact our team via email for dedicated deployment.
+                </p>
+                <a
+                  href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=Dedicated%20Instance%20Provisioning%20Inquiry`}
+                  className="btn btn-secondary text-xs py-1 px-2.5 inline-flex items-center gap-1.5 font-semibold"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Contact: {SUPPORT_CONTACT_EMAIL}</span>
+                </a>
+              </div>
               <div className="space-y-1 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
                 <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <Check className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   <span>Dedicated managed database instance</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <Check className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   <span>Dedicated compute throughput</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span>Custom production capacity</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span>No backups by default</span>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* High Capacity Notice */}
-          <div className="p-3.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-between text-xs">
-            <div>
-              <span className="font-semibold text-[var(--text-primary)]">High Capacity Enterprise (₹250/hour): </span>
-              <span className="text-[var(--text-muted)]">
-                For high-throughput and specialized workloads.
-              </span>
-            </div>
-            <a
-              href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=High%20Capacity%20Instance%20Inquiry`}
-              className="btn btn-secondary text-xs inline-flex items-center gap-1 shrink-0 ml-3"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              <span>Contact LioranDB</span>
-            </a>
           </div>
         </div>
 
@@ -309,7 +320,7 @@ export default function CreateInstancePage() {
           <label className="block text-sm font-semibold text-[var(--text-primary)]">
             3. Optional Managed Backups
           </label>
-          <label className="flex items-start gap-3 p-3.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] cursor-pointer">
+          <label className="flex items-start gap-3 p-3.5 rounded-[7px] bg-[var(--surface-2)] border border-[var(--border)] cursor-pointer">
             <input
               type="checkbox"
               className="mt-0.5"
@@ -335,7 +346,7 @@ export default function CreateInstancePage() {
           <div className="flex gap-2">
             <input
               type="text"
-              className="input uppercase font-mono text-xs flex-1"
+              className="input-field uppercase font-mono text-xs flex-1"
               placeholder="e.g. LAUNCH20"
               value={couponCode}
               onChange={(e) => setCouponCode(e.target.value)}
@@ -351,12 +362,19 @@ export default function CreateInstancePage() {
           </div>
 
           {appliedCoupon && (
-            <div className="p-2.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-mono">
-              ✓ Coupon <strong>{appliedCoupon.code}</strong> applied: {appliedCoupon.discountPercentage}% discount on accumulated charges.
+            <div className="p-2.5 rounded-[7px] bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-mono flex items-center justify-between">
+              <div>
+                ✓ Coupon <strong>{appliedCoupon.code}</strong> applied: {appliedCoupon.discountPercentage}% discount on hourly rate.
+              </div>
+              <span className="font-bold text-emerald-300 ml-2">
+                New Rate: {formatPaiseToRupees(
+                  Math.round(selectedPlan.hourlyRatePaise * (1 - appliedCoupon.discountPercentage / 100))
+                )}/hr
+              </span>
             </div>
           )}
           {couponError && (
-            <div className="p-2.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400">
+            <div className="p-2.5 rounded-[7px] bg-rose-500/10 border border-rose-500/20 text-xs text-rose-400">
               {couponError}
             </div>
           )}
@@ -368,32 +386,48 @@ export default function CreateInstancePage() {
             5. Order Review
           </label>
 
-          <div className="space-y-2 text-xs bg-[var(--surface-2)] p-4 rounded-lg border border-[var(--border)]">
+          <div className="space-y-2 text-xs bg-[var(--surface-2)] p-4 rounded-[7px] border border-[var(--border)]">
             <div className="flex justify-between py-1 border-b border-[var(--border)]">
               <span className="text-[var(--text-muted)]">Instance Name</span>
               <span className="font-mono text-[var(--text-primary)]">{instanceName || '—'}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-[var(--border)]">
-              <span className="text-[var(--text-muted)]">Plan & Hourly Rate</span>
+              <span className="text-[var(--text-muted)]">Plan</span>
               <span className="font-medium text-[var(--text-primary)]">
-                {selectedPlan.name} ({formatPaiseToRupees(selectedPlan.hourlyRatePaise)}/hr)
+                {selectedPlan.name}
               </span>
             </div>
+            <div className="flex justify-between py-1 border-b border-[var(--border)]">
+              <span className="text-[var(--text-muted)]">Base Hourly Rate</span>
+              <span className={`font-mono ${appliedCoupon ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
+                {formatPaiseToRupees(selectedPlan.hourlyRatePaise)}/hr
+              </span>
+            </div>
+            {appliedCoupon && (
+              <>
+                <div className="flex justify-between py-1 border-b border-[var(--border)] text-emerald-400 font-mono">
+                  <span>Coupon Discount ({appliedCoupon.code})</span>
+                  <span>-{appliedCoupon.discountPercentage}%</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-[var(--border)] font-mono text-emerald-400 font-bold">
+                  <span>Effective Hourly Rate</span>
+                  <span>
+                    {formatPaiseToRupees(
+                      Math.round(selectedPlan.hourlyRatePaise * (1 - appliedCoupon.discountPercentage / 100))
+                    )}/hr
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between py-1 border-b border-[var(--border)]">
               <span className="text-[var(--text-muted)]">Managed Backups</span>
               <span className="text-[var(--text-primary)]">
                 {backupEnabled ? 'Enabled (+₹200/month prorated)' : 'Disabled (₹0)'}
               </span>
             </div>
-            {appliedCoupon && (
-              <div className="flex justify-between py-1 border-b border-[var(--border)] text-emerald-400">
-                <span>Promotional Discount</span>
-                <span>-{appliedCoupon.discountPercentage}%</span>
-              </div>
-            )}
             <div className="flex justify-between py-1 text-sm font-semibold text-[var(--text-primary)] pt-2">
               <span>Upfront Payment Due Now</span>
-              <span className="text-emerald-400">₹0.00 (Postpaid)</span>
+              <span className="text-emerald-400 font-mono">₹0.00 (Postpaid)</span>
             </div>
           </div>
 
