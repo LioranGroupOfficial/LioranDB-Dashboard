@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin';
+import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
+import { encrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
 
@@ -31,6 +33,14 @@ export async function DELETE(
 
     const client = LioranDBAdminClient.forInstance(instance);
     await client.deleteUser(username);
+
+    // Remove user from databaseUsers array to free up slot
+    if (instance.databaseUsers) {
+      instance.databaseUsers = instance.databaseUsers.filter(
+        (u) => u.username.toLowerCase() !== username.toLowerCase()
+      );
+      await instance.save();
+    }
 
     await createAuditLog({
       userId: session.userId,
@@ -73,9 +83,44 @@ export async function POST(
     if (isMasterUser) {
       const rot = await client.rotateRootCredential();
       newPassword = rot.newGeneratedPassword;
+
+      // Re-generate authoritative connection string with actual new password
+      const newUri = buildLioranDBConnectionUri({
+        username: instance.username || 'admin',
+        password: newPassword,
+        host: instance.host,
+        port: instance.port || 27018,
+        database: instance.databaseName || 'default',
+        scheme: instance.port === 443 || instance.port === 8443 ? 'liorandb+https' : 'liorandb',
+        tls: instance.port === 443 || instance.port === 8443,
+        transport: 'grpc',
+      });
+
+      instance.encryptedConnectionUri = encrypt(newUri);
+      instance.encryptedControlPlaneCredential = encrypt(newPassword);
+      instance.rootRotatedAt = new Date();
+      instance.lastCredentialRotationAt = new Date();
+
+      if (instance.databaseUsers) {
+        const u = instance.databaseUsers.find((dbu) => dbu.username.toLowerCase() === username.toLowerCase());
+        if (u) {
+          u.encryptedPassword = encrypt(newPassword);
+          u.updatedAt = new Date();
+        }
+      }
+      await instance.save();
     } else {
       const res = await client.resetUserPassword(username);
       newPassword = res.newGeneratedPassword;
+
+      if (instance.databaseUsers) {
+        const u = instance.databaseUsers.find((dbu) => dbu.username.toLowerCase() === username.toLowerCase());
+        if (u) {
+          u.encryptedPassword = encrypt(newPassword);
+          u.updatedAt = new Date();
+        }
+        await instance.save();
+      }
     }
 
     await createAuditLog({
@@ -91,7 +136,7 @@ export async function POST(
       username,
       generatedPassword: newPassword,
       password: newPassword,
-      message: 'Password reset successfully. Copy this new password now; it will not be displayed again.',
+      message: 'Password reset successfully.',
     });
   } catch (error: unknown) {
     return createApiError(error);

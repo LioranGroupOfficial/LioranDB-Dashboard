@@ -19,6 +19,7 @@ export interface IDatabaseUser {
   username: string;
   role?: string;
   status?: 'ACTIVE' | 'DISABLED';
+  encryptedPassword?: string;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -80,6 +81,7 @@ const DatabaseUserSchema = new Schema<IDatabaseUser>(
     username: { type: String, required: true, trim: true },
     role: { type: String, default: 'readWrite', trim: true },
     status: { type: String, enum: ['ACTIVE', 'DISABLED'], default: 'ACTIVE' },
+    encryptedPassword: { type: String },
     createdAt: { type: Date, required: true, default: () => new Date() },
     updatedAt: { type: Date, default: () => new Date() },
   },

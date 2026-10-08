@@ -500,8 +500,11 @@ export async function provisionInstance(
   const hourlyRatePaise = plan?.hourlyRatePaise || (instance.planId === 'shared' ? 100 : 800);
   const backupMonthlyPaise = instance.backupEnabled ? BACKUP_MONTHLY_PAISE : 0;
 
-  // 3. Store encrypted native connection URI
+  // 3. Store encrypted native connection URI and admin password
   instance.encryptedConnectionUri = encrypt(deploymentResult.nativeConnectionUri);
+  if (deploymentResult.generatedPassword) {
+    instance.encryptedControlPlaneCredential = encrypt(deploymentResult.generatedPassword);
+  }
   instance.status = 'ACTIVE';
   instance.planName = plan?.name || 'Dedicated';
   instance.hourlyRatePaise = hourlyRatePaise;
@@ -521,8 +524,25 @@ export async function provisionInstance(
     instance.backupStartedAt = now;
   }
 
+  const adminEncryptedPassword = deploymentResult.generatedPassword
+    ? encrypt(deploymentResult.generatedPassword)
+    : undefined;
+
   if (!instance.databaseUsers || instance.databaseUsers.length === 0) {
-    instance.databaseUsers = [{ username, role: 'admin', status: 'ACTIVE', createdAt: now }];
+    instance.databaseUsers = [
+      {
+        username,
+        role: 'admin',
+        status: 'ACTIVE',
+        encryptedPassword: adminEncryptedPassword,
+        createdAt: now,
+      },
+    ];
+  } else {
+    const adminUser = instance.databaseUsers.find((u) => u.username === username);
+    if (adminUser && adminEncryptedPassword) {
+      adminUser.encryptedPassword = adminEncryptedPassword;
+    }
   }
 
   await instance.save();

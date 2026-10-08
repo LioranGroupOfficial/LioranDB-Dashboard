@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin';
-import { generateDatabasePassword } from '@/lib/crypto';
+import { decrypt, encrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
 
@@ -26,12 +26,27 @@ export async function GET(
       }
     }
 
-    const users = (instance.databaseUsers || []).map((u: { username: string; createdAt?: Date }) => ({
-      username: u.username,
-      createdAt: u.createdAt || instance.createdAt,
-    }));
+    const users = (instance.databaseUsers || []).map((u) => {
+      let password = '';
+      if (u.encryptedPassword) {
+        try {
+          password = decrypt(u.encryptedPassword);
+        } catch {}
+      } else if (u.username === instance.username && instance.encryptedControlPlaneCredential) {
+        try {
+          password = decrypt(instance.encryptedControlPlaneCredential);
+        } catch {}
+      }
+      return {
+        username: u.username,
+        role: u.role || 'readWrite',
+        status: u.status || 'ACTIVE',
+        password: password || undefined,
+        createdAt: u.createdAt || instance.createdAt,
+      };
+    });
 
-    return NextResponse.json({ success: true, users });
+    return NextResponse.json({ success: true, users, maxUsers: 5, currentCount: users.length });
   } catch (error: unknown) {
     return createApiError(error);
   }
@@ -71,11 +86,42 @@ export async function POST(
       return NextResponse.json({ error: 'Cannot add users to a terminated instance.' }, { status: 400 });
     }
 
+    // Enforce max 5 users limit
+    const currentUsers = instance.databaseUsers || [];
+    if (currentUsers.length >= 5) {
+      return NextResponse.json(
+        { error: 'Maximum limit of 5 database users reached for this instance. Delete an existing user before creating a new one.' },
+        { status: 400 }
+      );
+    }
+
+    // Check if username already exists
+    if (currentUsers.some((u) => u.username.toLowerCase() === trimmedUsername.toLowerCase())) {
+      return NextResponse.json(
+        { error: `Database user "${trimmedUsername}" already exists.` },
+        { status: 409 }
+      );
+    }
+
     const client = LioranDBAdminClient.forInstance(instance);
     const result = await client.createUser({
       username: trimmedUsername,
       role: 'readWrite',
     });
+
+    // Store encrypted password on the database user record
+    const encryptedPassword = result.generatedPassword
+      ? encrypt(result.generatedPassword)
+      : undefined;
+    if (!instance.databaseUsers) instance.databaseUsers = [];
+    instance.databaseUsers.push({
+      username: trimmedUsername,
+      role: 'readWrite',
+      status: 'ACTIVE',
+      encryptedPassword,
+      createdAt: new Date(),
+    });
+    await instance.save();
 
     await createAuditLog({
       userId: session.userId,
@@ -90,7 +136,7 @@ export async function POST(
       username: result.username,
       generatedPassword: result.generatedPassword,
       password: result.generatedPassword,
-      message: 'Database user created. Copy this password now; it will not be displayed again.',
+      message: 'Database user created successfully.',
     });
   } catch (error: unknown) {
     return createApiError(error);

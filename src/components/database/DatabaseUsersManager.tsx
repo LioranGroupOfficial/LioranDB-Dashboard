@@ -13,10 +13,15 @@ import {
   Loader2,
   X,
   ShieldAlert,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
-interface DatabaseUser {
+export interface DatabaseUser {
   username: string;
+  role?: string;
+  status?: string;
+  password?: string;
   createdAt: string | Date;
 }
 
@@ -38,6 +43,10 @@ export default function DatabaseUsersManager({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Password visibility map for user rows
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [copiedUser, setCopiedUser] = useState<string | null>(null);
+
   // One-time password display modal
   const [oneTimeSecret, setOneTimeSecret] = useState<{
     username: string;
@@ -49,6 +58,24 @@ export default function DatabaseUsersManager({
   // User deletion state
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [deletingUser, setDeletingUser] = useState(false);
+
+  const togglePasswordVisibility = (username: string) => {
+    setVisiblePasswords((prev) => ({
+      ...prev,
+      [username]: !prev[username],
+    }));
+  };
+
+  const handleCopyUserPassword = async (username: string, pwd?: string) => {
+    if (!pwd) return;
+    try {
+      await navigator.clipboard.writeText(pwd);
+      setCopiedUser(username);
+      setTimeout(() => setCopiedUser(null), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   const handleCopySecret = async (text: string) => {
     try {
@@ -64,6 +91,11 @@ export default function DatabaseUsersManager({
     e.preventDefault();
     const username = newUsername.trim();
     if (!username) return;
+
+    if (users.length >= 5) {
+      setError('Maximum limit of 5 users per database reached.');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -82,9 +114,17 @@ export default function DatabaseUsersManager({
 
       setShowCreateModal(false);
       setNewUsername('');
-      setUsers((prev) => [...prev, { username, createdAt: new Date().toISOString() }]);
+      const newUser: DatabaseUser = {
+        username,
+        role: 'readWrite',
+        status: 'ACTIVE',
+        password: data.generatedPassword,
+        createdAt: new Date().toISOString(),
+      };
+      setUsers((prev) => [...prev, newUser]);
+      setVisiblePasswords((prev) => ({ ...prev, [username]: true }));
 
-      // Display one-time password modal
+      // Display password modal
       setOneTimeSecret({
         username,
         password: data.generatedPassword,
@@ -113,6 +153,11 @@ export default function DatabaseUsersManager({
       if (!res.ok) {
         throw new Error(data.error || 'Failed to reset password');
       }
+
+      setUsers((prev) =>
+        prev.map((u) => (u.username === username ? { ...u, password: data.generatedPassword } : u))
+      );
+      setVisiblePasswords((prev) => ({ ...prev, [username]: true }));
 
       setOneTimeSecret({
         username,
@@ -152,17 +197,23 @@ export default function DatabaseUsersManager({
   };
 
   const isActive = instanceStatus === 'ACTIVE' || instanceStatus === 'RUNNING';
+  const isMaxUsersReached = users.length >= 5;
 
   return (
     <div className="card space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-sm font-bold text-[var(--text-strong)] flex items-center gap-2">
-            <Users className="w-4 h-4 text-[var(--text-strong)]" />
-            <span>Database Users &amp; Access Control</span>
-          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-sm font-bold text-[var(--text-strong)] flex items-center gap-2">
+              <Users className="w-4 h-4 text-[var(--text-strong)]" />
+              <span>Database Users &amp; Access Control</span>
+            </h2>
+            <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-bold">
+              {users.length}/5 Users
+            </span>
+          </div>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-            Manage authorized database credentials. Passwords are never stored in plaintext and are shown only once upon generation.
+            Manage authenticated users (max 5). You can reveal or copy user passwords directly.
           </p>
         </div>
 
@@ -170,10 +221,12 @@ export default function DatabaseUsersManager({
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
-            className="btn-secondary text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
+            disabled={isMaxUsersReached}
+            title={isMaxUsersReached ? 'Maximum 5 database users reached' : 'Create Database User'}
+            className="btn-secondary text-xs py-1.5 px-3 inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Create Database User</span>
+            <span>{isMaxUsersReached ? 'Limit Reached (5/5)' : 'Create Database User'}</span>
           </button>
         )}
       </div>
@@ -184,52 +237,101 @@ export default function DatabaseUsersManager({
           <thead className="bg-[var(--surface-soft)] border-b border-[var(--border)] text-[var(--text-muted)] uppercase font-mono">
             <tr>
               <th className="py-2.5 px-4 font-medium">Username</th>
+              <th className="py-2.5 px-4 font-medium">Password</th>
               <th className="py-2.5 px-4 font-medium">Created Date</th>
               <th className="py-2.5 px-4 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)] font-mono">
-            {users.map((u) => (
-              <tr key={u.username} className="hover:bg-[var(--surface-soft)] transition-colors">
-                <td className="py-2.5 px-4 font-semibold text-[var(--text-strong)]">
-                  {u.username}
-                </td>
-                <td className="py-2.5 px-4 text-[var(--text-muted)]">
-                  {new Date(u.createdAt).toLocaleDateString('en-IN', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </td>
-                <td className="py-2.5 px-4 text-right">
-                  <div className="inline-flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleResetPassword(u.username)}
-                      disabled={loading || !isActive}
-                      title="Reset and generate new password"
-                      className="btn-secondary text-xs py-1 px-2.5 inline-flex items-center gap-1 disabled:opacity-50"
-                    >
-                      <KeyRound className="w-3 h-3" />
-                      <span>Reset Password</span>
-                    </button>
+            {users.map((u) => {
+              const isVisible = Boolean(visiblePasswords[u.username]);
+              const hasPassword = Boolean(u.password);
+              const isCopied = copiedUser === u.username;
 
-                    <button
-                      type="button"
-                      onClick={() => setUserToDelete(u.username)}
-                      disabled={loading || !isActive}
-                      title="Delete user"
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+              return (
+                <tr key={u.username} className="hover:bg-[var(--surface-soft)] transition-colors">
+                  <td className="py-2.5 px-4 font-semibold text-[var(--text-strong)]">
+                    <div className="flex items-center gap-1.5">
+                      <span>{u.username}</span>
+                      {u.role && (
+                        <span className="text-[10px] text-[var(--text-muted)] font-mono font-normal">
+                          ({u.role})
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Password Column with Show/Hide Toggle & Copy */}
+                  <td className="py-2.5 px-4">
+                    {hasPassword ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-[var(--text-strong)] select-all">
+                          {isVisible ? u.password : '••••••••••••••••'}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => togglePasswordVisibility(u.username)}
+                            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors cursor-pointer"
+                            title={isVisible ? 'Hide password' : 'Show password'}
+                          >
+                            {isVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyUserPassword(u.username, u.password)}
+                            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors cursor-pointer"
+                            title="Copy password"
+                          >
+                            {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-[var(--text-muted)] font-mono">
+                        ••••••••••••••••
+                      </span>
+                    )}
+                  </td>
+
+                  <td className="py-2.5 px-4 text-[var(--text-muted)]">
+                    {new Date(u.createdAt).toLocaleDateString('en-IN', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </td>
+
+                  <td className="py-2.5 px-4 text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleResetPassword(u.username)}
+                        disabled={loading || !isActive}
+                        title="Reset and generate new password"
+                        className="btn-secondary text-xs py-1 px-2.5 inline-flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <KeyRound className="w-3 h-3" />
+                        <span>Reset Password</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setUserToDelete(u.username)}
+                        disabled={loading || !isActive}
+                        title="Delete user"
+                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {users.length === 0 && (
               <tr>
-                <td colSpan={3} className="py-6 text-center text-xs font-sans text-[var(--text-muted)]">
+                <td colSpan={4} className="py-6 text-center text-xs font-sans text-[var(--text-muted)]">
                   No database users configured.
                 </td>
               </tr>

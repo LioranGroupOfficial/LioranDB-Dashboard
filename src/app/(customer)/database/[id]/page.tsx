@@ -17,6 +17,7 @@ import DatabaseCredentials from '@/components/database/DatabaseCredentials';
 import DatabaseUsersManager from '@/components/database/DatabaseUsersManager';
 import CancelInstanceModal from '@/components/database/CancelInstanceModal';
 import { decrypt } from '@/lib/crypto';
+import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
 import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 
@@ -62,6 +63,27 @@ export default async function InstanceDetailsPage({
     }
   }
 
+  // Fallback: If connectionUri has placeholder or missing password, decrypt master password
+  if ((!connectionUri || connectionUri.includes('<password>')) && instance.encryptedControlPlaneCredential) {
+    try {
+      const password = decrypt(instance.encryptedControlPlaneCredential);
+      if (password) {
+        connectionUri = buildLioranDBConnectionUri({
+          username: instance.username || 'admin',
+          password,
+          host: instance.host,
+          port: instance.port || 27018,
+          database: instance.databaseName || 'default',
+          scheme: instance.port === 443 || instance.port === 8443 ? 'liorandb+https' : 'liorandb',
+          tls: instance.port === 443 || instance.port === 8443,
+          transport: 'grpc',
+        });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // Calculate current month usage estimate for this instance
   const currentPeriod = getCurrentMonthPeriod();
   const usageEstimate = calculateInstanceUsage(
@@ -83,10 +105,31 @@ export default async function InstanceDetailsPage({
     provisionedAt: instance.provisionedAt?.toISOString(),
   };
 
-  const users = ((instance.databaseUsers || []) as Array<{ username: string; createdAt?: Date | string }>).map((u) => ({
-    username: u.username,
-    createdAt: u.createdAt || instance.createdAt,
-  }));
+  const users = ((instance.databaseUsers || []) as Array<{
+    username: string;
+    role?: string;
+    status?: string;
+    encryptedPassword?: string;
+    createdAt?: Date | string;
+  }>).map((u) => {
+    let password = '';
+    if (u.encryptedPassword) {
+      try {
+        password = decrypt(u.encryptedPassword);
+      } catch {}
+    } else if (u.username === instance.username && instance.encryptedControlPlaneCredential) {
+      try {
+        password = decrypt(instance.encryptedControlPlaneCredential);
+      } catch {}
+    }
+    return {
+      username: u.username,
+      role: u.role || 'readWrite',
+      status: u.status || 'ACTIVE',
+      password: password || undefined,
+      createdAt: u.createdAt || instance.createdAt,
+    };
+  });
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-16">

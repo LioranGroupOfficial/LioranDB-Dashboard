@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check, ExternalLink, ShieldCheck } from 'lucide-react';
+import { Copy, Check, ExternalLink, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 interface DbData {
   id: string;
@@ -23,6 +23,7 @@ interface Props {
 
 export default function DatabaseCredentials({ db }: Props) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [showUri, setShowUri] = useState(false);
 
   async function copyToClipboard(text: string, field: string) {
     try {
@@ -34,9 +35,17 @@ export default function DatabaseCredentials({ db }: Props) {
     }
   }
 
-  const connectionUri =
+  const realConnectionUri =
     db.connectionUri ||
     `liorandb://${encodeURIComponent(db.username)}:<password>@${db.host}:${db.port}/${encodeURIComponent(db.databaseName)}`;
+
+  // Mask the password portion by default
+  const maskedConnectionUri = realConnectionUri.replace(
+    /:(?:[^@/:]+)@/,
+    ':••••••••••••••••@'
+  );
+
+  const displayedUri = showUri ? realConnectionUri : maskedConnectionUri;
 
   return (
     <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-6 space-y-5 shadow-2xs">
@@ -94,39 +103,73 @@ export default function DatabaseCredentials({ db }: Props) {
           <span className="text-xs font-mono uppercase tracking-wider text-[var(--muted)]">
             Connection String URI
           </span>
-          <button
-            type="button"
-            onClick={() => copyToClipboard(connectionUri, 'uri')}
-            className="text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-1 font-medium cursor-pointer"
-          >
-            {copied === 'uri' ? (
-              <>
-                <Check className="w-3.5 h-3.5" />
-                <span>Copied URI</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy URI</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowUri(!showUri)}
+              className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center gap-1 font-medium cursor-pointer transition-colors"
+            >
+              {showUri ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5" />
+                  <span>Hide URL</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Show URL</span>
+                </>
+              )}
+            </button>
+
+            <span className="text-[var(--border)]">•</span>
+
+            <button
+              type="button"
+              onClick={() => copyToClipboard(realConnectionUri, 'uri')}
+              className="text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-1 font-medium cursor-pointer"
+            >
+              {copied === 'uri' ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Copied URI</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy URI</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="p-3.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] font-mono text-xs text-[var(--text-primary)] break-all select-all flex items-center justify-between gap-3">
-          <span className="flex-1">{connectionUri}</span>
-          <button
-            type="button"
-            onClick={() => copyToClipboard(connectionUri, 'uri')}
-            className="p-1.5 rounded bg-[var(--surface-card)] hover:bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border)] transition-colors shrink-0 cursor-pointer"
-            title="Copy URI"
-          >
-            {copied === 'uri' ? <Check className="w-3.5 h-3.5 text-[var(--text-primary)]" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
+          <span className="flex-1">{displayedUri}</span>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowUri(!showUri)}
+              className="p-1.5 rounded bg-[var(--surface-card)] hover:bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border)] transition-colors cursor-pointer"
+              title={showUri ? 'Hide password in URI' : 'Show full password in URI'}
+            >
+              {showUri ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => copyToClipboard(realConnectionUri, 'uri')}
+              className="p-1.5 rounded bg-[var(--surface-card)] hover:bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border)] transition-colors cursor-pointer"
+              title="Copy URI with real password"
+            >
+              {copied === 'uri' ? <Check className="w-3.5 h-3.5 text-[var(--text-primary)]" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
 
         <p className="text-[11px] text-[var(--muted)]">
-          Replace <code className="text-[var(--primary)] font-mono">&lt;password&gt;</code> with your database user&apos;s generated password.
+          {showUri
+            ? 'Connection string includes your live authenticated database password.'
+            : 'Password hidden for security. Click "Show URL" or copy directly to use with your LioranDB or MongoDB client.'}
         </p>
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Check,
   ArrowRight,
@@ -22,6 +23,8 @@ interface Props {
 }
 
 export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }: Props) {
+  const router = useRouter();
+
   // Form states
   const [instanceName, setInstanceName] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState<'shared' | 'dedicated'>('shared');
@@ -36,16 +39,6 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [createdResult, setCreatedResult] = useState<{
-    id: string;
-    name: string;
-    username: string;
-    password?: string;
-    host: string;
-    port: number;
-    databaseName: string;
-  } | null>(null);
 
   const selectedPlan = PLANS[selectedPlanId];
 
@@ -79,7 +72,7 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
     }
   }
 
-  // Create instance
+  // Create instance and directly redirect to database details
   async function handleCreateInstance(e: React.FormEvent) {
     e.preventDefault();
     if (!instanceName.trim()) {
@@ -106,86 +99,19 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
         throw new Error(data.error || 'Failed to create instance');
       }
 
-      setCreatedResult(data.instance);
+      // Directly redirect user to the created database details page
+      const targetId = data.instance?.id || data.instance?._id;
+      if (targetId) {
+        router.push(`/database/${targetId}`);
+        router.refresh();
+      } else {
+        router.push('/database');
+        router.refresh();
+      }
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Creation failed');
-    } finally {
       setLoading(false);
     }
-  }
-
-  function handleCopyPassword(pwd: string) {
-    navigator.clipboard.writeText(pwd);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  // If successfully created, show credentials modal
-  if (createdResult) {
-    return (
-      <div className="max-w-2xl mx-auto py-8 space-y-6 animate-in fade-in zoom-in-95 duration-150">
-        <div className="card space-y-6 border-[var(--border-strong)]">
-          <div className="flex items-center gap-3 text-[var(--text-strong)]">
-            <CheckCircle2 className="w-7 h-7 shrink-0 text-[var(--text-strong)]" />
-            <div>
-              <h1 className="text-xl font-bold text-[var(--text-strong)]">
-                Database Instance Active
-              </h1>
-              <p className="text-xs text-[var(--text-secondary)]">
-                Your managed cluster <strong className="text-[var(--text-strong)] font-mono">{createdResult.name}</strong> is running and ready for client connections.
-              </p>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border)] text-xs text-[var(--text-secondary)] space-y-2">
-            <p className="font-bold text-[var(--text-strong)]">
-              Master Database Password Generated
-            </p>
-            <p>
-              Copy this password now. For security reasons, LioranDB hashes database credentials and you will not be able to view it in plaintext again.
-            </p>
-            {createdResult.password && (
-              <div className="flex items-center justify-between gap-2 p-2.5 bg-[var(--surface)] rounded-[5px] border border-[var(--border)] font-mono text-sm text-[var(--text-strong)] font-bold">
-                <span className="select-all break-all">{createdResult.password}</span>
-                <button
-                  type="button"
-                  onClick={() => handleCopyPassword(createdResult.password!)}
-                  className="btn-secondary text-xs py-1 px-2.5 inline-flex items-center gap-1 shrink-0"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>{copied ? 'Copied!' : 'Copy'}</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2 text-xs font-mono bg-[var(--surface-soft)] p-4 rounded-[7px] border border-[var(--border)]">
-            <div className="flex justify-between py-1 border-b border-[var(--border)]">
-              <span className="text-[var(--text-muted)]">Host / Endpoint</span>
-              <span className="text-[var(--text-strong)] font-bold">{createdResult.host}:{createdResult.port}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b border-[var(--border)]">
-              <span className="text-[var(--text-muted)]">Database Name</span>
-              <span className="text-[var(--text-strong)]">{createdResult.databaseName}</span>
-            </div>
-            <div className="flex justify-between py-1">
-              <span className="text-[var(--text-muted)]">Master User</span>
-              <span className="text-[var(--text-strong)]">{createdResult.username}</span>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Link
-              href={`/database/${createdResult.id}`}
-              className="btn-primary text-xs py-2 px-5 inline-flex items-center gap-1.5"
-            >
-              <span>Open Database Control Plane</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (
