@@ -8,7 +8,6 @@ import {
   Database,
   Activity,
   CreditCard,
-  LifeBuoy,
   Settings,
   LogOut,
   PanelLeftClose,
@@ -26,9 +25,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Databases', href: '/database', icon: Database },
-  { label: 'Usage', href: '/usage', icon: Activity },
   { label: 'Billing & Invoices', href: '/billing', icon: CreditCard },
-  { label: 'Support', href: '/support', icon: LifeBuoy },
   { label: 'Account', href: '/account', icon: Settings },
 ];
 
