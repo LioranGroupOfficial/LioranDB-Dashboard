@@ -109,6 +109,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // If 0 hosting nodes exist in total, automatically seed the default development node
+    const totalNodesCount = await HostingNode.countDocuments();
+    if (totalNodesCount === 0) {
+      try {
+        await HostingNode.create({
+          name: 'Localhost Node (127.0.0.1)',
+          slug: 'localhost-node-01',
+          region: 'Localhost / Development',
+          dbUrl: '127.0.0.1',
+          port: 27018,
+          protocol: 'http',
+          httpPort: 27018,
+          grpcUrl: '127.0.0.1',
+          grpcPort: 27019,
+          controlPlaneEndpoint: 'http://127.0.0.1:27018',
+          allocationMode: 'DEDICATED',
+          status: 'AVAILABLE',
+          healthStatus: 'HEALTHY',
+          maxCapacity: 1,
+          currentAssignedCount: 0,
+          defaultRootUsername: 'admin',
+          isDefault: true,
+          notes: 'Auto-seeded default development node',
+        });
+      } catch {
+        // Ignore if concurrent create
+      }
+    }
+
     // Allocate a dedicated active hosting node (1 server per user / database instance)
     const activeInstances = await ManagedDatabase.find({
       status: { $nin: ['TERMINATED', 'DELETED'] },
@@ -122,7 +151,7 @@ export async function POST(req: NextRequest) {
       .filter((id): id is NonNullable<typeof id> => Boolean(id));
 
     const availableNodes = await HostingNode.find({
-      status: 'ACTIVE',
+      status: { $in: ['AVAILABLE', 'ACTIVE'] },
       _id: { $nin: occupiedNodeIds },
     }).lean();
 
@@ -221,13 +250,15 @@ export async function POST(req: NextRequest) {
       if (appliedCouponCode) {
         await incrementCouponRedemption(appliedCouponCode);
       }
-    } catch (provErr) {
+    } catch (provErr: unknown) {
       console.error('[Provisioning Error]', provErr);
       instance.status = 'FAILED';
       await instance.save();
+      const errMessage = provErr instanceof Error ? provErr.message : 'Instance provisioning encountered an infrastructure error. Please try again or contact support.';
+      const statusCode = errMessage.includes('No dedicated database hosting servers') ? 400 : 500;
       return NextResponse.json(
-        { error: 'Instance provisioning encountered an infrastructure error. Please try again or contact support.' },
-        { status: 500 }
+        { error: errMessage, contactEmail: 'support@liorandb.com' },
+        { status: statusCode }
       );
     }
 

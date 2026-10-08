@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
           onboardingStage: 'ACTIVE',
         },
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {

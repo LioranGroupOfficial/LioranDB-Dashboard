@@ -123,7 +123,7 @@ export async function creditWallet(params: CreditWalletParams): Promise<{
         lifetimeCreditsAddedPaise: integerPaise,
       },
     },
-    { new: true, session: session || null }
+    { returnDocument: 'after', session: session || null }
   );
 
   if (!updatedWallet) {
@@ -233,7 +233,7 @@ export async function debitWallet(params: DebitWalletParams): Promise<{
         lifetimeCreditsUsedPaise: integerPaise,
       },
     },
-    { new: true, session: session || null }
+    { returnDocument: 'after', session: session || null }
   );
 
   if (!updatedWallet) {
@@ -336,7 +336,7 @@ export async function refundWallet(params: RefundWalletParams): Promise<{
         lifetimeCreditsUsedPaise: -integerPaise, // reduce used metric
       },
     },
-    { new: true, session: session || null }
+    { returnDocument: 'after', session: session || null }
   );
 
   if (!updatedWallet) {
@@ -428,7 +428,7 @@ export async function adminAdjustWallet(params: AdminAdjustParams): Promise<{
           : { lifetimeCreditsUsedPaise: integerPaise }),
       },
     },
-    { new: true }
+    { returnDocument: 'after' }
   );
 
   if (!updatedWallet) {

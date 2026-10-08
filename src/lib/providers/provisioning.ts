@@ -412,6 +412,35 @@ export async function provisionInstance(
     throw new Error('Database instance not found');
   }
 
+  // If 0 hosting nodes exist in total, automatically seed the default development node
+  const totalNodesCount = await HostingNode.countDocuments();
+  if (totalNodesCount === 0) {
+    try {
+      await HostingNode.create({
+        name: 'Localhost Node (127.0.0.1)',
+        slug: 'localhost-node-01',
+        region: 'Localhost / Development',
+        dbUrl: '127.0.0.1',
+        port: 27018,
+        protocol: 'http',
+        httpPort: 27018,
+        grpcUrl: '127.0.0.1',
+        grpcPort: 27019,
+        controlPlaneEndpoint: 'http://127.0.0.1:27018',
+        allocationMode: 'DEDICATED',
+        status: 'AVAILABLE',
+        healthStatus: 'HEALTHY',
+        maxCapacity: 1,
+        currentAssignedCount: 0,
+        defaultRootUsername: 'admin',
+        isDefault: true,
+        notes: 'Auto-seeded default development node',
+      });
+    } catch {
+      // Ignore if concurrent create
+    }
+  }
+
   // 1. Atomically reserve an available hosting node if not already assigned
   let node: IHostingNode | null = null;
 
@@ -419,7 +448,7 @@ export async function provisionInstance(
     node = await HostingNode.findById(instance.hostingNodeId);
   }
 
-  if (!node) {
+  if (!node || node.status === 'ASSIGNED') {
     // Atomically find and reserve an AVAILABLE node
     node = await HostingNode.findOneAndUpdate(
       {
@@ -432,7 +461,7 @@ export async function provisionInstance(
           currentAssignedCount: 1,
         },
       },
-      { new: true, sort: { isDefault: -1, createdAt: 1 } }
+      { returnDocument: 'after', sort: { isDefault: -1, createdAt: 1 } }
     );
   }
 
