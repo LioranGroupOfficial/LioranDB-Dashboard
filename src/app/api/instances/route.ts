@@ -7,7 +7,7 @@ import { provisionInstance } from '@/lib/providers/provisioning';
 import { reconcileHostingNodes } from '@/lib/providers/reconciliation';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
-import { generateDatabasePassword } from '@/lib/crypto';
+import { generateDatabasePassword, decrypt } from '@/lib/crypto';
 import { CreateInstanceSchema, getZodErrorMessage } from '@/lib/validation/schemas';
 import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import { createApiError } from '@/lib/errors';
@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
 
     // Run provisioning pipeline
     try {
-      await provisionInstance(instance);
+      await provisionInstance(instance, { customerEmail: user.email, initialPassword: masterPassword });
       if (appliedCouponCode) {
         await incrementCouponRedemption(appliedCouponCode);
       }
@@ -287,6 +287,14 @@ export async function POST(req: NextRequest) {
       link: `/database/${instance._id.toString()}`,
     });
 
+    // Decrypt the authoritative live password verified and set on the database instance
+    let actualPassword = masterPassword;
+    if (instance.encryptedControlPlaneCredential) {
+      try {
+        actualPassword = decrypt(instance.encryptedControlPlaneCredential);
+      } catch {}
+    }
+
     return NextResponse.json({
       success: true,
       instance: {
@@ -299,7 +307,7 @@ export async function POST(req: NextRequest) {
         port: instance.port,
         databaseName: instance.databaseName,
         username: masterUsername,
-        password: masterPassword, // returned strictly once upon creation
+        password: actualPassword, // returned strictly once upon creation
         hourlyRatePaise: instance.hourlyRatePaise,
         backupEnabled: instance.backupEnabled,
         billingStartedAt: instance.billingStartedAt,

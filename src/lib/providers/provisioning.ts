@@ -105,10 +105,25 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         };
       }
 
-      // 2. Authoritatively rotate the root database password on the Rust server
-      const rotated = await client.rotateRootCredential();
-      const rootPassword = rotated.newGeneratedPassword;
-      const rootUsername = rotated.rootUsername || 'admin';
+      // 2. Authoritatively rotate or reset the root database password on the Rust server
+      let rootPassword: string;
+      let rootUsername = 'admin';
+
+      if (params.password && params.password.trim()) {
+        try {
+          const resetRes = await client.resetUserPassword('admin', params.password.trim());
+          rootPassword = resetRes.newGeneratedPassword || params.password.trim();
+          rootUsername = resetRes.username || 'admin';
+        } catch {
+          const rotated = await client.rotateRootCredential();
+          rootPassword = rotated.newGeneratedPassword;
+          rootUsername = rotated.rootUsername || 'admin';
+        }
+      } else {
+        const rotated = await client.rotateRootCredential();
+        rootPassword = rotated.newGeneratedPassword;
+        rootUsername = rotated.rootUsername || 'admin';
+      }
 
       // 3. If a distinct customer username was requested, create it on the server
       let activeUsername = rootUsername;
@@ -400,8 +415,10 @@ export const provisioningProvider: LioranProvisioningProvider = new Proxy({} as 
  */
 export async function provisionInstance(
   instanceOrId: string | IManagedDatabase,
-  customerEmail?: string
+  optionsOrEmail?: string | { customerEmail?: string; initialPassword?: string }
 ): Promise<IManagedDatabase> {
+  const customerEmail = typeof optionsOrEmail === 'string' ? optionsOrEmail : optionsOrEmail?.customerEmail;
+  const initialPassword = typeof optionsOrEmail === 'object' ? optionsOrEmail?.initialPassword : undefined;
   await connectToDatabase();
   await reconcileHostingNodes();
 
@@ -476,6 +493,7 @@ export async function provisionInstance(
     customerEmail: customerEmail || 'customer@liorandb.com',
     deploymentName: instance.name,
     username,
+    password: initialPassword,
     host,
     port,
     databaseName,
