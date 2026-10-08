@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
-import { connectToDatabase, User, ManagedDatabase } from '@/lib/db';
+import { connectToDatabase, User, ManagedDatabase, HostingNode } from '@/lib/db';
 import { getPlan, formatPaiseToRupees, formatPaiseToInr, PLANS } from '@/lib/plans';
 import { validateCoupon, incrementCouponRedemption } from '@/lib/billing/coupons';
 import { provisionInstance } from '@/lib/providers/provisioning';
@@ -109,6 +109,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Allocate an active hosting node
+    const availableNodes = await HostingNode.find({ status: 'ACTIVE' }).lean();
+
+    if (availableNodes.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'No database hosting capacity is currently available. Please email support@liorandb.com for this query.',
+          code: 'NO_HOSTING_NODES_AVAILABLE',
+          contactEmail: 'support@liorandb.com',
+        },
+        { status: 400 }
+      );
+    }
+
+    // Select default node if available or the node with the lowest assigned load
+    let selectedNode = availableNodes.find((n) => n.isDefault && n.currentAssignedCount < n.maxCapacity);
+    if (!selectedNode) {
+      const sortedNodes = availableNodes
+        .filter((n) => n.currentAssignedCount < n.maxCapacity)
+        .sort((a, b) => a.currentAssignedCount - b.currentAssignedCount);
+
+      if (sortedNodes.length === 0) {
+        return NextResponse.json(
+          {
+            error: 'All database hosting clusters are currently at maximum capacity. Please email support@liorandb.com for this query.',
+            code: 'HOSTING_CAPACITY_FULL',
+            contactEmail: 'support@liorandb.com',
+          },
+          { status: 400 }
+        );
+      }
+      selectedNode = sortedNodes[0];
+    }
+
     // Check unique name for this customer
     const existing = await ManagedDatabase.findOne({
       customerId: user._id,
@@ -147,12 +181,14 @@ export async function POST(req: NextRequest) {
 
     // Generate initial master user password (returned only once)
     const masterPassword = generateDatabasePassword(24);
-    const masterUsername = 'db_admin';
+    const masterUsername = selectedNode.defaultRootUsername || 'admin';
+    const controlPlaneEndpoint = `${selectedNode.protocol}://${selectedNode.dbUrl}:${selectedNode.httpPort}`;
 
-    // Create ManagedDatabase in PENDING status
+    // Create ManagedDatabase assigned to the selected hosting node
     const instance = await ManagedDatabase.create({
       customerId: user._id,
       userId: user._id,
+      hostingNodeId: selectedNode._id,
       name: name.trim().toLowerCase(),
       planId: plan.id,
       hourlyRatePaise: plan.hourlyRatePaise,
@@ -161,16 +197,25 @@ export async function POST(req: NextRequest) {
       couponCode: appliedCouponCode,
       couponDiscountPercentage,
       status: 'PROVISIONING',
-      host: 'provisioning...',
-      port: 27017,
+      host: selectedNode.dbUrl,
+      port: selectedNode.port,
+      grpcUrl: selectedNode.grpcUrl,
+      grpcPort: selectedNode.grpcPort,
+      controlPlaneEndpoint,
       databaseName: name.trim().toLowerCase().replace(/-/g, '_'),
       username: masterUsername,
+      rootUsername: masterUsername,
       databaseUsers: [
         {
           username: masterUsername,
           createdAt: new Date(),
         },
       ],
+    });
+
+    // Update node assigned count
+    await HostingNode.findByIdAndUpdate(selectedNode._id, {
+      $inc: { currentAssignedCount: 1 },
     });
 
     // Run provisioning pipeline

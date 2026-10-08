@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Database,
+  Server,
   X,
 } from 'lucide-react';
 
@@ -21,6 +22,7 @@ const NAV = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Customers', href: '/admin/customers', icon: Users },
   { label: 'Databases', href: '/admin/databases', icon: Database },
+  { label: 'Hosting', href: '/admin/hosting', icon: Server },
   { label: 'Billing', href: '/admin/billing', icon: CreditCard },
   { label: 'Coupons', href: '/admin/coupons', icon: TicketPercent },
   { label: 'Audit', href: '/admin/audit', icon: Shield },

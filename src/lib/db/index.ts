@@ -17,6 +17,7 @@ export { default as AuditLog } from './models/AuditLog';
 export { default as Notification } from './models/Notification';
 export { default as Wallet } from './models/Wallet';
 export { default as WalletTransaction } from './models/WalletTransaction';
+export { default as HostingNode } from './models/HostingNode';
 
 export type { IUser, UserRole, OnboardingStage, IUserProfile } from './models/User';
 export type { IEmailVerification } from './models/EmailVerification';
@@ -44,3 +45,4 @@ export type {
   WalletTransactionType,
   WalletTransactionCategory,
 } from './models/WalletTransaction';
+export type { IHostingNode, HostingNodeStatus, HostingProtocol } from './models/HostingNode';

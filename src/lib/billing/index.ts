@@ -228,6 +228,7 @@ export interface CustomerMonthEstimate {
 
 /**
  * Calculates estimated month-to-date usage across all customer instances.
+ * Only calculates UNBILLED usage (starting after the latest non-void invoice).
  */
 export async function getCustomerMonthEstimate(
   customerId: string | mongoose.Types.ObjectId,
@@ -236,12 +237,33 @@ export async function getCustomerMonthEstimate(
   await connectToDatabase();
   const period = getCurrentMonthPeriod(referenceDate);
 
+  // Find latest non-void invoice to determine where unbilled usage begins
+  const latestInvoice = await Invoice.findOne({
+    customerId,
+    status: { $in: ['PAID', 'OPEN', 'OVERDUE'] },
+  })
+    .sort({ 'billingPeriod.end': -1 })
+    .lean();
+
+  let unbilledStart = period.start;
+  if (latestInvoice && latestInvoice.billingPeriod?.end) {
+    const lastBilledEnd = new Date(latestInvoice.billingPeriod.end);
+    if (lastBilledEnd.getTime() > unbilledStart.getTime()) {
+      unbilledStart = lastBilledEnd;
+    }
+  }
+
+  const unbilledPeriod: BillingPeriod = {
+    start: unbilledStart,
+    end: referenceDate,
+  };
+
   // Find all instances belonging to customer that were active or terminated during this period
   const instances = await ManagedDatabase.find({
     $and: [
       { $or: [{ customerId }, { userId: customerId }] },
-      { billingStartedAt: { $exists: true, $ne: null, $lte: period.end } },
-      { $or: [{ billingStoppedAt: { $exists: false } }, { billingStoppedAt: null }, { billingStoppedAt: { $gte: period.start } }] },
+      { billingStartedAt: { $exists: true, $ne: null, $lte: unbilledPeriod.end } },
+      { $or: [{ billingStoppedAt: { $exists: false } }, { billingStoppedAt: null }, { billingStoppedAt: { $gte: unbilledPeriod.start } }] },
     ],
   }).lean();
 
@@ -253,7 +275,7 @@ export async function getCustomerMonthEstimate(
   let activeCount = 0;
 
   for (const inst of instances) {
-    const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, period, referenceDate);
+    const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, unbilledPeriod, referenceDate);
     if (calc.billableSeconds > 0 || inst.status === 'ACTIVE' || inst.status === 'RUNNING') {
       instanceCalculations.push(calc);
       totalComputePaise += calc.usageAmountPaise;
@@ -268,7 +290,7 @@ export async function getCustomerMonthEstimate(
 
   return {
     customerId: customerId.toString(),
-    period,
+    period: unbilledPeriod,
     instanceCalculations,
     totalComputePaise,
     totalBackupPaise,
@@ -307,6 +329,7 @@ export interface CustomerLiveUsageSummary {
 
 /**
  * Calculates live real-time accrued unbilled usage for all customers with instances.
+ * Accurately excludes already-billed periods.
  */
 export async function getAllCustomersLiveUsage(referenceDate: Date = new Date()): Promise<CustomerLiveUsageSummary[]> {
   await connectToDatabase();
@@ -322,6 +345,27 @@ export async function getAllCustomersLiveUsage(referenceDate: Date = new Date())
 
     if (instances.length === 0) continue;
 
+    // Find latest non-void invoice to start only from unbilled timestamp
+    const lastInvoice = await Invoice.findOne({
+      customerId: customer._id,
+      status: { $in: ['PAID', 'OPEN', 'OVERDUE'] },
+    })
+      .sort({ 'billingPeriod.end': -1 })
+      .lean();
+
+    let unbilledStart = period.start;
+    if (lastInvoice && lastInvoice.billingPeriod?.end) {
+      const lastBilledEnd = new Date(lastInvoice.billingPeriod.end);
+      if (lastBilledEnd.getTime() > unbilledStart.getTime()) {
+        unbilledStart = lastBilledEnd;
+      }
+    }
+
+    const unbilledPeriod: BillingPeriod = {
+      start: unbilledStart,
+      end: referenceDate,
+    };
+
     let totalComputePaise = 0;
     let totalBackupPaise = 0;
     let totalDiscountPaise = 0;
@@ -329,7 +373,7 @@ export async function getAllCustomersLiveUsage(referenceDate: Date = new Date())
     let activeCount = 0;
 
     const instanceList = instances.map((inst) => {
-      const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, period, referenceDate);
+      const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, unbilledPeriod, referenceDate);
       if (inst.status === 'ACTIVE' || inst.status === 'RUNNING') {
         activeCount++;
       }
@@ -352,11 +396,6 @@ export async function getAllCustomersLiveUsage(referenceDate: Date = new Date())
       };
     });
 
-    const lastInvoice = await Invoice.findOne({ customerId: customer._id })
-      .sort({ createdAt: -1 })
-      .select('invoiceNumber createdAt')
-      .lean();
-
     summaries.push({
       customerId: customer._id.toString(),
       customerName: customer.profile?.fullName || customer.email.split('@')[0],
@@ -377,7 +416,8 @@ export async function getAllCustomersLiveUsage(referenceDate: Date = new Date())
 }
 
 /**
- * Generates an immutable snapshot Invoice for a customer's usage in a given period.
+ * Generates an immutable snapshot Invoice for a customer's unbilled usage.
+ * Automatically starts from the end of the previous non-void invoice to prevent double-billing.
  */
 export async function generateMonthlyInvoice(
   customerId: string | mongoose.Types.ObjectId,
@@ -389,12 +429,38 @@ export async function generateMonthlyInvoice(
     throw new Error(`Customer not found for ID: ${customerId}`);
   }
 
-  // Find instances with activity in the given period
+  // Find latest non-void invoice to guarantee we only bill NEW unbilled hours
+  const latestInvoice = await Invoice.findOne({
+    customerId: user._id,
+    status: { $in: ['PAID', 'OPEN', 'OVERDUE'] },
+  })
+    .sort({ 'billingPeriod.end': -1 })
+    .lean();
+
+  let unbilledStart = period.start;
+  if (latestInvoice && latestInvoice.billingPeriod?.end) {
+    const lastBilledEnd = new Date(latestInvoice.billingPeriod.end);
+    if (lastBilledEnd.getTime() > unbilledStart.getTime()) {
+      unbilledStart = lastBilledEnd;
+    }
+  }
+
+  // If already billed up to or past period.end, nothing new to invoice
+  if (unbilledStart.getTime() >= period.end.getTime()) {
+    return null;
+  }
+
+  const unbilledPeriod: BillingPeriod = {
+    start: unbilledStart,
+    end: period.end,
+  };
+
+  // Find instances with activity in the given unbilled period
   const instances = await ManagedDatabase.find({
     $and: [
       { $or: [{ customerId }, { userId: customerId }] },
-      { billingStartedAt: { $exists: true, $ne: null, $lte: period.end } },
-      { $or: [{ billingStoppedAt: { $exists: false } }, { billingStoppedAt: null }, { billingStoppedAt: { $gte: period.start } }] },
+      { billingStartedAt: { $exists: true, $ne: null, $lte: unbilledPeriod.end } },
+      { $or: [{ billingStoppedAt: { $exists: false } }, { billingStoppedAt: null }, { billingStoppedAt: { $gte: unbilledPeriod.start } }] },
     ],
   }).lean();
 
@@ -406,8 +472,8 @@ export async function generateMonthlyInvoice(
   for (const inst of instances) {
     const calc = calculateInstanceUsage(
       inst as unknown as IManagedDatabase,
-      period,
-      period.end
+      unbilledPeriod,
+      unbilledPeriod.end
     );
     if (calc.billableSeconds > 0) {
       // If active for even a few seconds on a paid plan, ensure at least 1 paise compute
@@ -438,13 +504,13 @@ export async function generateMonthlyInvoice(
     }
   }
 
-  if (lineItems.length === 0) {
+  if (lineItems.length === 0 || totalPaise === 0) {
     return null;
   }
 
   const issueDate = new Date();
   const dueDate = new Date(issueDate.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days payment window
-  const yearMonth = `${period.start.getFullYear()}${String(period.start.getMonth() + 1).padStart(2, '0')}`;
+  const yearMonth = `${unbilledPeriod.start.getFullYear()}${String(unbilledPeriod.start.getMonth() + 1).padStart(2, '0')}`;
   const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
   const invoiceNumber = `INV-${yearMonth}-${randomSuffix}`;
 
@@ -456,8 +522,8 @@ export async function generateMonthlyInvoice(
     customerName,
     customerEmail: user.email,
     billingPeriod: {
-      start: period.start,
-      end: period.end,
+      start: unbilledPeriod.start,
+      end: unbilledPeriod.end,
     },
     issueDate,
     dueDate,

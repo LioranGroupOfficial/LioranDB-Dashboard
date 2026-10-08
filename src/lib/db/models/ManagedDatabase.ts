@@ -68,6 +68,9 @@ export interface IManagedDatabase extends Document {
   terminationReason?: string;
   adminNotes?: string;
   providerDeploymentId?: string;
+  hostingNodeId?: mongoose.Types.ObjectId;
+  grpcUrl?: string;
+  grpcPort?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,6 +90,7 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
   {
     customerId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    hostingNodeId: { type: Schema.Types.ObjectId, ref: 'HostingNode', index: true },
     name: { type: String, required: true, trim: true },
     slug: { type: String, trim: true },
     username: { type: String, trim: true, default: 'admin' },
@@ -95,6 +99,8 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
     lastCredentialRotationAt: { type: Date },
     encryptedControlPlaneCredential: { type: String },
     controlPlaneEndpoint: { type: String },
+    grpcUrl: { type: String },
+    grpcPort: { type: Number },
     credentialVersion: { type: Number, default: 1 },
     serverVersion: { type: String, default: 'LioranDB Engine v2.4.1' },
     serverHealth: { type: String, default: 'HEALTHY' },

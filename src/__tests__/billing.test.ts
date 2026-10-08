@@ -121,4 +121,30 @@ describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
     expect(usage.discountPaise).toBe(72000);
     expect(usage.totalPaise).toBe(72000);
   });
+
+  test('calculateInstanceUsage correctly computes only unbilled incremental delta for partial period', async () => {
+    // Suppose an invoice was generated from 10:00 to 14:00 (4 hours billed).
+    // The next billing period starts at 14:00 and goes to 16:00 (2 hours unbilled).
+    const unbilledPeriod = {
+      start: new Date('2026-04-01T14:00:00.000Z'),
+      end: new Date('2026-04-01T16:00:00.000Z'),
+    };
+    const now = new Date('2026-04-01T16:00:00.000Z');
+
+    const mockRunningInstance = {
+      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d5'),
+      name: 'incremental-db',
+      hourlyRatePaise: 100, // ₹1/hr
+      backupEnabled: false,
+      billingStartedAt: new Date('2026-04-01T10:00:00.000Z'),
+      status: 'ACTIVE' as const,
+    } as unknown as IManagedDatabase;
+
+    const usage = await calculateInstanceUsage(mockRunningInstance, unbilledPeriod, now);
+
+    // Only 2 hours (14:00 to 16:00) should be billed, not the full 6 hours from 10:00
+    expect(usage.billableHours).toBe(2);
+    expect(usage.usageAmountPaise).toBe(200); // 2 * 100 paise = ₹2.00
+    expect(usage.totalPaise).toBe(200);
+  });
 });

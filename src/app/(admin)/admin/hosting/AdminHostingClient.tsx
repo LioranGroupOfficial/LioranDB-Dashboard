@@ -1,0 +1,780 @@
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Server,
+  Plus,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Edit2,
+  Trash2,
+  RotateCw,
+  Database,
+  ExternalLink,
+  Shield,
+  Layers,
+  Network,
+  Cpu,
+  Globe,
+  Radio,
+  Check,
+} from 'lucide-react';
+
+export interface AdminHostingNodeItem {
+  _id: string;
+  name: string;
+  slug: string;
+  region: string;
+  dbUrl: string;
+  port: number;
+  protocol: 'http' | 'https';
+  httpPort: number;
+  grpcUrl: string;
+  grpcPort: number;
+  defaultRootUsername: string;
+  defaultRootPassword?: string;
+  status: 'ACTIVE' | 'DRAINING' | 'MAINTENANCE' | 'DISABLED';
+  maxCapacity: number;
+  currentAssignedCount: number;
+  notes?: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+interface Props {
+  initialNodes: AdminHostingNodeItem[];
+}
+
+export default function AdminHostingClient({ initialNodes }: Props) {
+  const router = useRouter();
+  const [nodes, setNodes] = useState<AdminHostingNodeItem[]>(initialNodes);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [loading, setLoading] = useState(false);
+
+  // Modals
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editingNode, setEditingNode] = useState<AdminHostingNodeItem | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Form State
+  const [formName, setFormName] = useState('');
+  const [formSlug, setFormSlug] = useState('');
+  const [formRegion, setFormRegion] = useState('Asia (Mumbai)');
+  const [formDbUrl, setFormDbUrl] = useState('');
+  const [formPort, setFormPort] = useState(27017);
+  const [formProtocol, setFormProtocol] = useState<'http' | 'https'>('https');
+  const [formHttpPort, setFormHttpPort] = useState(443);
+  const [formGrpcUrl, setFormGrpcUrl] = useState('');
+  const [formGrpcPort, setFormGrpcPort] = useState(50051);
+  const [formRootUser, setFormRootUser] = useState('admin');
+  const [formStatus, setFormStatus] = useState<'ACTIVE' | 'DRAINING' | 'MAINTENANCE' | 'DISABLED'>('ACTIVE');
+  const [formMaxCapacity, setFormMaxCapacity] = useState(50);
+  const [formNotes, setFormNotes] = useState('');
+  const [formIsDefault, setFormIsDefault] = useState(false);
+
+  // Refresh
+  async function refreshNodes() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/hosting');
+      const data = await res.json();
+      if (data.success && data.nodes) {
+        setNodes(data.nodes);
+      }
+      router.refresh();
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Open Add Modal
+  function openAddModal() {
+    setFormName('');
+    setFormSlug('');
+    setFormRegion('Asia (Mumbai)');
+    setFormDbUrl('');
+    setFormPort(27017);
+    setFormProtocol('https');
+    setFormHttpPort(443);
+    setFormGrpcUrl('');
+    setFormGrpcPort(50051);
+    setFormRootUser('admin');
+    setFormStatus('ACTIVE');
+    setFormMaxCapacity(50);
+    setFormNotes('');
+    setFormIsDefault(nodes.length === 0);
+    setAddModalOpen(true);
+  }
+
+  // Open Edit Modal
+  function openEditModal(node: AdminHostingNodeItem) {
+    setEditingNode(node);
+    setFormName(node.name);
+    setFormSlug(node.slug);
+    setFormRegion(node.region);
+    setFormDbUrl(node.dbUrl);
+    setFormPort(node.port);
+    setFormProtocol(node.protocol);
+    setFormHttpPort(node.httpPort);
+    setFormGrpcUrl(node.grpcUrl);
+    setFormGrpcPort(node.grpcPort);
+    setFormRootUser(node.defaultRootUsername);
+    setFormStatus(node.status);
+    setFormMaxCapacity(node.maxCapacity);
+    setFormNotes(node.notes || '');
+    setFormIsDefault(node.isDefault);
+  }
+
+  // Save Node (Create or Update)
+  async function handleSaveNode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setFeedbackMsg(null);
+
+    const payload = {
+      name: formName.trim(),
+      slug: formSlug.trim() || undefined,
+      region: formRegion.trim(),
+      dbUrl: formDbUrl.trim(),
+      port: Number(formPort),
+      protocol: formProtocol,
+      httpPort: Number(formHttpPort),
+      grpcUrl: formGrpcUrl.trim(),
+      grpcPort: Number(formGrpcPort),
+      defaultRootUsername: formRootUser.trim() || 'admin',
+      status: formStatus,
+      maxCapacity: Number(formMaxCapacity),
+      notes: formNotes.trim(),
+      isDefault: formIsDefault,
+    };
+
+    try {
+      if (editingNode) {
+        // Update
+        const res = await fetch(`/api/admin/hosting/${editingNode._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to update node');
+        setFeedbackMsg({ type: 'success', text: `Hosting node "${formName}" updated successfully.` });
+        setEditingNode(null);
+      } else {
+        // Create
+        const res = await fetch('/api/admin/hosting', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create node');
+        setFeedbackMsg({ type: 'success', text: `Hosting node "${formName}" created successfully.` });
+        setAddModalOpen(false);
+      }
+
+      await refreshNodes();
+    } catch (err: unknown) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Operation failed',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Delete Node
+  async function handleDeleteNode(id: string, name: string) {
+    if (!confirm(`Are you sure you want to delete hosting node "${name}"?`)) return;
+
+    setLoading(true);
+    setFeedbackMsg(null);
+    try {
+      const res = await fetch(`/api/admin/hosting/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete node');
+
+      setFeedbackMsg({ type: 'success', text: `Hosting node "${name}" deleted.` });
+      await refreshNodes();
+    } catch (err: unknown) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Delete failed',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Filtered nodes
+  const filteredNodes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return nodes.filter((node) => {
+      const matchesSearch =
+        !q ||
+        node.name.toLowerCase().includes(q) ||
+        node.dbUrl.toLowerCase().includes(q) ||
+        node.grpcUrl.toLowerCase().includes(q) ||
+        node.region.toLowerCase().includes(q);
+
+      const matchesStatus = statusFilter === 'ALL' || node.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [nodes, search, statusFilter]);
+
+  // Stats
+  const stats = useMemo(() => {
+    const totalNodes = nodes.length;
+    const activeNodes = nodes.filter((n) => n.status === 'ACTIVE').length;
+    const totalCapacity = nodes.reduce((sum, n) => sum + n.maxCapacity, 0);
+    const totalAssigned = nodes.reduce((sum, n) => sum + n.currentAssignedCount, 0);
+
+    return { totalNodes, activeNodes, totalCapacity, totalAssigned };
+  }, [nodes]);
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text-strong)] tracking-tight">Database Hosting Nodes</h1>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
+            Configure authoritative infrastructure clusters, gRPC endpoints, ports, protocols, and default provisioning credentials.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={refreshNodes}
+            className="btn-secondary py-2 px-3 text-xs inline-flex items-center gap-1.5"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="btn-primary py-2 px-4 min-h-[38px] text-xs inline-flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Hosting Node</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Feedback Banner */}
+      {feedbackMsg && (
+        <div className="p-3.5 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border-strong)] text-xs text-[var(--text-strong)] flex items-center justify-between animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            {feedbackMsg.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-[var(--text-strong)] shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-[var(--text-strong)] shrink-0" />
+            )}
+            <span className="font-medium">{feedbackMsg.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFeedbackMsg(null)}
+            className="text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="card p-4">
+          <div className="flex items-center justify-between text-[var(--text-muted)]">
+            <span className="text-xs font-mono uppercase tracking-wider">Total Hosting Nodes</span>
+            <Server className="w-4 h-4 opacity-70" />
+          </div>
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.totalNodes}</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
+            Across global deployment regions
+          </p>
+        </div>
+
+        <div className="card p-4">
+          <div className="flex items-center justify-between text-[var(--text-muted)]">
+            <span className="text-xs font-mono uppercase tracking-wider">Active Nodes</span>
+            <CheckCircle2 className="w-4 h-4 opacity-70" />
+          </div>
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.activeNodes}</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
+            Accepting new user database instances
+          </p>
+        </div>
+
+        <div className="card p-4">
+          <div className="flex items-center justify-between text-[var(--text-muted)]">
+            <span className="text-xs font-mono uppercase tracking-wider">Assigned Databases</span>
+            <Database className="w-4 h-4 opacity-70" />
+          </div>
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.totalAssigned}</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
+            Live running customer instances
+          </p>
+        </div>
+
+        <div className="card p-4">
+          <div className="flex items-center justify-between text-[var(--text-muted)]">
+            <span className="text-xs font-mono uppercase tracking-wider">Total Capacity</span>
+            <Layers className="w-4 h-4 opacity-70" />
+          </div>
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.totalCapacity}</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
+            {stats.totalCapacity - stats.totalAssigned} slots remaining
+          </p>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="card p-4 flex flex-col sm:flex-row items-center gap-3">
+        <div className="relative flex-1 w-full">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search nodes by name, DB URL, gRPC URL, or region..."
+            className="input-field pl-9 w-full"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] text-xs text-[var(--text-secondary)]">
+            <span className="font-mono text-[11px]">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter hosting nodes by status"
+              className="bg-transparent text-[var(--text-strong)] focus:outline-hidden cursor-pointer font-medium"
+            >
+              <option value="ALL" className="bg-[var(--surface)] text-[var(--text-primary)]">All</option>
+              <option value="ACTIVE" className="bg-[var(--surface)] text-[var(--text-primary)]">Active</option>
+              <option value="DRAINING" className="bg-[var(--surface)] text-[var(--text-primary)]">Draining</option>
+              <option value="MAINTENANCE" className="bg-[var(--surface)] text-[var(--text-primary)]">Maintenance</option>
+              <option value="DISABLED" className="bg-[var(--surface)] text-[var(--text-primary)]">Disabled</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Hosting Nodes Table */}
+      <div className="card p-0 overflow-hidden shadow-2xs">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[var(--surface-2)] text-[var(--text-muted)] uppercase font-mono border-b border-[var(--border)]">
+              <tr>
+                <th className="px-4 py-3 font-medium">Node Details</th>
+                <th className="px-4 py-3 font-medium">Database Endpoint</th>
+                <th className="px-4 py-3 font-medium">gRPC Endpoint</th>
+                <th className="px-4 py-3 font-medium">Control Plane (HTTP)</th>
+                <th className="px-4 py-3 font-medium">Root User</th>
+                <th className="px-4 py-3 font-medium">Capacity</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border)] font-mono">
+              {filteredNodes.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-[var(--text-muted)] text-xs font-sans">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Server className="w-6 h-6 opacity-40" />
+                      <span>No hosting nodes found. Click &quot;Add Hosting Node&quot; to configure database infrastructure.</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredNodes.map((node) => {
+                  const capacityPercent = Math.min(100, Math.round((node.currentAssignedCount / node.maxCapacity) * 100));
+
+                  return (
+                    <tr key={node._id} className="hover:bg-[var(--surface-soft)] transition-colors">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs font-sans text-[var(--text-strong)]">{node.name}</span>
+                          {node.isDefault && (
+                            <span className="px-1.5 py-0.5 rounded-[4px] text-[9px] font-mono bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-bold">
+                              DEFAULT
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                          {node.region} • <span className="font-mono">{node.slug}</span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-xs text-[var(--text-strong)]">
+                        <div>{node.dbUrl}:{node.port}</div>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-xs text-[var(--text-secondary)]">
+                        <div>{node.grpcUrl}:{node.grpcPort}</div>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-xs text-[var(--text-secondary)]">
+                        <div>
+                          {node.protocol}://{node.dbUrl}:{node.httpPort}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-xs text-[var(--text-strong)]">
+                        <span className="font-bold">{node.defaultRootUsername}</span>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <div className="space-y-1 w-28">
+                          <div className="flex justify-between text-[10px] text-[var(--text-muted)] font-mono">
+                            <span>{node.currentAssignedCount}/{node.maxCapacity}</span>
+                            <span>{capacityPercent}%</span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                            <div
+                              className="h-full bg-[var(--text-strong)] transition-all"
+                              style={{ width: `${capacityPercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-[4px] text-[11px] font-mono uppercase tracking-wider ${
+                            node.status === 'ACTIVE'
+                              ? 'bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-semibold'
+                              : node.status === 'DRAINING'
+                              ? 'bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)]'
+                              : 'text-[var(--text-muted)] border border-[var(--border)]'
+                          }`}
+                        >
+                          {node.status}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(node)}
+                            className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteNode(node._id, node.name)}
+                            disabled={node.currentAssignedCount > 0}
+                            title={node.currentAssignedCount > 0 ? 'Cannot delete node with active instances' : 'Delete node'}
+                            className="btn-secondary px-2 py-1 text-[11px] text-[var(--text-muted)] hover:text-[var(--text-strong)] disabled:opacity-40"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* CREATE / EDIT HOSTING NODE MODAL */}
+      {(addModalOpen || editingNode) && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="card max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+              <div className="flex items-center gap-2">
+                <Server className="w-5 h-5 text-[var(--text-strong)]" />
+                <h3 className="text-base font-bold text-[var(--text-strong)]">
+                  {editingNode ? `Edit Hosting Node: ${editingNode.name}` : 'Add New Database Hosting Node'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddModalOpen(false);
+                  setEditingNode(null);
+                }}
+                className="text-[var(--text-muted)] hover:text-[var(--text-strong)]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNode} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Node Name */}
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    Node Cluster Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formName}
+                    onChange={(e) => {
+                      setFormName(e.target.value);
+                      if (!editingNode && !formSlug) {
+                        setFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'));
+                      }
+                    }}
+                    placeholder="e.g. Mumbai Primary Node 01"
+                    className="input-field w-full text-xs"
+                  />
+                </div>
+
+                {/* Slug */}
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    Slug / Identifier
+                  </label>
+                  <input
+                    type="text"
+                    value={formSlug}
+                    onChange={(e) => setFormSlug(e.target.value)}
+                    placeholder="e.g. mumbai-node-01"
+                    className="input-field w-full text-xs font-mono"
+                  />
+                </div>
+
+                {/* Region */}
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    Region
+                  </label>
+                  <input
+                    type="text"
+                    value={formRegion}
+                    onChange={(e) => setFormRegion(e.target.value)}
+                    placeholder="e.g. Asia (Mumbai)"
+                    className="input-field w-full text-xs"
+                  />
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    Node Status
+                  </label>
+                  <select
+                    value={formStatus}
+                    onChange={(e) => setFormStatus(e.target.value as unknown as typeof formStatus)}
+                    className="input-field w-full text-xs font-medium cursor-pointer"
+                  >
+                    <option value="ACTIVE">ACTIVE (Accepting Deployments)</option>
+                    <option value="DRAINING">DRAINING (No New Instances)</option>
+                    <option value="MAINTENANCE">MAINTENANCE (Offline for Updates)</option>
+                    <option value="DISABLED">DISABLED (Archived)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Endpoints & Networking */}
+              <div className="p-3.5 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border)] space-y-3">
+                <span className="text-xs font-bold text-[var(--text-strong)] block">
+                  Endpoints &amp; Ports Configuration
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Database Host */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      Database Host / DB URL *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formDbUrl}
+                      onChange={(e) => setFormDbUrl(e.target.value)}
+                      placeholder="db-mumbai-01.liorandb.net"
+                      className="input-field w-full text-xs font-mono"
+                    />
+                  </div>
+
+                  {/* Database Port */}
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      DB Port
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      value={formPort}
+                      onChange={(e) => setFormPort(Number(e.target.value))}
+                      placeholder="27017"
+                      className="input-field w-full text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* gRPC URL */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      gRPC URL *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formGrpcUrl}
+                      onChange={(e) => setFormGrpcUrl(e.target.value)}
+                      placeholder="grpc.mumbai-01.liorandb.net"
+                      className="input-field w-full text-xs font-mono"
+                    />
+                  </div>
+
+                  {/* gRPC Port */}
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      gRPC Port
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      value={formGrpcPort}
+                      onChange={(e) => setFormGrpcPort(Number(e.target.value))}
+                      placeholder="50051"
+                      className="input-field w-full text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Protocol */}
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      HTTP Protocol
+                    </label>
+                    <select
+                      value={formProtocol}
+                      onChange={(e) => setFormProtocol(e.target.value as 'http' | 'https')}
+                      className="input-field w-full text-xs font-mono cursor-pointer"
+                    >
+                      <option value="https">HTTPS (Secure)</option>
+                      <option value="http">HTTP (Standard)</option>
+                    </select>
+                  </div>
+
+                  {/* HTTP Port */}
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      HTTP/API Port
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      value={formHttpPort}
+                      onChange={(e) => setFormHttpPort(Number(e.target.value))}
+                      placeholder="443"
+                      className="input-field w-full text-xs font-mono"
+                    />
+                  </div>
+
+                  {/* Max Capacity */}
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      Max Database Slots
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={1000}
+                      value={formMaxCapacity}
+                      onChange={(e) => setFormMaxCapacity(Number(e.target.value))}
+                      placeholder="50"
+                      className="input-field w-full text-xs font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Credentials & Options */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                    Default Root Username
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formRootUser}
+                    onChange={(e) => setFormRootUser(e.target.value)}
+                    placeholder="admin"
+                    className="input-field w-full text-xs font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    id="isDefaultNode"
+                    checked={formIsDefault}
+                    onChange={(e) => setFormIsDefault(e.target.checked)}
+                    className="cursor-pointer accent-black dark:accent-white"
+                  />
+                  <label htmlFor="isDefaultNode" className="text-xs text-[var(--text-strong)] cursor-pointer font-medium">
+                    Set as Default Hosting Node for New Databases
+                  </label>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-muted)] mb-1">
+                  Internal Operational Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  placeholder="e.g. Bare metal node provisioned in Equinix Mumbai datacenter DC-2..."
+                  className="input-field w-full text-xs font-sans"
+                />
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddModalOpen(false);
+                    setEditingNode(null);
+                  }}
+                  className="btn-secondary text-xs py-2 px-4"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary text-xs py-2 px-5 inline-flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {loading ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span>{editingNode ? 'Save Changes' : 'Create Hosting Node'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
