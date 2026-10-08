@@ -34,7 +34,9 @@ export default function DatabaseCredentials({ db }: Props) {
     }
   }
 
-  const connectionUri = db.connectionUri || `mongodb://${db.username}:<password>@${db.host}:${db.port}/${db.databaseName}?authSource=admin&ssl=true`;
+  const connectionUri =
+    db.connectionUri ||
+    `liorandb://${encodeURIComponent(db.username)}:<password>@${db.host}:${db.port}/${encodeURIComponent(db.databaseName)}`;
 
   return (
     <div className="bg-[var(--surface-card)] border border-[var(--border)] rounded-xl p-6 space-y-5 shadow-2xs">

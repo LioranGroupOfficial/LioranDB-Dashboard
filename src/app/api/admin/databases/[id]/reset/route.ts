@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin';
+import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
+import { encrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { rateLimit } from '@/lib/rate-limit';
@@ -53,10 +55,33 @@ export async function POST(
     });
 
     const client = LioranDBAdminClient.forInstance(instance);
+    const serverStatus = await client.getServerStatus();
+    const targetInstanceId = serverStatus.instanceId || `node-1`;
+
     const result = await client.resetInstance({
-      confirmation,
+      instanceId: targetInstanceId,
       idempotencyKey,
     });
+
+    // Re-key native connection URI with fresh bootstrap credentials
+    const isTls = instance.port === 443 || instance.port === 8443;
+    const newUri = buildLioranDBConnectionUri({
+      username: result.rootUsername,
+      password: result.newGeneratedRootPassword,
+      host: instance.host,
+      port: instance.port || 27018,
+      database: instance.databaseName || 'default',
+      scheme: isTls ? 'liorandb+https' : 'liorandb',
+      tls: isTls,
+      transport: 'grpc',
+    });
+
+    instance.encryptedConnectionUri = encrypt(newUri);
+    instance.status = 'ACTIVE';
+    instance.databaseUsers = [];
+    instance.rootRotatedAt = new Date();
+    instance.lastCredentialRotationAt = new Date();
+    await instance.save();
 
     await createAuditLog({
       actorId: admin.userId,

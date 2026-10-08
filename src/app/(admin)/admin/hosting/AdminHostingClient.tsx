@@ -34,14 +34,22 @@ export interface AdminHostingNodeItem {
   httpPort: number;
   grpcUrl: string;
   grpcPort: number;
+  controlPlaneEndpoint?: string;
+  healthStatus?: 'HEALTHY' | 'DEGRADED' | 'UNREACHABLE' | 'AUTHENTICATION_FAILED' | 'UNKNOWN';
+  serverIdentity?: string;
+  serverVersion?: string;
+  allocationMode?: string;
   defaultRootUsername: string;
   defaultRootPassword?: string;
-  status: 'ACTIVE' | 'DRAINING' | 'MAINTENANCE' | 'DISABLED';
+  status: 'AVAILABLE' | 'ACTIVE' | 'RESERVED' | 'PROVISIONING' | 'ASSIGNED' | 'DRAINING' | 'RESETTING' | 'FAILED' | 'QUARANTINED' | 'MAINTENANCE' | 'DISABLED';
   maxCapacity?: number;
   currentAssignedCount: number;
   assignedInstanceName?: string;
   assignedInstanceStatus?: string;
   assignedDatabaseId?: string;
+  lastHealthCheckAt?: string;
+  lastResetAt?: string;
+  lastCredentialRotationAt?: string;
   notes?: string;
   isDefault: boolean;
   createdAt: string;
@@ -68,13 +76,15 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   const [formSlug, setFormSlug] = useState('');
   const [formRegion, setFormRegion] = useState('Asia (Mumbai)');
   const [formDbUrl, setFormDbUrl] = useState('');
-  const [formPort, setFormPort] = useState(27017);
-  const [formProtocol, setFormProtocol] = useState<'http' | 'https'>('https');
-  const [formHttpPort, setFormHttpPort] = useState(443);
+  const [formPort, setFormPort] = useState(27018);
+  const [formProtocol, setFormProtocol] = useState<'http' | 'https'>('http');
+  const [formHttpPort, setFormHttpPort] = useState(27018);
+  const [formControlPlaneEndpoint, setFormControlPlaneEndpoint] = useState('');
+  const [formControlPlaneToken, setFormControlPlaneToken] = useState('');
   const [formGrpcUrl, setFormGrpcUrl] = useState('');
-  const [formGrpcPort, setFormGrpcPort] = useState(50051);
+  const [formGrpcPort, setFormGrpcPort] = useState(27019);
   const [formRootUser, setFormRootUser] = useState('admin');
-  const [formStatus, setFormStatus] = useState<'ACTIVE' | 'DRAINING' | 'MAINTENANCE' | 'DISABLED'>('ACTIVE');
+  const [formStatus, setFormStatus] = useState<AdminHostingNodeItem['status']>('AVAILABLE');
   const [formNotes, setFormNotes] = useState('');
   const [formIsDefault, setFormIsDefault] = useState(false);
 
@@ -135,11 +145,13 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     setFormDbUrl('127.0.0.1');
     setFormPort(27018);
     setFormProtocol('http');
-    setFormHttpPort(8080);
+    setFormHttpPort(27018);
+    setFormControlPlaneEndpoint('http://127.0.0.1:27018');
+    setFormControlPlaneToken('');
     setFormGrpcUrl('127.0.0.1');
     setFormGrpcPort(27019);
     setFormRootUser('admin');
-    setFormStatus('ACTIVE');
+    setFormStatus('AVAILABLE');
     setFormNotes('Localhost dedicated development database cluster on 127.0.0.1');
     if (nodes.length === 0) setFormIsDefault(true);
   }
@@ -150,13 +162,15 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     setFormSlug('');
     setFormRegion('Asia (Mumbai)');
     setFormDbUrl('');
-    setFormPort(27017);
-    setFormProtocol('https');
-    setFormHttpPort(443);
+    setFormPort(27018);
+    setFormProtocol('http');
+    setFormHttpPort(27018);
+    setFormControlPlaneEndpoint('');
+    setFormControlPlaneToken('');
     setFormGrpcUrl('');
-    setFormGrpcPort(50051);
+    setFormGrpcPort(27019);
     setFormRootUser('admin');
-    setFormStatus('ACTIVE');
+    setFormStatus('AVAILABLE');
     setFormNotes('');
     setFormIsDefault(nodes.length === 0);
     setAddModalOpen(true);
@@ -172,6 +186,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     setFormPort(node.port);
     setFormProtocol(node.protocol);
     setFormHttpPort(node.httpPort);
+    setFormControlPlaneEndpoint(node.controlPlaneEndpoint || '');
+    setFormControlPlaneToken('');
     setFormGrpcUrl(node.grpcUrl);
     setFormGrpcPort(node.grpcPort);
     setFormRootUser(node.defaultRootUsername);
@@ -194,6 +210,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       port: Number(formPort),
       protocol: formProtocol,
       httpPort: Number(formHttpPort),
+      controlPlaneEndpoint: formControlPlaneEndpoint.trim() || undefined,
+      controlPlaneToken: formControlPlaneToken.trim() || undefined,
       grpcUrl: formGrpcUrl.trim(),
       grpcPort: Number(formGrpcPort),
       defaultRootUsername: formRootUser.trim() || 'admin',
@@ -281,11 +299,11 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   // Stats
   const stats = useMemo(() => {
     const totalNodes = nodes.length;
-    const activeNodes = nodes.filter((n) => n.status === 'ACTIVE').length;
-    const availableNodes = nodes.filter((n) => n.status === 'ACTIVE' && n.currentAssignedCount === 0).length;
+    const healthyNodes = nodes.filter((n) => n.healthStatus === 'HEALTHY' || n.status === 'AVAILABLE' || n.status === 'ACTIVE').length;
+    const availableNodes = nodes.filter((n) => (n.status === 'AVAILABLE' || n.status === 'ACTIVE') && n.currentAssignedCount === 0).length;
     const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0).length;
 
-    return { totalNodes, activeNodes, availableNodes, totalAssigned };
+    return { totalNodes, healthyNodes, availableNodes, totalAssigned };
   }, [nodes]);
 
   return (
@@ -295,7 +313,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-strong)] tracking-tight">Database Hosting Nodes</h1>
           <p className="text-xs text-[var(--text-muted)] mt-1">
-            Dedicated 1-server-per-user infrastructure: configure authoritative hosts, gRPC endpoints, ports, protocols, and default provisioning credentials.
+            Dedicated 1-server-per-user Rust infrastructure: manage authoritative control planes, gRPC listeners, credentials, and real-time health.
           </p>
         </div>
 
@@ -326,9 +344,9 @@ export default function AdminHostingClient({ initialNodes }: Props) {
         <div className="p-3.5 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border-strong)] text-xs text-[var(--text-strong)] flex items-center justify-between animate-in fade-in duration-150">
           <div className="flex items-center gap-2">
             {feedbackMsg.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-[var(--text-strong)] shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
             ) : (
-              <AlertCircle className="w-4 h-4 text-[var(--text-strong)] shrink-0" />
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
             )}
             <span className="font-medium">{feedbackMsg.text}</span>
           </div>
@@ -346,23 +364,23 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4">
           <div className="flex items-center justify-between text-[var(--text-muted)]">
-            <span className="text-xs font-mono uppercase tracking-wider">Total Hosting Servers</span>
+            <span className="text-xs font-mono uppercase tracking-wider">Total Hosting Nodes</span>
             <Server className="w-4 h-4 opacity-70" />
           </div>
           <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.totalNodes}</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-            Across global deployment regions
+            Registered Rust database nodes
           </p>
         </div>
 
         <div className="card p-4">
           <div className="flex items-center justify-between text-[var(--text-muted)]">
-            <span className="text-xs font-mono uppercase tracking-wider">Active Servers</span>
-            <CheckCircle2 className="w-4 h-4 opacity-70" />
+            <span className="text-xs font-mono uppercase tracking-wider">Healthy Control Plane</span>
+            <CheckCircle2 className="w-4 h-4 opacity-70 text-emerald-500" />
           </div>
-          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.activeNodes}</p>
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.healthyNodes}</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-            Online infrastructure nodes
+            Verified /v1/admin/status responders
           </p>
         </div>
 
@@ -373,7 +391,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
           </div>
           <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.availableNodes}</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-            Ready for instant user allocation
+            Ready for instant dedicated provisioning
           </p>
         </div>
 
@@ -384,7 +402,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
           </div>
           <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.totalAssigned}</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-            1 server dedicated per user db
+            Exclusive 1:1 customer allocation
           </p>
         </div>
       </div>
@@ -397,7 +415,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search nodes by name, DB URL, gRPC URL, or region..."
+            placeholder="Search nodes by name, DB URL, gRPC URL, control plane, or region..."
             className="input-field pl-9 w-full"
           />
         </div>
@@ -412,8 +430,14 @@ export default function AdminHostingClient({ initialNodes }: Props) {
               className="bg-transparent text-[var(--text-strong)] focus:outline-hidden cursor-pointer font-medium"
             >
               <option value="ALL" className="bg-[var(--surface)] text-[var(--text-primary)]">All</option>
+              <option value="AVAILABLE" className="bg-[var(--surface)] text-[var(--text-primary)]">Available</option>
+              <option value="ASSIGNED" className="bg-[var(--surface)] text-[var(--text-primary)]">Assigned</option>
               <option value="ACTIVE" className="bg-[var(--surface)] text-[var(--text-primary)]">Active</option>
+              <option value="RESERVED" className="bg-[var(--surface)] text-[var(--text-primary)]">Reserved</option>
+              <option value="PROVISIONING" className="bg-[var(--surface)] text-[var(--text-primary)]">Provisioning</option>
               <option value="DRAINING" className="bg-[var(--surface)] text-[var(--text-primary)]">Draining</option>
+              <option value="RESETTING" className="bg-[var(--surface)] text-[var(--text-primary)]">Resetting</option>
+              <option value="FAILED" className="bg-[var(--surface)] text-[var(--text-primary)]">Failed</option>
               <option value="MAINTENANCE" className="bg-[var(--surface)] text-[var(--text-primary)]">Maintenance</option>
               <option value="DISABLED" className="bg-[var(--surface)] text-[var(--text-primary)]">Disabled</option>
             </select>
@@ -427,12 +451,11 @@ export default function AdminHostingClient({ initialNodes }: Props) {
           <table className="w-full text-left text-xs">
             <thead className="bg-[var(--surface-2)] text-[var(--text-muted)] uppercase font-mono border-b border-[var(--border)]">
               <tr>
-                <th className="px-4 py-3 font-medium">Node Details</th>
-                <th className="px-4 py-3 font-medium">Database Endpoint</th>
-                <th className="px-4 py-3 font-medium">gRPC Endpoint</th>
-                <th className="px-4 py-3 font-medium">Control Plane (HTTP)</th>
+                <th className="px-4 py-3 font-medium">Node &amp; Version</th>
+                <th className="px-4 py-3 font-medium">Control Plane &amp; Health</th>
+                <th className="px-4 py-3 font-medium">Client DB &amp; gRPC</th>
                 <th className="px-4 py-3 font-medium">Root User</th>
-                <th className="px-4 py-3 font-medium">Server Allocation</th>
+                <th className="px-4 py-3 font-medium">Allocation (1:1)</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
@@ -440,7 +463,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
             <tbody className="divide-y divide-[var(--border)] font-mono">
               {filteredNodes.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-[var(--text-muted)] text-xs font-sans">
+                  <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)] text-xs font-sans">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Server className="w-6 h-6 opacity-40" />
                       <span>No hosting nodes found. Click &quot;Add Hosting Node&quot; to configure database infrastructure.</span>
@@ -450,6 +473,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
               ) : (
                 filteredNodes.map((node) => {
                   const isAssigned = node.currentAssignedCount > 0;
+                  const cpEndpoint = node.controlPlaneEndpoint || `${node.protocol || 'http'}://${node.dbUrl}:${node.httpPort || 27018}`;
 
                   return (
                     <tr key={node._id} className="hover:bg-[var(--surface-soft)] transition-colors">
@@ -469,21 +493,38 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                         </div>
                         <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
                           {node.region} • <span className="font-mono">{node.slug}</span>
+                          {node.serverIdentity && (
+                            <span className="block text-[10px] text-[var(--text-muted)] opacity-80">
+                              ID: {node.serverIdentity} (v{node.serverVersion || '2.4.1'})
+                            </span>
+                          )}
                         </div>
                       </td>
 
-                      <td className="px-4 py-3.5 text-xs text-[var(--text-strong)]">
-                        <div>{node.dbUrl}:{node.port}</div>
-                      </td>
-
-                      <td className="px-4 py-3.5 text-xs text-[var(--text-secondary)]">
-                        <div>{node.grpcUrl}:{node.grpcPort}</div>
-                      </td>
-
-                      <td className="px-4 py-3.5 text-xs text-[var(--text-secondary)]">
-                        <div>
-                          {node.protocol}://{node.dbUrl}:{node.httpPort}
+                      <td className="px-4 py-3.5 text-xs">
+                        <div className="text-[var(--text-strong)] font-mono truncate max-w-[200px]" title={cpEndpoint}>
+                          {cpEndpoint}
                         </div>
+                        <div className="mt-1">
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] text-[9px] font-mono font-semibold uppercase tracking-wider ${
+                              node.healthStatus === 'HEALTHY'
+                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
+                                : node.healthStatus === 'AUTHENTICATION_FAILED'
+                                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30'
+                                : node.healthStatus === 'UNREACHABLE' || node.healthStatus === 'DEGRADED'
+                                ? 'bg-rose-500/10 text-rose-500 border border-rose-500/30'
+                                : 'bg-[var(--surface-soft)] text-[var(--text-muted)] border border-[var(--border)]'
+                            }`}
+                          >
+                            {node.healthStatus || 'UNKNOWN'}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-xs text-[var(--text-secondary)]">
+                        <div>DB: <span className="text-[var(--text-strong)]">{node.dbUrl}:{node.port}</span></div>
+                        <div className="text-[11px] text-[var(--text-muted)]">gRPC: {node.grpcUrl}:{node.grpcPort}</div>
                       </td>
 
                       <td className="px-4 py-3.5 text-xs text-[var(--text-strong)]">
@@ -517,10 +558,12 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       <td className="px-4 py-3.5">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-[4px] text-[11px] font-mono uppercase tracking-wider ${
-                            node.status === 'ACTIVE'
+                            node.status === 'AVAILABLE' || node.status === 'ACTIVE'
                               ? 'bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-semibold'
-                              : node.status === 'DRAINING'
+                              : node.status === 'ASSIGNED' || node.status === 'RESERVED'
                               ? 'bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)]'
+                              : node.status === 'FAILED'
+                              ? 'bg-rose-500/10 text-rose-500 border border-rose-500/30'
                               : 'text-[var(--text-muted)] border border-[var(--border)]'
                           }`}
                         >
@@ -670,7 +713,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                     onChange={(e) => setFormStatus(e.target.value as unknown as typeof formStatus)}
                     className="input-field w-full text-xs font-medium cursor-pointer"
                   >
-                    <option value="ACTIVE">ACTIVE (Accepting Deployments)</option>
+                    <option value="AVAILABLE">AVAILABLE (Accepting Deployments)</option>
+                    <option value="ACTIVE">ACTIVE</option>
                     <option value="DRAINING">DRAINING (No New Instances)</option>
                     <option value="MAINTENANCE">MAINTENANCE (Offline for Updates)</option>
                     <option value="DISABLED">DISABLED (Archived)</option>
@@ -682,11 +726,46 @@ export default function AdminHostingClient({ initialNodes }: Props) {
               <div className="p-3.5 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border)] space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[var(--text-strong)] block">
-                    Endpoints &amp; Ports Configuration
+                    Control Plane &amp; Networking Endpoints
                   </span>
                   <span className="text-[10px] text-[var(--text-muted)] font-mono">
-                    Supports 127.0.0.1, localhost, or domains
+                    Rust HTTP / gRPC / Control Plane
                   </span>
+                </div>
+
+                {/* Private Control Plane Endpoint */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      Private Control Plane Endpoint
+                    </label>
+                    <input
+                      type="text"
+                      value={formControlPlaneEndpoint}
+                      onChange={(e) => setFormControlPlaneEndpoint(e.target.value)}
+                      placeholder="http://127.0.0.1:27018 or https://cp.internal"
+                      className="input-field w-full text-xs font-mono"
+                    />
+                    <span className="text-[10px] text-[var(--text-muted)] mt-0.5 block">
+                      Leave empty to auto-derive from protocol, host, and HTTP port.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      Node Control Plane Token (Optional)
+                    </label>
+                    <input
+                      type="password"
+                      value={formControlPlaneToken}
+                      onChange={(e) => setFormControlPlaneToken(e.target.value)}
+                      placeholder="Leave empty to use env LIORANDB_CONTROL_PLANE_TOKEN"
+                      className="input-field w-full text-xs font-mono"
+                    />
+                    <span className="text-[10px] text-[var(--text-muted)] mt-0.5 block">
+                      Encrypted with AES-256-GCM before storage.
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -708,7 +787,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                   {/* Database Port */}
                   <div>
                     <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
-                      DB Port
+                      DB Native Port
                     </label>
                     <input
                       type="number"
@@ -764,22 +843,22 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       onChange={(e) => setFormProtocol(e.target.value as 'http' | 'https')}
                       className="input-field w-full text-xs font-mono cursor-pointer"
                     >
-                      <option value="https">HTTPS (Secure)</option>
                       <option value="http">HTTP (Standard)</option>
+                      <option value="https">HTTPS (Secure / TLS)</option>
                     </select>
                   </div>
 
                   {/* HTTP Port */}
                   <div>
                     <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
-                      HTTP/API Port
+                      HTTP / Control Plane Port
                     </label>
                     <input
                       type="number"
                       required
                       value={formHttpPort}
                       onChange={(e) => setFormHttpPort(Number(e.target.value))}
-                      placeholder="443"
+                      placeholder="27018"
                       className="input-field w-full text-xs font-mono"
                     />
                   </div>
@@ -825,7 +904,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                   rows={2}
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
-                  placeholder="e.g. Bare metal node provisioned in Equinix Mumbai datacenter DC-2..."
+                  placeholder="e.g. Bare metal Rust node provisioned in Equinix Mumbai datacenter DC-2..."
                   className="input-field w-full text-xs font-sans"
                 />
               </div>

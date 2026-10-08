@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAPI } from '@/lib/auth/guards';
 import { connectToDatabase, HostingNode, ManagedDatabase } from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
+import { encrypt } from '@/lib/crypto';
+import { LioranDBAdminClient } from '@/lib/liorandb-admin/client';
+import { parseAndNormalizeEndpoint } from '../route';
+import type { HostingAllocationMode, HostingNodeHealthStatus } from '@/lib/db/models/HostingNode';
 
 export async function GET(
   _req: NextRequest,
@@ -39,8 +43,6 @@ export async function GET(
   }
 }
 
-import { parseAndNormalizeEndpoint } from '../route';
-
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -62,30 +64,56 @@ export async function PUT(
 
     if (body.name !== undefined) node.name = body.name.trim();
     if (body.region !== undefined) node.region = body.region.trim();
+    if (body.allocationMode !== undefined) node.allocationMode = (body.allocationMode as HostingAllocationMode) || 'DEDICATED';
+
     if (body.dbUrl !== undefined) {
       const dbEndpoint = parseAndNormalizeEndpoint(body.dbUrl, body.port ? Number(body.port) : node.port);
       node.dbUrl = dbEndpoint.host;
-      if (body.port === undefined && dbEndpoint.port !== 27017) {
+      if (body.port === undefined && dbEndpoint.port !== 27018) {
         node.port = dbEndpoint.port;
       }
     }
     if (body.port !== undefined) node.port = Number(body.port);
-    if (body.protocol !== undefined) node.protocol = body.protocol === 'http' ? 'http' : 'https';
+    if (body.protocol !== undefined) node.protocol = body.protocol === 'https' ? 'https' : 'http';
     if (body.httpPort !== undefined) node.httpPort = Number(body.httpPort);
     if (body.grpcUrl !== undefined) {
       const grpcEndpoint = parseAndNormalizeEndpoint(body.grpcUrl, body.grpcPort ? Number(body.grpcPort) : node.grpcPort);
       node.grpcUrl = grpcEndpoint.host;
-      if (body.grpcPort === undefined && grpcEndpoint.port !== 50051) {
+      if (body.grpcPort === undefined && grpcEndpoint.port !== 27019) {
         node.grpcPort = grpcEndpoint.port;
       }
     }
     if (body.grpcPort !== undefined) node.grpcPort = Number(body.grpcPort);
+
+    if (body.controlPlaneEndpoint !== undefined) {
+      node.controlPlaneEndpoint = body.controlPlaneEndpoint.trim();
+    }
+    if (body.controlPlaneToken && body.controlPlaneToken.trim().length >= 32) {
+      node.encryptedControlPlaneToken = encrypt(body.controlPlaneToken.trim());
+    }
+
     if (body.defaultRootUsername !== undefined) node.defaultRootUsername = body.defaultRootUsername.trim();
-    if (body.defaultRootPassword !== undefined) node.defaultRootPassword = body.defaultRootPassword.trim();
     if (body.status !== undefined) node.status = body.status;
     node.maxCapacity = 1;
     if (body.notes !== undefined) node.notes = body.notes;
     if (body.isDefault !== undefined) node.isDefault = Boolean(body.isDefault);
+
+    // Run live health check against Rust control plane
+    try {
+      const client = LioranDBAdminClient.forNode(node);
+      const statusRes = await client.getServerStatus();
+      node.healthStatus = statusRes.status === 'HEALTHY' ? 'HEALTHY' : 'DEGRADED';
+      node.serverIdentity = statusRes.instanceId;
+      node.serverVersion = statusRes.version || '2.4.1';
+      node.lastHealthCheckAt = new Date();
+    } catch (err: unknown) {
+      const errMsg = (err as Error).message || '';
+      if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('authentication') || errMsg.includes('unauthorized')) {
+        node.healthStatus = 'AUTHENTICATION_FAILED';
+      } else {
+        node.healthStatus = 'UNREACHABLE';
+      }
+    }
 
     await node.save();
 
@@ -94,7 +122,7 @@ export async function PUT(
       action: 'HOSTING_NODE_UPDATED' as any,
       entityType: 'HostingNode',
       entityId: node._id.toString(),
-      metadata: { name: node.name, status: node.status },
+      metadata: { name: node.name, status: node.status, healthStatus: node.healthStatus },
     });
 
     return NextResponse.json({ success: true, node });

@@ -6,6 +6,7 @@ import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { createApiError } from '@/lib/errors';
+import { provisioningProvider } from '@/lib/providers/provisioning';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 
 export async function GET(
@@ -98,7 +99,10 @@ export async function DELETE(
 
     const now = new Date();
 
-    // 1. Mark instance terminated and record billingStoppedAt
+    // 1. Invoke termination and real server reset on assigned node
+    await provisioningProvider.terminateDeployment(instance._id.toString());
+
+    // 2. Mark instance terminated and record billingStoppedAt
     instance.status = 'TERMINATED';
     instance.billingStoppedAt = now;
     if (instance.backupEnabled) {
@@ -106,7 +110,7 @@ export async function DELETE(
     }
     await instance.save();
 
-    // 2. Close active billing interval
+    // 3. Close active billing interval
     await BillingInterval.findOneAndUpdate(
       { instanceId: instance._id, endedAt: null },
       { endedAt: now }

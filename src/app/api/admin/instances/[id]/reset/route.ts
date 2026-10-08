@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin';
-import { provisioningProvider } from '@/lib/providers/provisioning';
-import { generateDatabasePassword, encrypt } from '@/lib/crypto';
+import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
+import { encrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 
 export async function POST(
@@ -28,22 +28,21 @@ export async function POST(
     const rotateRes = await client.rotateRootCredential();
     const newPassword = rotateRes.newGeneratedPassword;
 
-    if (instance.providerDeploymentId) {
-      await provisioningProvider.resetDeployment(instance.providerDeploymentId);
-    }
+    const isTls = instance.port === 443 || instance.port === 8443;
+    const connectionUri = buildLioranDBConnectionUri({
+      username: instance.username || rotateRes.rootUsername || 'admin',
+      password: newPassword,
+      host: instance.host,
+      port: instance.port || 27018,
+      database: instance.databaseName || 'default',
+      scheme: isTls ? 'liorandb+https' : 'liorandb',
+      tls: isTls,
+      transport: 'grpc',
+    });
 
-    const isLocal =
-      instance.host === 'localhost' ||
-      instance.host === '127.0.0.1' ||
-      instance.host === '0.0.0.0' ||
-      instance.host?.startsWith('127.') ||
-      instance.host === '::1';
-    const sslParam = isLocal ? 'ssl=false' : 'ssl=true';
-
-    const connectionUri = `mongodb://${instance.username}:${encodeURIComponent(
-      newPassword
-    )}@${instance.host}:${instance.port}/${instance.databaseName}?authSource=admin&${sslParam}`;
     instance.encryptedConnectionUri = encrypt(connectionUri);
+    instance.lastCredentialRotationAt = new Date();
+    instance.rootRotatedAt = new Date();
     await instance.save();
 
     await createAuditLog({
@@ -56,7 +55,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      username: instance.username,
+      username: instance.username || rotateRes.rootUsername,
       temporaryPassword: newPassword,
       message: 'Master password has been reset. Store it securely; it will not be shown again.',
     });
@@ -66,4 +65,3 @@ export async function POST(
     return NextResponse.json({ error: message }, { status });
   }
 }
-

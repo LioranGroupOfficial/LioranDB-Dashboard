@@ -4,6 +4,7 @@ import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { decrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
+import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
 
 export async function POST(
   req: NextRequest,
@@ -28,24 +29,28 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const isLocal =
-      inst.host === 'localhost' ||
-      inst.host === '127.0.0.1' ||
-      inst.host === '0.0.0.0' ||
-      inst.host?.startsWith('127.') ||
-      inst.host === '::1' ||
-      inst.host?.includes('local');
-    const sslParam = isLocal ? 'ssl=false' : 'ssl=true';
-
     let connectionUri = '';
     if (inst.encryptedConnectionUri) {
       try {
         connectionUri = decrypt(inst.encryptedConnectionUri);
       } catch {
-        connectionUri = `mongodb://${inst.username}:••••••••@${inst.host}:${inst.port}/${inst.databaseName}?authSource=admin&${sslParam}`;
+        connectionUri = '';
       }
-    } else {
-      connectionUri = `mongodb://${inst.username}:••••••••@${inst.host}:${inst.port}/${inst.databaseName}?authSource=admin&${sslParam}`;
+    }
+
+    // If not decrypted or missing, generate masked fallback
+    if (!connectionUri) {
+      const isTls = inst.port === 443 || inst.port === 8443;
+      connectionUri = buildLioranDBConnectionUri({
+        username: inst.username || 'admin',
+        password: '••••••••',
+        host: inst.host || '127.0.0.1',
+        port: inst.port || 27018,
+        database: inst.databaseName || 'default',
+        scheme: isTls ? 'liorandb+https' : 'liorandb',
+        tls: isTls,
+        transport: 'grpc',
+      });
     }
 
     await createAuditLog({
@@ -56,16 +61,29 @@ export async function POST(
       entityId: inst._id.toString(),
     });
 
-    return NextResponse.json({
-      success: true,
-      connectionUri,
-      host: inst.host,
-      port: inst.port,
-      databaseName: inst.databaseName,
-      username: inst.username,
-    });
+    return new NextResponse(
+      JSON.stringify({
+        success: true,
+        connectionUri,
+        host: inst.host,
+        port: inst.port,
+        grpcUrl: inst.grpcUrl,
+        grpcPort: inst.grpcPort,
+        databaseName: inst.databaseName,
+        username: inst.username,
+        serverVersion: inst.serverVersion,
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   } catch (error: unknown) {
     return createApiError(error);
   }
 }
-

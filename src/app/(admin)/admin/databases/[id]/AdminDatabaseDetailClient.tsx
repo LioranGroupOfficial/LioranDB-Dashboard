@@ -65,11 +65,14 @@ export interface DatabaseDetailData {
     version: string;
     uptimeSeconds: number;
     storageBytes: number;
-    documentCount: number;
-    activeConnections: number;
-    opsPerSec: number;
+    documentCount?: number;
+    databaseCount?: number;
+    collectionCount?: number;
+    activeConnections?: number;
+    opsPerSec?: number;
     lastBackupAt?: string;
-    engine: string;
+    engine?: string;
+    state?: string;
   };
   estimate: {
     periodStart: string;
@@ -637,7 +640,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                 {(data.serverStatus.storageBytes / (1024 * 1024)).toFixed(1)} MB
               </p>
               <span className="text-[11px] text-[var(--text-muted)] mt-1 block font-mono">
-                {data.serverStatus.documentCount.toLocaleString()} documents
+                {(data.serverStatus.documentCount ?? data.serverStatus.collectionCount ?? 0).toLocaleString()} documents
               </span>
             </div>
 

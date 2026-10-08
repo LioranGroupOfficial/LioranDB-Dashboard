@@ -55,9 +55,19 @@ export class LioranDBConflictError extends LioranDBAdminError {
 }
 
 export class LioranDBResetError extends LioranDBAdminError {
-  constructor(message = 'Failed to reset instance engine state', options?: { requestId?: string; cause?: unknown }) {
-    super(message, { statusCode: 500, code: 'RESET_FAILED', ...options });
+  constructor(
+    message = 'Failed to reset instance engine state',
+    options?: { statusCode?: number; code?: string; requestId?: string; cause?: unknown }
+  ) {
+    super(message, { statusCode: options?.statusCode || 500, code: options?.code || 'RESET_FAILED', ...options });
     this.name = 'LioranDBResetError';
+  }
+}
+
+export class LioranDBUnreachableError extends LioranDBAdminError {
+  constructor(message = 'LioranDB server is unreachable', options?: { requestId?: string; cause?: unknown }) {
+    super(message, { statusCode: 503, code: 'SERVER_UNREACHABLE', ...options });
+    this.name = 'LioranDBUnreachableError';
   }
 }
 

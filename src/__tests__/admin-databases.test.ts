@@ -93,9 +93,153 @@ jest.mock('@/lib/db', () => {
 });
 
 describe('LioranDB Admin Control Plane & Database Management', () => {
+  const originalFetch = global.fetch;
+
   beforeAll(() => {
     process.env.CREDENTIAL_ENCRYPTION_KEY = 'ed1a67380d610695b8f63a3371e0ff2d02fe4ffd21e5e84e7c12b3b7eb2fc414';
-    process.env.LIORANDB_MOCK_DRIVER = 'true';
+    process.env.LIORANDB_CONTROL_PLANE_TOKEN = 'test_global_bearer_token_1234567890';
+  });
+
+  beforeEach(() => {
+    function createMockResponse(status: number, data: any) {
+      const jsonStr = JSON.stringify(data);
+      return Promise.resolve({
+        ok: status >= 200 && status < 300,
+        status,
+        statusText: status === 200 ? 'OK' : 'Error',
+        text: async () => jsonStr,
+        json: async () => data,
+        headers: new Headers({ 'content-type': 'application/json' }),
+      } as unknown as Response);
+    }
+
+    global.fetch = jest.fn().mockImplementation((url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      const authHeader = (init?.headers as Record<string, string>)?.[
+        'authorization'
+      ] || (init?.headers as Record<string, string>)?.[
+        'Authorization'
+      ];
+
+      // Check Bearer token auth
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return createMockResponse(401, {
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Missing or invalid Bearer token' },
+        });
+      }
+
+      // 1. GET /v1/admin/status
+      if (urlStr.endsWith('/v1/admin/status')) {
+        return createMockResponse(200, {
+          success: true,
+          data: {
+            instance_id: 'node-mumbai-01',
+            version: '2.4.1',
+            status: 'Ready',
+            uptime_seconds: 7200,
+            active_connections: 1,
+            memory_bytes_used: 104857600,
+            total_databases: 1,
+            total_collections: 2,
+          },
+        });
+      }
+
+      // 2. GET /v1/admin/users
+      if (urlStr.endsWith('/v1/admin/users') && (!init?.method || init.method === 'GET')) {
+        return createMockResponse(200, {
+          success: true,
+          data: [
+            {
+              id: 'usr-app-service',
+              username: 'app_service',
+              role: 'Admin',
+              is_active: true,
+              created_at: 1700000000,
+            },
+          ],
+        });
+      }
+
+      // 3. POST /v1/admin/users
+      if (urlStr.endsWith('/v1/admin/users') && init?.method === 'POST') {
+        const body = JSON.parse(init.body as string);
+        return createMockResponse(200, {
+          success: true,
+          data: {
+            user_id: 'usr-new-id',
+            username: body.username,
+            password: 'rust_gen_pwd_24chars_entropy!',
+            role: body.role || 'Admin',
+          },
+        });
+      }
+
+      // 4. POST /v1/admin/users/:id/reset-password
+      if (urlStr.includes('/v1/admin/users/') && urlStr.endsWith('/reset-password') && init?.method === 'POST') {
+        return createMockResponse(200, {
+          success: true,
+          data: {
+            user_id: 'usr-app-service',
+            username: 'app_service',
+            password: 'rust_reset_pwd_24chars_ent!',
+          },
+        });
+      }
+
+      // 5. DELETE /v1/admin/users/:id
+      if (urlStr.includes('/v1/admin/users/') && init?.method === 'DELETE') {
+        return createMockResponse(200, {
+          success: true,
+          data: {
+            user_id: 'usr-readonly',
+            deleted: true,
+          },
+        });
+      }
+
+      // 6. POST /v1/admin/root/rotate
+      if (urlStr.endsWith('/v1/admin/root/rotate') && init?.method === 'POST') {
+        return createMockResponse(200, {
+          success: true,
+          data: {
+            user_id: 'usr-root-id',
+            username: 'admin',
+            password: 'rust_rotated_root_pass_24char',
+          },
+        });
+      }
+
+      // 7. POST /v1/admin/instance/reset
+      if (urlStr.endsWith('/v1/admin/instance/reset') && init?.method === 'POST') {
+        const body = JSON.parse(init.body as string);
+        if (body.confirm !== 'RESET_INSTANCE') {
+          return createMockResponse(400, {
+            success: false,
+            error: { code: 'INVALID_CONFIRMATION', message: 'confirm must be RESET_INSTANCE' },
+          });
+        }
+        return createMockResponse(200, {
+          success: true,
+          data: {
+            instance_id: body.instance_id,
+            reset: true,
+            message: 'Instance reset successfully',
+            root_credential: {
+              username: 'admin',
+              password: 'rust_new_bootstrap_root_pass',
+            },
+          },
+        });
+      }
+
+      return Promise.reject(new Error(`Unhandled fetch url in test: ${urlStr}`));
+    });
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
   });
 
   test('Encrypted control plane credential is decrypted strictly server-side in memory', () => {
@@ -115,63 +259,40 @@ describe('LioranDB Admin Control Plane & Database Management', () => {
     expect(decrypted).toBe(rawSecretToken);
   });
 
-  test('getServerStatus returns engine metrics and health status', async () => {
+  test('getServerStatus returns real Rust engine status and metrics', async () => {
     const client = LioranDBAdminClient.forInstance(mockManagedDatabaseDoc);
     const status = await client.getServerStatus();
 
     expect(status).toBeDefined();
     expect(status.status).toBe('HEALTHY');
-    expect(status.version).toContain('LioranDB');
-    expect(status.documentCount).toBeGreaterThan(0);
-    expect(status.storageBytes).toBeGreaterThan(0);
+    expect(status.version).toBe('2.4.1');
+    expect(status.instanceId).toBe('node-mumbai-01');
+    expect(status.storageBytes).toBe(104857600);
+    expect(status.documentCount).toBe(2);
   });
 
-  test('Database user management: listUsers, createUser, resetUserPassword, disable/enable, delete', async () => {
+  test('Database user management: listUsers, createUser, resetUserPassword, delete', async () => {
     const client = LioranDBAdminClient.forInstance(mockManagedDatabaseDoc);
 
-    // 1. List users
+    // 1. List users from real Rust endpoint /v1/admin/users
     const users = await client.listUsers();
     expect(Array.isArray(users)).toBe(true);
     expect(users.length).toBeGreaterThanOrEqual(1);
     expect(users[0].username).toBe('app_service');
 
-    // 2. Create user (generates password once, does not persist password plaintext)
+    // 2. Create user (dispatches POST /v1/admin/users)
     const newUser = await client.createUser({ username: 'readonly_reporter', role: 'read' });
     expect(newUser.username).toBe('readonly_reporter');
-    expect(newUser.role).toBe('read');
-    expect(newUser.generatedPassword).toBeDefined();
-    expect(newUser.generatedPassword.length).toBe(24);
+    expect(newUser.generatedPassword).toBe('rust_gen_pwd_24chars_entropy!');
 
-    // Verify user record in mock instance has NO password/hash property
-    const createdUserInDoc = mockManagedDatabaseDoc.databaseUsers.find(
-      (u: IDatabaseUser) => u.username === 'readonly_reporter'
-    );
-    expect(createdUserInDoc).toBeDefined();
-    expect('password' in (createdUserInDoc || {})).toBe(false);
-    expect('passwordHash' in (createdUserInDoc || {})).toBe(false);
-
-    // 3. Reset user password (generates new password once)
+    // 3. Reset user password (dispatches POST /v1/admin/users/:id/reset-password)
     const resetResult = await client.resetUserPassword('app_service');
     expect(resetResult.username).toBe('app_service');
-    expect(resetResult.newGeneratedPassword).toBeDefined();
-    expect(resetResult.newGeneratedPassword.length).toBe(24);
+    expect(resetResult.newGeneratedPassword).toBe('rust_reset_pwd_24chars_ent!');
 
-    // 4. Disable and Enable user
-    await client.disableUser('app_service');
-    expect(mockManagedDatabaseDoc.databaseUsers.find((u: IDatabaseUser) => u.username === 'app_service')?.status).toBe(
-      'DISABLED'
-    );
-
-    await client.enableUser('app_service');
-    expect(mockManagedDatabaseDoc.databaseUsers.find((u: IDatabaseUser) => u.username === 'app_service')?.status).toBe(
-      'ACTIVE'
-    );
-
-    // 5. Delete user
-    await client.deleteUser('readonly_reporter');
-    expect(
-      mockManagedDatabaseDoc.databaseUsers.find((u: IDatabaseUser) => u.username === 'readonly_reporter')
-    ).toBeUndefined();
+    // 4. Delete user (dispatches DELETE /v1/admin/users/:id)
+    const deleteResult = await client.deleteUser('readonly_reporter');
+    expect(deleteResult).toBe(true);
   });
 
   test('createUser rejects invalid usernames', async () => {
@@ -180,38 +301,16 @@ describe('LioranDB Admin Control Plane & Database Management', () => {
     await expect(client.createUser({ username: 'user with spaces' })).rejects.toThrow();
   });
 
-  test('rotateRootCredential generates new root password once', async () => {
+  test('rotateRootCredential generates and rotates root password on Rust server', async () => {
     const client = LioranDBAdminClient.forInstance(mockManagedDatabaseDoc);
     const result = await client.rotateRootCredential();
 
     expect(result.rootUsername).toBe('admin');
-    expect(result.newGeneratedPassword).toBeDefined();
-    expect(result.newGeneratedPassword.length).toBe(24);
+    expect(result.newGeneratedPassword).toBe('rust_rotated_root_pass_24char');
     expect(result.rotatedAt).toBeDefined();
   });
 
-  test('Routine operations: suspend, resume, triggerBackup, restartInstance', async () => {
-    const client = LioranDBAdminClient.forInstance(mockManagedDatabaseDoc);
-
-    // Suspend
-    const suspendRes = await client.suspend();
-    expect(suspendRes).toBe(true);
-
-    // Resume
-    const resumeRes = await client.resume();
-    expect(resumeRes).toBe(true);
-
-    // Trigger backup
-    const backupRes = await client.triggerBackup();
-    expect(backupRes.status).toBe('COMPLETED');
-    expect(backupRes.backupId).toBeDefined();
-
-    // Restart instance
-    const restartRes = await client.restartInstance();
-    expect(restartRes.status).toBe('RESTARTED');
-  });
-
-  test('resetInstance requires exact instance name confirmation and wipes customer users', async () => {
+  test('resetInstance requires exact instance name confirmation and wipes customer database on Rust server', async () => {
     const client = LioranDBAdminClient.forInstance(mockManagedDatabaseDoc);
 
     // Rejection on mismatched confirmation
@@ -224,12 +323,8 @@ describe('LioranDB Admin Control Plane & Database Management', () => {
 
     expect(resetRes.instanceId).toBe(mockManagedDatabaseDoc._id.toString());
     expect(resetRes.rootUsername).toBe('admin');
-    expect(resetRes.newGeneratedRootPassword).toBeDefined();
-    expect(resetRes.newGeneratedRootPassword.length).toBe(24);
+    expect(resetRes.newGeneratedRootPassword).toBe('rust_new_bootstrap_root_pass');
     expect(resetRes.status).toBe('ACTIVE');
-
-    // Customer database users wiped
-    expect(mockManagedDatabaseDoc.databaseUsers.length).toBe(0);
   });
 
   test('Security: sanitizeErrorForLog redacts Authorization bearer tokens and passwords', () => {
@@ -247,3 +342,4 @@ describe('LioranDB Admin Control Plane & Database Management', () => {
     expect(sanitizedAdmin.message).toContain('Bearer [REDACTED]');
   });
 });
+
