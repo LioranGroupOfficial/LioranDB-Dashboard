@@ -15,14 +15,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-[var(--background)] px-4 py-8 overflow-y-auto selection:bg-[var(--primary)] selection:text-[var(--on-primary)] transition-colors duration-150">
       <header className="max-w-5xl mx-auto w-full flex items-center justify-between pb-4 border-b border-[var(--border)]">
-        <Link href="/login" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 rounded-[7px] bg-[var(--primary)] flex items-center justify-center text-[var(--on-primary)] font-bold border-2 border-[var(--primary)] shadow-xs transition-transform group-hover:scale-105">
-            <Database className="w-4 h-4 text-[var(--on-primary)]" />
+        <Link href="/login" className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 rounded-[7px] bg-[var(--surface-soft)] flex items-center justify-center border border-[var(--border)] shadow-xs overflow-hidden transition-transform group-hover:scale-105 shrink-0">
+            <img src="/favicon.ico" alt="LCS" className="w-5 h-5 object-contain" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
-            Lioran<span className="text-[var(--text-strong)]">DB</span><span className="text-[var(--text-muted)] font-mono text-sm ml-1">Cloud</span>
+          <span className="text-xl font-bold tracking-tight text-[var(--text-strong)] font-sans">
+            LCS
           </span>
-          <span className="badge badge-default text-[10px]">
+          <span className="badge badge-default text-[10px] font-mono">
             CONSOLE
           </span>
         </Link>

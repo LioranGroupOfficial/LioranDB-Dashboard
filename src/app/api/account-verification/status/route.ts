@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
             userId: sessionUser.userId,
             type: 'PAYMENT_RECEIVED',
             title: 'Account Activated',
-            body: 'Your ₹30 account verification payment was reconciled. You have full access to LioranDB Cloud.',
+            body: 'Your ₹30 account verification payment was reconciled. You have full access to LCS.',
             link: '/dashboard',
           });
 

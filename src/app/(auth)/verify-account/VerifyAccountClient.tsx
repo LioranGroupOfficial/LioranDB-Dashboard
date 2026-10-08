@@ -80,7 +80,7 @@ export default function VerifyAccountClient({ userEmail, isEmailVerified }: Prop
         key: keyId,
         amount: amountPaise,
         currency: currency || 'INR',
-        name: 'LioranDB Cloud',
+        name: 'LCS',
         description: 'One-Time ₹30 Account Verification Fee',
         order_id: orderId,
         prefill: {
@@ -174,7 +174,7 @@ export default function VerifyAccountClient({ userEmail, isEmailVerified }: Prop
           Verify Your LioranDB Account
         </h1>
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto">
-          Complete a one-time ₹30 account verification payment to activate your account and start using LioranDB Cloud.
+          Complete a one-time ₹30 account verification payment to activate your account and start using LCS.
         </p>
       </div>
 
@@ -231,7 +231,7 @@ export default function VerifyAccountClient({ userEmail, isEmailVerified }: Prop
           <span>Account Activation Policy</span>
         </p>
         <p>
-          This one-time fee activates your LioranDB Cloud account. Database hosting and other services are billed separately.
+          This one-time fee activates your LCS account. Database hosting and other services are billed separately.
         </p>
       </div>
 

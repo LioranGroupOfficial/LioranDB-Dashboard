@@ -54,21 +54,21 @@ export default function SupportSidebar({ email: _email, mobileOpen, onMobileClos
         <div className="h-14 shrink-0 flex items-center justify-between px-3.5 border-b border-[var(--border)]">
           {!collapsed ? (
             <Link href="/support-console" className="flex items-center gap-2.5 group">
-              <div className="w-7 h-7 rounded-[6px] bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center border-2 border-[var(--primary)] shadow-xs">
-                <Database className="w-4 h-4 text-[var(--on-primary)]" />
+              <div className="w-7 h-7 rounded-[6px] bg-[var(--surface-soft)] text-[var(--text-strong)] font-bold flex items-center justify-center border border-[var(--border)] shadow-xs overflow-hidden shrink-0">
+                <img src="/favicon.ico" alt="LCS" className="w-4 h-4 object-contain" />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
-                  Lioran<span className="text-[var(--text-strong)]">DB</span><span className="text-[var(--text-muted)] font-mono text-xs ml-1 font-normal">Cloud</span>
+                <span className="text-base font-bold tracking-tight text-[var(--text-strong)] font-sans">
+                  LCS
                 </span>
-                <span className="badge badge-default text-[9px] py-0 px-1">
+                <span className="badge badge-default text-[9px] py-0 px-1 font-mono">
                   SUPPORT
                 </span>
               </div>
             </Link>
           ) : (
-            <div className="w-7 h-7 rounded-[6px] bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center mx-auto border-2 border-[var(--primary)] shadow-xs">
-              <Database className="w-4 h-4 text-[var(--on-primary)]" />
+            <div className="w-7 h-7 rounded-[6px] bg-[var(--surface-soft)] text-[var(--text-strong)] font-bold flex items-center justify-center mx-auto border border-[var(--border)] shadow-xs overflow-hidden">
+              <img src="/favicon.ico" alt="LCS" className="w-4 h-4 object-contain" />
             </div>
           )}
 
@@ -158,14 +158,14 @@ export default function SupportSidebar({ email: _email, mobileOpen, onMobileClos
                 onClick={onMobileClose}
                 className="flex items-center gap-2.5"
               >
-                <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center">
-                  <Database className="w-4 h-4 text-[var(--on-primary)]" />
+                <div className="w-7 h-7 rounded-[6px] bg-[var(--surface-soft)] text-[var(--text-strong)] font-bold flex items-center justify-center border border-[var(--border)] shadow-xs overflow-hidden shrink-0">
+                  <img src="/favicon.ico" alt="LCS" className="w-4 h-4 object-contain" />
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
-                    Lioran<span className="text-[var(--text-strong)]">DB</span><span className="text-[var(--text-muted)] font-mono text-xs ml-1 font-normal">Cloud</span>
+                  <span className="text-base font-bold tracking-tight text-[var(--text-strong)] font-sans">
+                    LCS
                   </span>
-                  <span className="badge badge-default text-[9px] py-0 px-1">
+                  <span className="badge badge-default text-[9px] py-0 px-1 font-mono">
                     SUPPORT
                   </span>
                 </div>

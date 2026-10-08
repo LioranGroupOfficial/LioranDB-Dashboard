@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation';
 import VerifyAccountClient from './VerifyAccountClient';
 
 export const metadata = {
-  title: 'Verify Account — LioranDB Cloud',
-  description: 'Complete one-time ₹30 account verification payment to activate your LioranDB Cloud account.',
+  title: 'Verify Account — LCS',
+  description: 'Complete one-time ₹30 account verification payment to activate your LCS account.',
 };
 
 export default async function VerifyAccountPage() {

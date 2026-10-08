@@ -122,7 +122,7 @@ export default function InvoicesList({ initialInvoices }: Props) {
         key: data.keyId,
         amount: data.amountPaise,
         currency: data.currency || 'INR',
-        name: 'LioranDB Cloud',
+        name: 'LCS',
         description: `Invoice ${invoice.invoiceNumber} Payment`,
         order_id: data.orderId,
         modal: {
