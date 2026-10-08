@@ -55,13 +55,21 @@ export default async function DatabasePage() {
             Control plane for your managed LioranDB database instances
           </p>
         </div>
-        <Link
-          href="/database/create"
-          className="btn-primary"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Create Database</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          {instances.length < 2 ? (
+            <Link
+              href="/database/create"
+              className="btn-primary"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Database ({instances.length}/2)</span>
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-[7px] text-xs font-mono font-medium bg-[var(--surface-soft)] text-[var(--text-muted)] border border-[var(--border)]">
+              Limit Reached (2/2)
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Instance Cards / Grid */}

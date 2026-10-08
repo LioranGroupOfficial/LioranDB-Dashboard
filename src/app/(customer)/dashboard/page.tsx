@@ -60,13 +60,23 @@ export default async function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <Link
-            href="/database/create"
-            className="btn-primary"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create Database</span>
-          </Link>
+          {instances.length < 2 ? (
+            <Link
+              href="/database/create"
+              className="btn-primary"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Database ({instances.length}/2)</span>
+            </Link>
+          ) : (
+            <Link
+              href="/database"
+              className="btn-secondary text-xs"
+            >
+              <Database className="w-3.5 h-3.5" />
+              <span>Databases (2/2)</span>
+            </Link>
+          )}
           <a
             href="https://studio.liorandb.com"
             target="_blank"

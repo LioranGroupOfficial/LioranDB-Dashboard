@@ -90,6 +90,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Enforce 2 databases per user limit
+    const MAX_DATABASES_PER_USER = 2;
+    const activeDatabasesCount = await ManagedDatabase.countDocuments({
+      $or: [{ customerId: user._id }, { userId: user._id }],
+      status: { $nin: ['TERMINATED', 'DELETED'] },
+    });
+
+    if (user.role !== 'admin' && activeDatabasesCount >= MAX_DATABASES_PER_USER) {
+      return NextResponse.json(
+        {
+          error: `Database limit reached: You can create a maximum of ${MAX_DATABASES_PER_USER} databases per account. Please terminate an existing database before creating a new one.`,
+          code: 'DATABASE_LIMIT_EXCEEDED',
+          limit: MAX_DATABASES_PER_USER,
+          currentCount: activeDatabasesCount,
+        },
+        { status: 400 }
+      );
+    }
+
     // Check unique name for this customer
     const existing = await ManagedDatabase.findOne({
       customerId: user._id,

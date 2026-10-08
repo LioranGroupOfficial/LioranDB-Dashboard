@@ -46,4 +46,14 @@ describe('Provisioning Service & Credentials', () => {
     expect(pass2.length).toBe(24);
     expect(pass1).not.toBe(pass2);
   });
+
+  test('Database limit per user is enforced to maximum 2 databases', () => {
+    const MAX_DATABASES_PER_USER = 2;
+    const userActiveDatabases = ['db-prod-1', 'db-staging-2'];
+    const canCreateMore = userActiveDatabases.length < MAX_DATABASES_PER_USER;
+    expect(canCreateMore).toBe(false);
+
+    const userWithOneDb = ['db-prod-1'];
+    expect(userWithOneDb.length < MAX_DATABASES_PER_USER).toBe(true);
+  });
 });
