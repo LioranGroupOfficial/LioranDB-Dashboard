@@ -88,15 +88,15 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
         <div className="h-14 shrink-0 flex items-center justify-between px-3.5 border-b border-[var(--border)]">
           {!collapsed ? (
             <Link href="/dashboard" className="flex items-center gap-2.5 group">
-              <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center shadow-xs">
+              <div className="w-7 h-7 rounded-[6px] bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center border-2 border-[var(--primary)] shadow-xs">
                 <Database className="w-4 h-4 text-[var(--on-primary)]" />
               </div>
-              <span className="text-base font-normal font-serif tracking-tight text-[var(--text-primary)]">
-                Lioran<span className="text-[var(--primary)] italic">DB</span>
+              <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
+                STHASHTA<span className="text-[var(--text-muted)] font-mono text-xs ml-1.5 font-normal">/ DB</span>
               </span>
             </Link>
           ) : (
-            <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center mx-auto shadow-xs">
+            <div className="w-7 h-7 rounded-[6px] bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center mx-auto border-2 border-[var(--primary)] shadow-xs">
               <Database className="w-4 h-4 text-[var(--on-primary)]" />
             </div>
           )}
@@ -105,7 +105,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
             type="button"
             onClick={toggleCollapsed}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-card)] transition-colors ${
+            className={`p-1.5 rounded-[5px] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-soft)] transition-colors ${
               collapsed ? 'hidden' : 'block'
             }`}
             aria-label="Toggle sidebar"
@@ -120,7 +120,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
               type="button"
               onClick={toggleCollapsed}
               title="Expand sidebar"
-              className="p-1.5 rounded-lg text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-card)] transition-colors"
+              className="p-1.5 rounded-[5px] text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface-soft)] transition-colors"
             >
               <PanelLeftOpen className="w-4 h-4" />
             </button>
@@ -147,11 +147,11 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
               >
                 <Icon
                   className={`w-4 h-4 shrink-0 transition-colors ${
-                    active ? 'text-[var(--primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
+                    active ? 'text-[var(--on-primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
                   }`}
                 />
                 {!collapsed && (
-                  <span className="text-xs font-medium truncate">{item.label}</span>
+                  <span className="text-xs font-semibold truncate">{item.label}</span>
                 )}
               </Link>
             );
@@ -160,17 +160,17 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
 
         {/* Current Month Estimated Usage Pill */}
         {!collapsed && estimatedPaise !== null && (
-          <div className="p-3 mx-2 mb-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border)] shadow-2xs">
+          <div className="p-3 mx-2 mb-2 rounded-[7px] bg-[var(--surface)] border border-[var(--border)] shadow-xs">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1">
                 <Activity className="w-3 h-3 text-[var(--primary)]" />
                 Month Estimate
               </span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--muted)] font-mono">
-                Postpaid
+              <span className="badge badge-default text-[9px] py-0 px-1">
+                POSTPAID
               </span>
             </div>
-            <p className="font-serif text-sm font-bold text-[var(--text-primary)]">
+            <p className="font-mono text-sm font-bold text-[var(--text-primary)]">
               ₹{(estimatedPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>

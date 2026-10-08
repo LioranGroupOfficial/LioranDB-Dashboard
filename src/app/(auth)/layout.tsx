@@ -16,14 +16,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen flex flex-col justify-between bg-[var(--background)] px-4 py-8 overflow-y-auto selection:bg-[var(--primary)] selection:text-[var(--on-primary)] transition-colors duration-150">
       <header className="max-w-5xl mx-auto w-full flex items-center justify-between pb-4 border-b border-[var(--border)]">
         <Link href="/login" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 rounded-lg bg-[var(--primary)] flex items-center justify-center text-[var(--on-primary)] font-bold shadow-sm transition-transform group-hover:scale-105">
+          <div className="w-8 h-8 rounded-[7px] bg-[var(--primary)] flex items-center justify-center text-[var(--on-primary)] font-bold border-2 border-[var(--primary)] shadow-xs transition-transform group-hover:scale-105">
             <Database className="w-4 h-4 text-[var(--on-primary)]" />
           </div>
-          <span className="text-xl font-normal font-serif tracking-tight text-[var(--text-primary)]">
-            Lioran<span className="text-[var(--primary)] italic">DB</span>
+          <span className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
+            STHASHTA / Lioran<span className="text-[var(--text-muted)] font-mono text-sm ml-1">Cloud</span>
           </span>
-          <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-[var(--surface-card)] text-[var(--text-secondary)] border border-[var(--border)] font-sans font-medium">
-            Console
+          <span className="badge badge-default text-[10px]">
+            CONSOLE
           </span>
         </Link>
         <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">

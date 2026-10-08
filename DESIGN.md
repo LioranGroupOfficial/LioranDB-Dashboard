@@ -1,589 +1,1060 @@
 ---
 version: alpha
-name: Claude-design-analysis
-description: A warm-canvas editorial interface for Anthropic's Claude product. The system anchors on a tinted cream canvas with serif display headlines, warm coral CTAs, and dark navy product surfaces (code editor mockups, model showcase cards). Brand voltage comes from the cream/coral pairing — deliberately warm and humanist where most AI brands use cool blue + slate. Type voice runs a slab-serif display ("Copernicus" / Tiempos Headline) for h1/h2 and a humanist sans for body. The signature Anthropic black-radial-spike mark anchors the wordmark.
+name: Sthashta-design-system
+description: Sthashta is a live founder-meetup platform with a deliberately hand-made black-and-white visual language. The entire product uses a pure white paper-like canvas, near-black ink, rough sketch borders, stickman founder illustrations, hand-drawn arrows and connectors, and intentionally imperfect geometry. There is only one visual mode: light mode. No gradients, colored accents, glossy surfaces, glassmorphism, realistic 3D, or conventional polished SaaS decoration. The interface should feel like a founder sketched the product on paper and then made the sketch interactive.
 
 colors:
-  primary: "#cc785c"
-  primary-active: "#a9583e"
-  primary-disabled: "#e6dfd8"
-  ink: "#141413"
-  body: "#3d3d3a"
-  body-strong: "#252523"
-  muted: "#6c6a64"
-  muted-soft: "#8e8b82"
-  hairline: "#e6dfd8"
-  hairline-soft: "#ebe6df"
-  canvas: "#faf9f5"
-  surface-soft: "#f5f0e8"
-  surface-card: "#efe9de"
-  surface-cream-strong: "#e8e0d2"
-  surface-dark: "#181715"
-  surface-dark-elevated: "#252320"
-  surface-dark-soft: "#1f1e1b"
-  on-primary: "#ffffff"
-  on-dark: "#faf9f5"
-  on-dark-soft: "#a09d96"
-  accent-teal: "#5db8a6"
-  accent-amber: "#e8a55a"
-  success: "#5db872"
-  warning: "#d4a017"
-  error: "#c64545"
+  primary: "#000000"
+  primary-active: "#222222"
+  ink: "#111111"
+  body: "#333333"
+  body-strong: "#000000"
+  muted: "#666666"
+  muted-soft: "#999999"
+  sketch-faint: "#D9D9D9"
+  hairline: "#D0D0D0"
+  hairline-soft: "#E8E8E8"
+  hairline-strong: "#111111"
+  canvas: "#FFFFFF"
+  canvas-soft: "#FAFAFA"
+  surface-card: "#FFFFFF"
+  surface-strong: "#F4F4F4"
+  on-primary: "#FFFFFF"
+  semantic-error: "#111111"
+  semantic-success: "#111111"
 
 typography:
-  display-xl:
-    fontFamily: "Copernicus, Tiempos Headline, serif"
+  display-mega:
+    fontFamily: "'Inter', -apple-system, system-ui, sans-serif"
     fontSize: 64px
-    fontWeight: 400
+    fontWeight: 700
+    lineHeight: 1.02
+    letterSpacing: -2.2px
+  display-xl:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 48px
+    fontWeight: 700
     lineHeight: 1.05
     letterSpacing: -1.5px
   display-lg:
-    fontFamily: "Copernicus, Tiempos Headline, serif"
-    fontSize: 48px
-    fontWeight: 400
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 36px
+    fontWeight: 700
     lineHeight: 1.1
     letterSpacing: -1px
   display-md:
-    fontFamily: "Copernicus, Tiempos Headline, serif"
-    fontSize: 36px
-    fontWeight: 400
-    lineHeight: 1.15
-    letterSpacing: -0.5px
-  display-sm:
-    fontFamily: "Copernicus, Tiempos Headline, serif"
+    fontFamily: "'Inter', sans-serif"
     fontSize: 28px
-    fontWeight: 400
-    lineHeight: 1.2
-    letterSpacing: -0.3px
-  title-lg:
-    fontFamily: "StyreneB, Inter, sans-serif"
+    fontWeight: 650
+    lineHeight: 1.15
+    letterSpacing: -0.7px
+  display-sm:
+    fontFamily: "'Inter', sans-serif"
     fontSize: 22px
-    fontWeight: 500
-    lineHeight: 1.3
-    letterSpacing: 0
+    fontWeight: 650
+    lineHeight: 1.2
+    letterSpacing: -0.4px
   title-md:
-    fontFamily: "StyreneB, Inter, sans-serif"
+    fontFamily: "'Inter', sans-serif"
     fontSize: 18px
-    fontWeight: 500
-    lineHeight: 1.4
-    letterSpacing: 0
+    fontWeight: 650
+    lineHeight: 1.35
   title-sm:
-    fontFamily: "StyreneB, Inter, sans-serif"
+    fontFamily: "'Inter', sans-serif"
     fontSize: 16px
-    fontWeight: 500
+    fontWeight: 650
     lineHeight: 1.4
-    letterSpacing: 0
   body-md:
-    fontFamily: "StyreneB, Inter, sans-serif"
+    fontFamily: "'Inter', sans-serif"
     fontSize: 16px
     fontWeight: 400
     lineHeight: 1.55
-    letterSpacing: 0
   body-sm:
-    fontFamily: "StyreneB, Inter, sans-serif"
+    fontFamily: "'Inter', sans-serif"
     fontSize: 14px
     fontWeight: 400
-    lineHeight: 1.55
-    letterSpacing: 0
+    lineHeight: 1.5
   caption:
-    fontFamily: "StyreneB, Inter, sans-serif"
+    fontFamily: "'Inter', sans-serif"
     fontSize: 13px
-    fontWeight: 500
+    fontWeight: 400
     lineHeight: 1.4
-    letterSpacing: 0
   caption-uppercase:
-    fontFamily: "StyreneB, Inter, sans-serif"
-    fontSize: 12px
-    fontWeight: 500
+    fontFamily: "'JetBrains Mono', monospace"
+    fontSize: 11px
+    fontWeight: 600
     lineHeight: 1.4
-    letterSpacing: 1.5px
-  code:
-    fontFamily: "JetBrains Mono, ui-monospace, monospace"
+    letterSpacing: 0.7px
+    textTransform: uppercase
+  sketch-note:
+    fontFamily: "'Comic Neue', 'Comic Sans MS', cursive"
     fontSize: 14px
     fontWeight: 400
-    lineHeight: 1.6
-    letterSpacing: 0
+    lineHeight: 1.35
+  code:
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace"
+    fontSize: 13px
+    fontWeight: 400
+    lineHeight: 1.5
   button:
-    fontFamily: "StyreneB, Inter, sans-serif"
+    fontFamily: "'Inter', sans-serif"
     fontSize: 14px
-    fontWeight: 500
+    fontWeight: 600
     lineHeight: 1
-    letterSpacing: 0
   nav-link:
-    fontFamily: "StyreneB, Inter, sans-serif"
+    fontFamily: "'Inter', sans-serif"
     fontSize: 14px
-    fontWeight: 500
+    fontWeight: 550
     lineHeight: 1.4
-    letterSpacing: 0
 
 rounded:
-  xs: 4px
-  sm: 6px
-  md: 8px
-  lg: 12px
-  xl: 16px
-  pill: 9999px
+  none: 0px
+  sketch-xs: 3px
+  sketch-sm: 5px
+  sketch-md: 7px
+  sketch-lg: 10px
   full: 9999px
 
 spacing:
   xxs: 4px
   xs: 8px
   sm: 12px
-  md: 16px
+  base: 16px
+  md: 20px
   lg: 24px
   xl: 32px
   xxl: 48px
   section: 96px
 
 components:
-  button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.button}"
-    rounded: "{rounded.md}"
-    padding: 12px 20px
-    height: 40px
-  button-primary-active:
-    backgroundColor: "{colors.primary-active}"
-    textColor: "{colors.on-primary}"
-    rounded: "{rounded.md}"
-  button-primary-disabled:
-    backgroundColor: "{colors.primary-disabled}"
-    textColor: "{colors.muted}"
-    rounded: "{rounded.md}"
-  button-secondary:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    typography: "{typography.button}"
-    rounded: "{rounded.md}"
-    padding: 12px 20px
-    height: 40px
-  button-secondary-on-dark:
-    backgroundColor: "{colors.surface-dark-elevated}"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.button}"
-    rounded: "{rounded.md}"
-    padding: 12px 20px
-  button-text-link:
-    backgroundColor: transparent
-    textColor: "{colors.ink}"
-    typography: "{typography.button}"
-  button-icon-circular:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.full}"
-    size: 36px
-  text-link:
-    backgroundColor: transparent
-    textColor: "{colors.primary}"
-    typography: "{typography.body-md}"
   top-nav:
     backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
     typography: "{typography.nav-link}"
     height: 64px
+    borderBottom: "1.5px hand-drawn {colors.ink}"
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.button}"
+    rounded: "{rounded.sketch-md}"
+    padding: 11px 19px
+    height: 42px
+    border: "2px solid {colors.primary}"
+    treatment: "slightly irregular hand-drawn outline"
+  button-secondary:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.button}"
+    rounded: "{rounded.sketch-md}"
+    padding: 10px 18px
+    height: 42px
+    border: "2px hand-drawn {colors.ink}"
   hero-band:
     backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
-    typography: "{typography.display-xl}"
+    typography: "{typography.display-mega}"
     padding: 96px
-  hero-illustration-card:
+  founder-match-card:
     backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.xl}"
+    rounded: "{rounded.sketch-lg}"
+    padding: 0
+    border: "2px rough hand-drawn {colors.ink}"
+  founder-video-panel:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.sketch-md}"
+    border: "2px rough hand-drawn {colors.ink}"
   feature-card:
-    backgroundColor: "{colors.surface-card}"
+    backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
     typography: "{typography.title-md}"
-    rounded: "{rounded.lg}"
-    padding: 32px
-  product-mockup-card-dark:
-    backgroundColor: "{colors.surface-dark}"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.title-md}"
-    rounded: "{rounded.lg}"
-    padding: 32px
-  code-window-card:
-    backgroundColor: "{colors.surface-dark}"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.code}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.sketch-lg}"
     padding: 24px
-  model-comparison-card:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    typography: "{typography.title-md}"
-    rounded: "{rounded.lg}"
-    padding: 32px
-  pricing-tier-card:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    typography: "{typography.title-lg}"
-    rounded: "{rounded.lg}"
-    padding: 32px
-  pricing-tier-card-featured:
-    backgroundColor: "{colors.surface-dark}"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.title-lg}"
-    rounded: "{rounded.lg}"
-    padding: 32px
-  callout-card-coral:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.title-md}"
-    rounded: "{rounded.lg}"
-    padding: 32px
-  connector-tile:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.ink}"
-    typography: "{typography.title-sm}"
-    rounded: "{rounded.lg}"
-    padding: 20px
+    border: "1.5px rough hand-drawn {colors.ink}"
+  sketch-note:
+    backgroundColor: transparent
+    textColor: "{colors.body}"
+    typography: "{typography.sketch-note}"
   text-input:
     backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
     typography: "{typography.body-md}"
-    rounded: "{rounded.md}"
-    padding: 10px 14px
-    height: 40px
-  text-input-focused:
+    rounded: "{rounded.sketch-md}"
+    padding: 12px 16px
+    height: 46px
+    border: "1.5px rough hand-drawn {colors.ink}"
+  badge:
     backgroundColor: "{colors.canvas}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-  cookie-consent-card:
-    backgroundColor: "{colors.surface-dark}"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.lg}"
-    padding: 24px
-  category-tab:
-    backgroundColor: transparent
-    textColor: "{colors.muted}"
-    typography: "{typography.nav-link}"
-    padding: 8px 14px
-    rounded: "{rounded.md}"
-  category-tab-active:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.ink}"
-    typography: "{typography.nav-link}"
-    rounded: "{rounded.md}"
-  badge-pill:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.ink}"
-    typography: "{typography.caption}"
-    rounded: "{rounded.pill}"
-    padding: 4px 12px
-  badge-coral:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
     typography: "{typography.caption-uppercase}"
-    rounded: "{rounded.pill}"
-    padding: 4px 12px
-  cta-band-coral:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.display-sm}"
-    rounded: "{rounded.lg}"
-    padding: 64px
-  cta-band-dark:
-    backgroundColor: "{colors.surface-dark}"
-    textColor: "{colors.on-dark}"
-    typography: "{typography.display-sm}"
-    rounded: "{rounded.lg}"
-    padding: 64px
-  footer:
-    backgroundColor: "{colors.surface-dark}"
-    textColor: "{colors.on-dark-soft}"
+    rounded: "{rounded.sketch-sm}"
+    padding: 4px 9px
+    border: "1px rough hand-drawn {colors.ink}"
+  cta-band:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.display-lg}"
+    padding: 96px
+  footer-light:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.body}"
     typography: "{typography.body-sm}"
-    padding: 64px
+    padding: 64px 48px
+
 ---
 
 ## Overview
 
-Claude.com is the warmest, most editorial interface in the AI-product category. The base atmosphere is a **tinted cream canvas** (`{colors.canvas}` — #faf9f5) — distinctly warm, deliberately not the cool gray-white that every other AI brand uses. Headlines run a **slab-serif display** ("Copernicus" / Tiempos Headline) at weight 400 with negative letter-spacing, paired with **StyreneB / Inter** body sans. The combination feels like a literary publication, not a SaaS marketing page.
+Sthashta is a live founder-to-founder meetup product. Its visual identity should feel like a **black-ink startup sketchbook that became interactive**. The source design used a polished white developer-platform canvas with blue accents, gradient atmosphere, device mockups, dark cards, and conventional SaaS geometry. Sthashta deliberately removes those signals and replaces them with one strict language: **white paper + black ink + stickmen + imperfect hand-drawn UI**.
 
-Brand voltage comes from the **cream + coral pairing** — coral (`{colors.primary}` — #cc785c) is the signature Anthropic accent, used on every primary CTA, on the brand wordmark, and on full-bleed callout cards. The coral is warm, slightly muted, never cyan/blue — a deliberate counter-positioning against OpenAI's cool slate, Google's saturated blue, and Microsoft's corporate cyan.
+The experience is **light-mode only**. There is no dark theme, no theme switcher, and no alternate color scheme.
 
-The system has three surface modes that alternate page-by-page:
-1. **Cream canvas** (`{colors.canvas}`) — default body floor
-2. **Light cream cards** (`{colors.surface-card}`) — feature card backgrounds
-3. **Dark navy product surfaces** (`{colors.surface-dark}`) — code editor mockups, model showcase cards, pre-footer CTAs, footer itself
+The page should not look childish or like a classroom doodle. The goal is a **premium editorial sketch**: sparse, confident, weirdly human, and memorable.
 
-The dark surfaces are where Claude shows its product chrome — code blocks, terminal output, model comparison tables, agentic-flow diagrams. The cream-to-dark contrast is the page's pacing rhythm.
+### Brand sentence
 
-**Key Characteristics:**
-- Warm cream canvas (`{colors.canvas}` — #faf9f5) with dark warm-ink text (`{colors.ink}` — #141413). The brand's defining color choice.
-- Coral primary CTA (`{colors.primary}` — #cc785c). Used scarcely on individual buttons, generously on full-bleed coral callout cards.
-- Slab-serif display headlines via Copernicus / Tiempos Headline at weight 400 with negative letter-spacing. Pairs with humanist sans body for a literary editorial voice.
-- Dark navy product mockup cards (`{colors.surface-dark}` — #181715) carrying code blocks, terminal panels, model comparison data — the brand shows the product chrome at scale rather than abstract marketing illustrations.
-- Light cream feature cards (`{colors.surface-card}` — #efe9de) — slightly darker than canvas, used for content-driven feature explanations.
-- Anthropic radial-spike mark — a small black asterisk-like glyph (4-spoke radial) — appears as the brand wordmark prefix and as a content marker.
-- Border radius is hierarchical: `{rounded.md}` (8px) for buttons + inputs, `{rounded.lg}` (12px) for content + product cards, `{rounded.xl}` (16px) for the hero illustration container, `{rounded.pill}` for badges.
-- Section rhythm `{spacing.section}` (96px) — modern-SaaS standard. Internal card padding stays generous at `{spacing.xl}` (32px).
+**Sthashta — where founders meet.**
+
+### Key Characteristics
+
+- Pure solid white background everywhere.
+- Black and near-black ink only.
+- Grays are allowed only for hierarchy, disabled states, subtle texture, and secondary copy.
+- Absolutely no colored accent.
+- Absolutely no gradients.
+- Absolutely no dark-mode sections.
+- Hand-drawn stickman founders are the main brand imagery.
+- Rough lines, arrows, circles, underlines, connection paths, speech marks, and annotations act as decoration.
+- Product UI is still usable and clean, but its containers look manually sketched.
+- Large areas of negative white space.
+- Inter for functional/product typography.
+- JetBrains Mono for system labels, status, matching metadata, room IDs, and technical surfaces.
+- Optional Comic Neue only for tiny handwritten annotations, never for primary UI or long body copy.
+- No photorealistic people, stock photography, 3D renders, gradients, glassmorphism, neon glows, or glossy illustrations.
+- Motion should feel like ink being drawn, not objects floating through space.
+
+## Character System
+
+The brand repeatedly uses two canonical founder archetypes. These characters should remain recognizable across landing-page art, onboarding, empty states, waiting rooms, social graphics, and launch content.
+
+### Rahul — Humble Founder
+
+Rahul is a young Indian male founder around 24 years old represented as a very simple hand-drawn stickman/sketch character. Slim stickman body. Simple round-ish hand-drawn face. Messy short black hair represented by a few rough black strokes. Tiny light-stubble marks. Plain solid-black T-shirt. Simple black trousers. No glasses. No jewelry. Down-to-earth, humble founder appearance.
+
+Do not increase anatomical detail. Rahul should remain a sketch character.
+
+### Ravi — Hip-Hop Founder
+
+Ravi is a young Indian male founder around 27 years old represented as a simple hand-drawn stickman/sketch character. Slightly broader stickman body than Rahul. Stylish short black hair made from sharper rough strokes. Tiny trimmed-beard marks. Rectangular black sunglasses. Oversized black streetwear jacket over a black shirt. Small subtle chain. Confident, slightly rocky visual energy, but genuine and never dangerous.
+
+Ravi must remain visually consistent with Rahul's illustration system. He is not a realistic portrait.
+
+### Generic Founder
+
+When Rahul or Ravi are not appropriate, use generic founder stickmen with only one or two distinguishing marks: hair shape, glasses, hoodie, cap, beard marks, or shirt fill. Never create highly detailed avatars.
 
 ## Colors
 
-### Brand & Accent
-- **Coral / Primary** (`{colors.primary}` — #cc785c): The signature Anthropic warm coral. Used on every primary CTA background, on full-bleed coral callout cards, on the brand wordmark accent. The most-recognized Anthropic color outside of the spike-mark logo.
-- **Coral Active** (`{colors.primary-active}` — #a9583e): The press / hover-darker variant.
-- **Coral Disabled** (`{colors.primary-disabled}` — #e6dfd8): A desaturated cream-tinted disabled state.
-- **Accent Teal** (`{colors.accent-teal}` — #5db8a6): Used sparingly on secondary product surfaces (terminal status indicators, "active connection" dots in connectors page).
-- **Accent Amber** (`{colors.accent-amber}` — #e8a55a): A small companion warm-tone used on category badges and inline highlights.
+### Absolute Rule
+
+Sthashta is monochrome.
+
+The only fundamental colors are:
+
+- **Paper** `{colors.canvas}` — #FFFFFF
+- **Ink** `{colors.primary}` — #000000
+
+Everything else exists only to create readable hierarchy.
+
+### Ink
+
+- **Pure Black** #000000: primary CTA, major illustration strokes, active controls, logo.
+- **Near Black** #111111: primary text and slightly softer sketch lines.
+- **Body** #333333: running copy.
+- **Muted** #666666: metadata and secondary text.
+- **Muted Soft** #999999: disabled states.
+- **Sketch Faint** #D9D9D9: optional construction lines and faint paper-like marks.
 
 ### Surface
-- **Canvas** (`{colors.canvas}` — #faf9f5): The default page floor. Tinted cream — warm, deliberately not pure white.
-- **Surface Soft** (`{colors.surface-soft}` — #f5f0e8): Section dividers, very-soft band backgrounds.
-- **Surface Card** (`{colors.surface-card}` — #efe9de): Feature cards, content cards. One step darker than canvas.
-- **Surface Cream Strong** (`{colors.surface-cream-strong}` — #e8e0d2): A strongest-cream variant used on selected category tabs and emphasized section bands.
-- **Surface Dark** (`{colors.surface-dark}` — #181715): Code editor mockups, model showcase cards, footer. The dominant dark surface.
-- **Surface Dark Elevated** (`{colors.surface-dark-elevated}` — #252320): Elevated cards inside dark bands (settings panels in mockups).
-- **Surface Dark Soft** (`{colors.surface-dark-soft}` — #1f1e1b): Slightly lighter dark, used for code block backgrounds inside larger dark cards.
-- **Hairline** (`{colors.hairline}` — #e6dfd8): The 1px border tone on cream surfaces. Same hex as `{colors.primary-disabled}` — borders feel like one elevation step rather than ink lines.
-- **Hairline Soft** (`{colors.hairline-soft}` — #ebe6df): Barely-visible divider used inside the same band.
 
-### Text
-- **Ink** (`{colors.ink}` — #141413): All headlines and primary text. Warm dark, slightly off-pure-black.
-- **Body Strong** (`{colors.body-strong}` — #252523): Emphasized paragraphs, lead text.
-- **Body** (`{colors.body}` — #3d3d3a): Default running-text color.
-- **Muted** (`{colors.muted}` — #6c6a64): Sub-headings, breadcrumbs, footer-adjacent secondary text.
-- **Muted Soft** (`{colors.muted-soft}` — #8e8b82): Captions, fine-print, copyright lines.
-- **On Primary** (`{colors.on-primary}` — #ffffff): Text on coral buttons.
-- **On Dark** (`{colors.on-dark}` — #faf9f5): Cream-tinted white used on dark surfaces (echoes the canvas tone).
-- **On Dark Soft** (`{colors.on-dark-soft}` — #a09d96): Footer body text, secondary labels in dark mockups.
+- Canvas: #FFFFFF.
+- Cards: #FFFFFF.
+- Alternate sections: preferably #FFFFFF. #FAFAFA may be used extremely sparingly when layout separation is otherwise unclear.
+- Inputs: #FFFFFF.
+- Video frames: #FFFFFF before video loads.
 
-### Semantic
-- **Success** (`{colors.success}` — #5db872): Green status dots, "available" indicators.
-- **Warning** (`{colors.warning}` — #d4a017): Warning callouts (rare on marketing surfaces).
-- **Error** (`{colors.error}` — #c64545): Validation errors.
+### Forbidden Colors
+
+Do not use:
+- blue links
+- green success
+- red errors
+- purple preview tags
+- cyan accents
+- yellow highlights
+- colored avatars
+- colored logos
+- gradient backgrounds
+
+Semantic meaning must be communicated using **iconography, labels, border styles, fill patterns, and typography**, not hue alone.
+
+Example:
+- success = black checkmark + "connected"
+- error = black cross + explanatory text
+- waiting = hand-drawn ellipsis / spinner
+- warning = black outlined triangle
 
 ## Typography
 
-### Font Family
-The system runs **Copernicus** (or **Tiempos Headline** as substitute) as the slab-serif display face for headlines, and **StyreneB** (or **Inter** as substitute) as the humanist sans for body, navigation, and UI labels. **JetBrains Mono** handles code blocks. The fallback stack walks `Tiempos Headline, Garamond, "Times New Roman", serif` for display and `Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` for body.
+### Primary Typeface
 
-The display/body split is editorial:
-- Copernicus serif (weight 400, negative tracking) → h1, h2, h3, hero display
-- StyreneB sans (weight 400-500) → body, navigation, buttons, captions, labels
-- JetBrains Mono → all code blocks and terminal text
+Use **Inter** for the actual application and marketing UI.
 
-### Hierarchy
+The sketch aesthetic comes from illustration and geometry, not from making every word look handwritten. This keeps Sthashta usable and prevents the site from turning into a comic-book interface.
 
-| Token | Size | Weight | Line Height | Letter Spacing | Use |
-|---|---|---|---|---|---|
-| `{typography.display-xl}` | 64px | 400 | 1.05 | -1.5px | Homepage h1 ("Meet your thinking partner") — Copernicus serif |
-| `{typography.display-lg}` | 48px | 400 | 1.1 | -1px | Section heads — Copernicus |
-| `{typography.display-md}` | 36px | 400 | 1.15 | -0.5px | Sub-section heads, model names — Copernicus |
-| `{typography.display-sm}` | 28px | 400 | 1.2 | -0.3px | Pricing tier names, callout headlines — Copernicus |
-| `{typography.title-lg}` | 22px | 500 | 1.3 | 0 | Pricing plan size labels — StyreneB |
-| `{typography.title-md}` | 18px | 500 | 1.4 | 0 | Feature card titles, intro paragraphs |
-| `{typography.title-sm}` | 16px | 500 | 1.4 | 0 | Connector tile titles, list labels |
-| `{typography.body-md}` | 16px | 400 | 1.55 | 0 | Default running-text — StyreneB |
-| `{typography.body-sm}` | 14px | 400 | 1.55 | 0 | Footer body, fine-print |
-| `{typography.caption}` | 13px | 500 | 1.4 | 0 | Badge labels, captions |
-| `{typography.caption-uppercase}` | 12px | 500 | 1.4 | 1.5px | Category tags, "NEW" badges |
-| `{typography.code}` | 14px | 400 | 1.6 | 0 | Code blocks — JetBrains Mono |
-| `{typography.button}` | 14px | 500 | 1.0 | 0 | Standard button labels |
-| `{typography.nav-link}` | 14px | 500 | 1.4 | 0 | Top-nav menu items |
+### Secondary Typeface
 
-### Principles
-Display sizes use weight 400 (regular), never bold. Negative letter-spacing (-0.3 to -1.5px) is essential — Copernicus without it reads as off-brand. The serif character is what gives Anthropic its literary, considered voice; switching to a sans-serif display would make Claude feel like every other AI tool.
+Use **JetBrains Mono** for:
+- MATCHING...
+- LIVE
+- room/session IDs
+- timestamps
+- founder tags
+- technical metadata
+- small uppercase labels
 
-Body type stays at weight 400 for paragraphs, weight 500 for labels and emphasized phrases. The sans body is humanist (StyreneB) — never geometric. Inter is an acceptable substitute because of its similar humanist proportions; Helvetica or Arial would be too neutral and break the warm-editorial feel.
+### Handwritten Accent
 
-### Note on Font Substitutes
-If Copernicus / Tiempos Headline is unavailable, **Cormorant Garamond** at weight 500 with -0.02em letter-spacing is the closest open-source approximation. **EB Garamond** is a fallback. For StyreneB, **Inter** is the closest match — both are humanist sans designed for screen reading. **Söhne** is another close alternative if licensed.
+`{typography.sketch-note}` may use Comic Neue or a similar freely available handwritten face only for small annotation-style notes such as:
+
+- "you"
+- "another founder"
+- "say hi"
+- "random match"
+- arrows pointing toward UI elements
+
+Never use it for paragraphs, navigation, forms, or primary CTAs.
+
+### Display
+
+Hero headings should be bold, compact, and black. Use large Inter rather than decorative lettering.
+
+Recommended hero:
+
+**Meet a founder.  
+Not a feed.**
+
+Alternative supporting line:
+
+**Random live conversations with people who are actually building.**
 
 ## Layout
 
-### Spacing System
-- **Base unit:** 4px.
-- **Tokens:** `{spacing.xxs}` 4px · `{spacing.xs}` 8px · `{spacing.sm}` 12px · `{spacing.md}` 16px · `{spacing.lg}` 24px · `{spacing.xl}` 32px · `{spacing.xxl}` 48px · `{spacing.section}` 96px.
-- **Section padding:** `{spacing.section}` (96px) — modern-SaaS rhythm.
-- **Card internal padding:** `{spacing.xl}` (32px) for feature cards, pricing tier cards, model comparison cards; `{spacing.lg}` (24px) for code-window cards and connector tiles.
-- **Callout / CTA bands:** `{spacing.xxl}` (48px) inside coral callout cards; 64px inside the larger dark CTA band.
+### Spacing
 
-### Grid & Container
-- **Max content width:** ~1200px centered.
-- **Editorial body:** Single 12-column grid; hero often uses 6/6 split (h1 left, illustration right).
-- **Feature card grids:** 3-up at desktop, 2-up at tablet, 1-up at mobile.
-- **Connector tile grids:** 4-up or 6-up at desktop, 2-up at tablet, 1-up at mobile.
-- **Pricing grid:** 3-up at desktop (Free / Pro / Team / Enterprise often), 1-up at mobile.
+Retain a 4px base spacing system and generous 96px desktop section rhythm.
 
-### Whitespace Philosophy
-The cream canvas + serif display + generous internal padding create an editorial pacing — Claude reads like a long-form magazine column rather than a marketing template. Whitespace between bands stays uniform at 96px; whitespace inside cards is generous (32px), letting type breathe.
+### Container
+
+- Max content width: 1180–1200px.
+- Marketing pages: wide editorial composition.
+- Product matching view: center the live interaction within a max 1100px stage.
+- Long copy should stay narrow, roughly 620–720px.
+- Keep large white margins. Empty space is part of the identity.
+
+### Composition
+
+Avoid perfectly symmetrical SaaS grids everywhere.
+
+Use subtle controlled irregularity:
+- illustration shifted 8–20px from mathematical center
+- arrows crossing section boundaries
+- handwritten labels outside card bounds
+- sketch circles partially intersecting a component
+- occasional slightly rotated decorative paper/card, maximum about 1–2 degrees
+
+Functional controls themselves must remain aligned and predictable.
 
 ## Elevation & Depth
 
+Sthashta is nearly flat.
+
 | Level | Treatment | Use |
 |---|---|---|
-| Flat | No shadow, no border | Body sections, top nav, hero bands |
-| Soft hairline | 1px `{colors.hairline}` border | Inputs, sub-nav, occasionally on cards |
-| Cream card | `{colors.surface-card}` background — no shadow | Feature cards, content cards |
-| Dark surface card | `{colors.surface-dark}` background — no shadow | Code editor mockups, model showcase cards |
-| Subtle drop shadow | Faint shadow at low alpha | Hover-elevated states (the system uses `0 1px 3px rgba(20,20,19,0.08)` rarely) |
+| Paper | pure white | entire site |
+| Sketch card | white + rough black outline | cards, founder panels |
+| Active | black fill + white text | primary action |
+| Layered paper | duplicate offset black/gray outline | rare hero or modal emphasis |
 
-The elevation philosophy is **color-block first, shadow rare**. Most depth comes from the cream-vs-dark surface contrast. Shadows are minimal. The dark surface mockups have their own internal product chrome (code editor scrollbars, line numbers, syntax highlighting) which adds detail without needing external shadows.
+### Shadows
 
-### Decorative Depth
-- The Anthropic spike-mark glyph (4-spoke radial asterisk) appears as a small black mark in the brand wordmark and inline as a content marker.
-- Code editor mockups carry their own internal depth: syntax-highlighted text in muted blues / oranges / grays, line numbers in `{colors.muted-soft}`, status bars at the bottom in `{colors.surface-dark-elevated}`.
-- Some hero illustrations use simple line-art with coral and dark-navy strokes on cream — minimal, hand-drawn-feeling, never photorealistic.
+Avoid conventional blurred box shadows.
+
+If separation is required, use:
+- an offset 2–4px hard black/gray sketch line, or
+- a second imperfect outline behind the object.
+
+No glowing shadows.
 
 ## Shapes
 
-### Border Radius Scale
+### Geometry Philosophy
 
-| Token | Value | Use |
-|---|---|---|
-| `{rounded.xs}` | 4px | Reserved for badge accents and tiny dropdowns |
-| `{rounded.sm}` | 6px | Small inline buttons, dropdown items |
-| `{rounded.md}` | 8px | Standard CTA buttons, text inputs, category tabs |
-| `{rounded.lg}` | 12px | Content cards (feature, pricing, code-window, model-comparison) |
-| `{rounded.xl}` | 16px | Hero illustration container, the larger marquee components |
-| `{rounded.pill}` | 9999px | Badge pills, "NEW" tags |
-| `{rounded.full}` | 9999px / 50% | Avatar substitutes, icon buttons |
+Shapes should look **drawn**, not mathematically sterile.
 
-### Photography & Illustrations
-Claude's hero rarely uses photography. Instead it uses:
-- Simple line-art illustrations with coral + dark-navy strokes on the cream canvas
-- Code editor mockups (the dominant "hero" treatment on developer-focused pages)
-- Terminal output mockups with monospace text on dark
-- Model comparison cards (Opus / Sonnet / Haiku) with abstract geometric thumbnails
+The browser implementation may use normal rectangles, but visual treatment should simulate small imperfections.
 
-When photography is used (rare — mostly testimonials), avatars crop to perfect circles at 40px diameter.
+Examples:
+- uneven SVG border path
+- rough.js style line
+- duplicated 1px outline with tiny offset
+- hand-drawn corner decoration
+
+### Radius
+
+Keep radii small.
+
+- inputs: 7px
+- buttons: 7px
+- cards: 10px
+- video panels: 7px
+- badges: 5px
+
+Avoid huge 24–32px SaaS bubbles and full-pill buttons.
+
+## Logo
+
+### Wordmark
+
+Primary wordmark:
+
+**STHASHTA**
+
+Black on white.
+
+The wordmark should be clean enough to read immediately. A tiny roughness in baseline or underline is acceptable, but do not distort the spelling.
+
+### Mark
+
+Preferred icon direction:
+- two minimal stickman heads or dots
+- one imperfect line connecting them
+- optional tiny speech marks
+
+Alternative:
+- two rough circles connected by one hand-drawn bridge line
+
+Do not use:
+- gradient logo
+- dinosaur mascot as the primary mark
+- generic network-node globe
+- lightning bolt
+- abstract AI sparkle
+
+A sketch dinosaur may exist later as an easter egg or mascot, but founder-to-founder connection is the primary identity.
 
 ## Components
 
 ### Top Navigation
 
-**`top-nav`** — Cream nav bar pinned to the top of every page. 64px tall, `{colors.canvas}` background. Carries the Anthropic spike-mark + "Claude" wordmark at left, primary horizontal menu (Product, Solutions, Use Cases, Pricing, Research, Company) center-left, right-side cluster with "Sign in" text-link, "Try Claude" `{component.button-primary}` (coral). Menu items in `{typography.nav-link}` (StyreneB 14px / 500).
+White background, black text, 64px height.
 
-### Buttons
+Left:
+- STHASHTA wordmark
 
-**`button-primary`** — The signature coral CTA. Background `{colors.primary}` (#cc785c), text `{colors.on-primary}` (white), type `{typography.button}` (StyreneB 14px / 500), padding 12px × 20px, height 40px, rounded `{rounded.md}` (8px). Active state `button-primary-active` darkens to `{colors.primary-active}` (#a9583e).
+Middle/right:
+- How it works
+- Safety
+- About
 
-**`button-secondary`** — Cream button with hairline outline. Background `{colors.canvas}`, text `{colors.ink}`, 1px hairline border, same padding + height + radius as primary.
+Primary action:
+- **Meet a founder**
 
-**`button-secondary-on-dark`** — Used over `{colors.surface-dark}` cards. Background `{colors.surface-dark-elevated}` (#252320), text `{colors.on-dark}`. Stays dark — the system never inverts to a light secondary on dark surfaces.
+Optional secondary:
+- Sign in
 
-**`button-text-link`** — Inline text button, no background. Used for "Sign in" in the top nav and inline CTA links.
+Use a thin imperfect black bottom rule only when the page has scrolled. On the initial hero, the nav can float on white with no divider.
 
-**`button-icon-circular`** — 36px circular icon button. Background `{colors.canvas}`, hairline border, ink-color icon. Used for carousel arrows, share, "view more".
+No theme switcher. Sthashta has one theme.
 
-**`text-link`** — Inline body links in `{colors.primary}` (the coral). Underlined on press; the coral inline link is one of the system's most distinctive small details.
+### Primary Button
 
-### Cards & Containers
+Black fill, white text, 2px black border.
 
-**`hero-band`** — Cream-canvas hero with a 6-6 grid: h1 + sub-headline + button row on the left, hero illustration card or product mockup card on the right. Vertical padding `{spacing.section}` (96px).
+Examples:
+- Meet a founder
+- Start matching
+- Join waitlist
+- Continue
 
-**`hero-illustration-card`** — A larger card holding the hero's right-side artifact — sometimes a coral-stroke line illustration on cream background, sometimes a dark code editor mockup. Background `{colors.canvas}` or `{colors.surface-dark}` depending on context, rounded `{rounded.xl}` (16px).
+On hover:
+- no color shift
+- translate approximately 1px
+- optional sketch-outline offset changes subtly
 
-**`feature-card`** — Used in 3-up feature grids. Background `{colors.surface-card}` (#efe9de — slightly darker cream), rounded `{rounded.lg}` (12px), internal padding `{spacing.xl}` (32px). Carries a small icon at top, an `{typography.title-md}` headline, and a body description in `{typography.body-md}`.
+On press:
+- translate 2px and remove offset-outline effect.
 
-**`product-mockup-card-dark`** — Dark navy card showing actual Claude product chrome (chat interface, code editor, agent controls). Background `{colors.surface-dark}`, rounded `{rounded.lg}`, internal padding `{spacing.xl}` (32px). Carries text labels in `{colors.on-dark}` and product UI fragments below.
+### Secondary Button
 
-**`code-window-card`** — A specialized dark card showing a code editor with line numbers, syntax-highlighted code in `{typography.code}` (JetBrains Mono), and sometimes a "Run" button or terminal output panel below. Background `{colors.surface-dark}` with `{colors.surface-dark-soft}` for the inner code block, rounded `{rounded.lg}`, padding `{spacing.lg}` (24px). The signature visual element of Claude Code product pages.
+White fill, black text, 2px rough black border.
 
-**`model-comparison-card`** — Used on the homepage's "Which problem are you up against?" section comparing Opus / Sonnet / Haiku. Background `{colors.canvas}` with hairline border, rounded `{rounded.lg}`, internal padding `{spacing.xl}` (32px). Carries the model name, a short capability blurb, and a `{component.text-link}` to learn more.
+Examples:
+- Learn how it works
+- Skip
+- End conversation
 
-**`pricing-tier-card`** — Standard tier card. Background `{colors.canvas}` with hairline border, rounded `{rounded.lg}`, padding `{spacing.xl}` (32px). Carries the plan name in `{typography.title-lg}` (StyreneB), price in `{typography.display-sm}` (Copernicus serif!), feature checklist in `{typography.body-md}`, and a `{component.button-primary}` at the bottom.
+### Text Links
 
-**`pricing-tier-card-featured`** — The featured tier (typically "Pro" or "Team"). Background flips to `{colors.surface-dark}`, text inverts to `{colors.on-dark}`. The dark surface IS the featured-tier signal.
+Links are black.
 
-**`callout-card-coral`** — A full-bleed coral card carrying a major call-to-action. Background `{colors.primary}` (#cc785c), text `{colors.on-primary}` (white), rounded `{rounded.lg}`, padding `{spacing.xxl}` (48px). The coral surface IS the voltage; the CTA inside uses an inverted button style (cream/canvas button on coral).
+Differentiate using:
+- underline
+- hand-drawn underline
+- arrow `↗`
+- weight
 
-**`connector-tile`** — Used on the connectors page's integration grid. Background `{colors.canvas}` with hairline border, rounded `{rounded.lg}`, padding 20px. Each tile carries a logo at top, a `{typography.title-sm}` connector name, and a short description.
+Never blue.
 
-### Inputs & Forms
+### Founder Match Stage
 
-**`text-input`** — Standard text input. Background `{colors.canvas}`, text `{colors.ink}`, type `{typography.body-md}`, rounded `{rounded.md}` (8px), padding 10px × 14px, height 40px. 1px hairline border in `{colors.hairline}`.
+This is the signature product component.
 
-**`text-input-focused`** — Focus state. Border thickens or shifts to `{colors.primary}` (coral) for emphasis. Carries a 3px coral-at-15%-alpha outer ring.
+Desktop:
+- two founder video panels side by side
+- a narrow center connector
+- controls below
+- status above or between panels
 
-**`cookie-consent-card`** — Bottom-right floating dark cookie banner. Background `{colors.surface-dark}`, text `{colors.on-dark}`, rounded `{rounded.lg}`, padding `{spacing.lg}` (24px). One of the few places dark surface appears at small scale on cream pages.
+Before match:
+- left panel shows "YOU" with simple stickman placeholder
+- right panel shows animated hand-drawn searching marks
+- black ink line appears to search/connect between panels
 
-### Tags / Badges
+During match:
+- both panels contain live video
+- minimal names/roles
+- tiny founder/company tags
+- timer
+- End / Next controls
 
-**`badge-pill`** — Small pill label used for category tags. Background `{colors.surface-card}`, text `{colors.ink}`, type `{typography.caption}` (13px / 500), rounded `{rounded.pill}`, padding 4px × 12px.
+At successful conversation end:
+- reveal contact exchange UI
+- each founder explicitly chooses what to share
+- contact cards should resemble rough paper slips
 
-**`badge-coral`** — Coral-fill badge for "NEW", "BETA", featured highlights. Background `{colors.primary}`, text `{colors.on-primary}`, type `{typography.caption-uppercase}` (12px / 500 / 1.5px tracking), rounded `{rounded.pill}`, padding 4px × 12px.
+The entire component should resemble a **sketched video-call wireframe that became functional**.
 
-### Tab / Filter
+### Founder Video Panel
 
-**`category-tab`** + **`category-tab-active`** — Used in sub-nav rows on solutions / connectors pages. Inactive: transparent background, `{colors.muted}` text. Active: `{colors.surface-card}` background, `{colors.ink}` text. Padding 8px × 14px, rounded `{rounded.md}`.
+- white/black video treatment where technically possible for branded demos
+- 2px rough black frame
+- small radius
+- name plate as white paper label with black border
+- no colorful online-status dot
+- use black filled dot + "LIVE"
 
-### CTA / Footer
+### Matching State
 
-**`cta-band-coral`** — A pre-footer "Try Claude" CTA card. Full-width coral fill, white type, rounded `{rounded.lg}`, padding 64px. Carries an h2 in `{typography.display-sm}` (still serif!), a sub-line, and a cream-button CTA.
+Use animated sketch elements:
+- three hand-drawn dots
+- line scribbling from left founder toward right
+- rough circular spinner
+- tiny stickman walking/searching
 
-**`cta-band-dark`** — Alternative pre-footer band on developer-focused pages. Background `{colors.surface-dark}`, text `{colors.on-dark}`, rounded `{rounded.lg}`, padding 64px. Often pairs with a code-window card.
+Copy example:
 
-**`footer`** — Dark navy footer that closes every page. Background `{colors.surface-dark}` (#181715), text `{colors.on-dark-soft}`. 4-column link list at desktop covering Product / Company / Resources / Legal. Vertical padding 64px. The Anthropic spike-mark + "Anthropic" wordmark sits at the top in `{colors.on-dark}`. The footer never inverts.
+**Finding someone building...**
+
+Supporting text:
+
+**Random match. Founder to founder.**
+
+### Contact Exchange Card
+
+White paper-like card with rough border.
+
+Fields can include:
+- name
+- company
+- role
+- website
+- LinkedIn / X / email where chosen by the user
+
+The user must intentionally choose what to share.
+
+Visual metaphor:
+two small paper cards slide toward the center and overlap.
+
+### Founder Profile Card
+
+Keep it compact:
+- stickman/avatar
+- founder name
+- company
+- "building..." sentence
+- industry tags
+- optional location
+- looking-for tag
+
+No colorful skill chips. Tags are black outline on white.
+
+### Input
+
+White background, black text, rough black outline.
+
+Focus:
+- border thickens
+- tiny secondary sketch outline may appear
+
+Do not use blue focus rings. Preserve accessibility with sufficient black outline thickness and an additional shape/offset treatment.
+
+### Badges
+
+Black text on white with thin rough outline.
+
+Examples:
+- SaaS
+- D2C
+- DEVTOOLS
+- INDIA
+- LOOKING FOR SALES
+- BUILDING
+
+Avoid pill overload. Prefer small paper-label rectangles.
+
+### Dialog / Modal
+
+White paper card centered over a translucent neutral overlay.
+
+No blurred glass.
+
+Use a slightly doubled sketch border for emphasis.
+
+### Toast
+
+Small white rectangular paper slip with black border.
+
+Icon + concise text:
+- ✓ Contact saved
+- × Camera unavailable
+- ! Connection lost
+
+Again, no semantic colors.
+
+## Landing Page
+
+### Hero
+
+The hero should immediately communicate live founder matching.
+
+Suggested composition:
+
+Left/top:
+**Meet founders  
+you wouldn't meet otherwise.**
+
+Supporting copy:
+**Random live conversations for founders. Talk, connect, exchange contacts, move on.**
+
+Primary CTA:
+**Meet a founder**
+
+Secondary:
+**How it works**
+
+Right/below:
+large hand-drawn scene of Rahul and Ravi inside two rough video-call boxes connected by a black scribbled line.
+
+Tiny handwritten annotation:
+**random founder →**
+
+No gradient behind the hero. No colored atmospheric wash.
+
+### Hero Illustration Rules
+
+The illustration should be:
+- stickman
+- black ink
+- pure white background
+- sparse
+- intentionally rough
+- recognizable at a glance
+- not a polished vector SaaS illustration
+
+It can include:
+- laptop outline
+- two founder panels
+- Rahul
+- Ravi
+- speech marks
+- one connection line
+- tiny arrows
+- tiny notes
+
+### How It Works
+
+Three large sketch panels:
+
+**1. Enter**
+Tell Sthashta what you're building.
+
+**2. Match**
+Get paired with another founder.
+
+**3. Connect**
+Talk. If both want to, exchange contacts.
+
+Connect the three panels with one imperfect hand-drawn arrow that visually travels across the section.
+
+### Why Sthashta
+
+Avoid a generic six-card feature grid.
+
+Use a sketch story:
+- lonely founder
+- searching line
+- founder appears
+- conversation
+- exchanged card
+- both leave with a useful connection
+
+Copy should remain concise.
+
+### Safety Section
+
+Because this is random live matching, safety should feel first-class rather than hidden in legal copy.
+
+Use simple monochrome illustrations for:
+- report
+- block
+- leave instantly
+- choose what contact information to share
+
+No red warning UI. Use strong black iconography and explicit wording.
+
+### Launch / Waitlist Section
+
+Large white section.
+
+**Sthashta is going live.**
+
+CTA:
+**Join the waitlist**
+
+Use Rahul and Ravi standing on opposite sides of the CTA with one hand-drawn line between them.
+
+## Product Experience
+
+### Onboarding
+
+Keep onboarding short.
+
+Possible sequence:
+1. Your name
+2. What are you building?
+3. Your role
+4. What kind of founder would you like to meet?
+5. Camera / microphone check
+6. Start matching
+
+Each step uses one tiny stickman sketch.
+
+### Waiting Room
+
+Center stage:
+- user stickman/video preview
+- animated sketch search line
+- status
+
+**Finding a founder...**
+
+Controls:
+- camera
+- microphone
+- cancel
+
+### Live Conversation
+
+Priority is video and conversation.
+
+Do not surround video with dashboards.
+
+Visible information should be minimal:
+- name
+- company
+- what they build
+- conversation timer
+- report
+- end
+- optional contact exchange near the end
+
+### End Screen
+
+The end state is important to the product loop.
+
+Headline:
+**Good talk? Stay connected.**
+
+Two contact cards.
+
+Each person can:
+- share selected contact
+- skip
+- meet someone else
+
+Primary next action:
+**Meet another founder**
+
+## Illustration Language
+
+### Stroke
+
+Use mostly 1.5–2.5px black strokes.
+
+Vary width slightly.
+
+Do not make every line perfectly smooth.
+
+### Stickmen
+
+Stickmen should have:
+- round-ish imperfect head
+- minimal facial marks
+- line arms/legs
+- simple filled clothing blocks where character identity requires it
+- tiny hair/beard/accessory cues
+
+Avoid:
+- realistic hands
+- realistic anatomy
+- detailed noses/lips
+- photorealistic shading
+- anime styling
+- emoji faces
+
+### Arrows
+
+Arrows are a major brand element.
+
+They should look quickly drawn by hand:
+- slightly curved
+- uneven
+- open arrowhead
+- occasionally annotated
+
+### Scribbles
+
+Use scribbles sparingly for:
+- loading
+- matching
+- uncertainty
+- energy around a successful connection
+
+Do not cover readable UI with decorative scribbles.
+
+### Texture
+
+The site background remains clean white.
+
+Do not add a strong paper texture globally.
+
+If texture is used, it should be nearly invisible and localized to illustrations.
+
+## Motion
+
+Animation should imitate drawing.
+
+Recommended:
+- SVG stroke draws from 0% to 100%
+- arrows draw toward their destination
+- stickman speech marks pop in
+- borders wobble subtly on hover
+- contact card slides like a paper note
+- matching dots redraw
+
+Avoid:
+- gradient animation
+- floating blobs
+- particle systems
+- 3D parallax
+- glowing cursor trails
+- springy cartoon bounce everywhere
+
+Motion duration:
+- micro interactions: 120–180ms
+- sketch line draw: 300–700ms
+- section illustration entrance: 500–900ms
+
+Respect `prefers-reduced-motion`.
+
+## Icons
+
+Prefer custom line icons or Lucide icons modified to fit the sketch language.
+
+Rules:
+- black stroke
+- no fill except active state
+- 1.75–2px stroke
+- rounded linecaps
+- optional tiny roughness wrapper
+
+Core icons:
+- video
+- mic
+- next
+- end
+- report
+- block
+- contact
+- copy
+- external link
+
+## Accessibility
+
+The sketch aesthetic must never reduce usability.
+
+- Text contrast remains high.
+- Focus states must be clearly visible in black and white.
+- Do not rely on color for status.
+- All icon-only controls need accessible labels.
+- Video controls need at least 44px touch targets.
+- Captions/subtitles should be supported where possible.
+- Keyboard navigation must work through matching, call controls, report, and contact exchange.
+- Decorative sketch SVGs should be hidden from screen readers.
+- Reduced-motion mode disables line-drawing animations that are not essential.
+
+## Responsive Behavior
+
+### Mobile < 640px
+
+- Hero heading: 38–42px.
+- Illustration stacks below copy.
+- Founder video panels stack vertically or use a dominant remote panel with small self-preview.
+- Controls remain reachable at bottom.
+- Navigation becomes a simple menu.
+- Handwritten annotations reduce significantly to avoid clutter.
+- Section padding: 64px 20px.
+
+### Tablet 640–1024px
+
+- Hero heading: ~48px.
+- Two founder panels may remain side-by-side in landscape.
+- Feature/story sections use 2-up layouts where appropriate.
+
+### Desktop 1024–1280px
+
+- Hero heading: 64px.
+- Full Rahul + Ravi call illustration.
+- Two-panel live call stage.
+- Content max ~1200px.
+
+### Wide > 1280px
+
+Do not endlessly expand the interface. Keep content capped around 1200px and preserve white margins.
 
 ## Do's and Don'ts
 
 ### Do
-- Anchor every page on the cream canvas. Pure white reads as "any other AI tool"; the warm tint is the brand differentiator.
-- Use Copernicus serif for every display headline. Pair with StyreneB sans body. Negative letter-spacing on display sizes is non-negotiable.
-- Reserve `{colors.primary}` (coral) for primary CTAs and full-bleed `{component.callout-card-coral}` moments. Don't paint accent moments coral elsewhere.
-- Use `{component.product-mockup-card-dark}` and `{component.code-window-card}` to show actual Claude product chrome. Don't paint marketing illustrations of code when you can show real code.
-- Pair `{component.feature-card}` (cream) with `{component.product-mockup-card-dark}` (navy) in alternating bands. The cream-to-dark rhythm is the brand's pacing mechanism.
-- Use the Anthropic spike-mark glyph as the brand wordmark prefix. Never invert the mark to white-on-dark within the wordmark itself.
-- Apply `{spacing.section}` (96px) between major bands.
+
+- Keep the whole product in light mode.
+- Use white as the dominant visual field.
+- Use black as the only action color.
+- Make every illustration feel hand drawn.
+- Keep Rahul and Ravi visually consistent.
+- Use stickmen rather than realistic people in marketing art.
+- Use rough borders and imperfect arrows as recurring motifs.
+- Use huge amounts of negative space.
+- Keep actual application typography clean and readable.
+- Make the founder match interface the strongest visual signature.
+- Let the weirdness come from drawing style, not from usability.
 
 ### Don't
-- Don't use cool grays or pure white for canvas. Cream is the brand.
-- Don't bold serif display weight. Copernicus at 700 reads as bombastic; the system stays at 400.
-- Don't use cool blue or saturated cyan as a brand accent. The coral is the brand voltage.
-- Don't put coral everywhere. The coral is scarce on individual elements and generous only on full-bleed coral callout cards.
-- Don't use Inter for display headlines. The serif character is the brand voice.
-- Don't repeat the same surface mode in two consecutive bands. The pacing alternates: cream → cream-card → dark-mockup → cream → coral-callout → dark-footer.
-- Don't add hover state styling beyond what the system already encodes — primary darkens on press; nothing else changes.
 
-## Responsive Behavior
+- Do not add dark mode.
+- Do not add a theme toggle.
+- Do not use gradients anywhere.
+- Do not use blue links.
+- Do not use colorful success/error/warning states.
+- Do not use glassmorphism.
+- Do not use glowing effects.
+- Do not use 3D device mockups.
+- Do not use polished corporate vector people.
+- Do not use stock photography.
+- Do not use realistic Rahul or Ravi.
+- Do not use large bubbly SaaS radii.
+- Do not make every component crooked. Functional layout stays disciplined.
+- Do not overuse handwritten fonts.
+- Do not turn the site into a children's doodle aesthetic.
+- Do not use fake paper texture heavily.
+- Do not introduce visual elements that cannot be explained by paper, ink, or live founder connection.
 
-### Breakpoints
+## Implementation Guidance
 
-| Name | Width | Key Changes |
-|---|---|---|
-| Mobile | < 768px | Hamburger nav; hero h1 64→32px; hero-illustration-card stacks below content; feature grids 1-up; connector tiles 2-up; pricing 1-up; footer 4 cols → 1 |
-| Tablet | 768–1024px | Top nav stays horizontal but tightens; feature cards 2-up; connector tiles 3-up; pricing 2-up |
-| Desktop | 1024–1440px | Full top-nav with all menu items; 3-up feature cards; 4-up or 6-up connector tiles; 3-up pricing tiers |
-| Wide | > 1440px | Same as desktop with more outer breathing room; max content width caps at 1200px |
+### Rough Borders
 
-### Touch Targets
-- `{component.button-primary}` at minimum 40 × 40px.
-- `{component.button-icon-circular}` at exactly 36 × 36 — slightly under WCAG 44 but visually centered.
-- `{component.text-input}` height is 40px.
-- Connector tile entire card area is tappable; effective tap area >> 44px.
+Prefer SVG/CSS techniques rather than raster assets.
 
-### Collapsing Strategy
-- Top nav collapses to hamburger at < 768px; menu opens as a full-screen cream sheet.
-- Hero band's 6-6 grid collapses to single-column on mobile — h1 + sub-head + buttons first, then the illustration / mockup card below.
-- Feature grids reduce columns rather than scaling cards down.
-- Pricing tier cards collapse 4 → 2 → 1; featured-tier dark surface stays visually distinct at every breakpoint.
-- Code-window cards retain code legibility at every breakpoint by allowing horizontal scroll within the card rather than wrapping code lines.
+Possible implementations:
+- rough.js for decorative borders/arrows
+- SVG filters with extremely subtle displacement
+- two pseudo-element borders with 1–2px offset
+- custom hand-drawn SVG paths
 
-### Image Behavior
-- Code blocks inside dark mockups stay at fixed font-size; horizontal scroll on mobile rather than wrapping.
-- Hero illustrations scale proportionally; line-art strokes thin slightly on mobile.
-- Avatar photos in testimonials crop to circles at every breakpoint.
+Keep text and clickable geometry stable even when decorative outlines are irregular.
+
+### Sketch Components
+
+Build reusable primitives:
+- `SketchBorder`
+- `SketchCard`
+- `SketchButton`
+- `SketchArrow`
+- `SketchUnderline`
+- `StickFounder`
+- `FounderVideoFrame`
+- `ContactSlip`
+- `SketchStatus`
+
+Do not manually redraw random CSS per page.
+
+### Light Mode Enforcement
+
+The application should explicitly render the same white/black theme regardless of OS preference.
+
+- no `prefers-color-scheme: dark` theme
+- no theme persistence setting
+- set browser `color-scheme: light`
+- white root/background
+- ensure native inputs do not automatically switch to dark controls
+
+### Image Generation Prompt Baseline
+
+When generating Sthashta marketing artwork, begin with:
+
+"Vertical or horizontal minimalist black-and-white hand-drawn stickman sketch, solid pure white background, rough black ink strokes, intentionally imperfect simple lines, lots of negative space, premium startup advertisement aesthetic, no colors, no gradients, no photorealism, no realistic anatomy, no 3D, no generated text."
+
+Then append the complete Rahul and/or Ravi character lock whenever either character appears.
 
 ## Iteration Guide
 
-1. Focus on ONE component at a time. Reference its YAML key (`{component.feature-card}`, `{component.code-window-card}`).
-2. Variants of an existing component (`-active`, `-disabled`, `-focused`) live as separate entries in `components:`.
-3. Use `{token.refs}` everywhere — never inline hex.
-4. Never document hover. Default and Active/Pressed states only.
-5. Display headlines stay Copernicus serif 400 with negative tracking. Body stays StyreneB / Inter 400. The split is unbreakable.
-6. Cream + coral + dark navy is the trinity. Don't introduce a fourth surface tone (no purple cards, no green sections).
-7. When in doubt about emphasis: bigger Copernicus serif before bolder weight.
+1. Start every new page from white paper, not from a conventional SaaS component library aesthetic.
+2. Ask whether each decorative element could plausibly be drawn with a black pen. If not, remove it.
+3. Keep the application grid disciplined even when borders are rough.
+4. Use one strong illustration per section rather than many decorative assets.
+5. Keep copy short enough that illustrations and negative space remain dominant.
+6. Test all controls without color.
+7. Test mobile early because sketch annotations become clutter quickly.
+8. Keep Rahul and Ravi locked across all generated artwork.
+9. Make the match stage recognizable even without the Sthashta wordmark.
+10. If the page begins to look like Expo, Linear, Vercel, or a generic SaaS template, strip another layer of polish away and return to paper + ink.
 
 ## Known Gaps
 
-- Copernicus and StyreneB are licensed Anthropic typefaces and not available as public web fonts. Substitutes (Tiempos Headline / Cormorant Garamond / EB Garamond for serif; Inter / Söhne for sans) are documented in the typography section.
-- The Anthropic radial-spike-mark is a brand glyph rendered as inline SVG; it's not formalized as a system token here. Treat it as a logo asset.
-- Animation and transition timings (chat message reveal, code block typewriter effect on the homepage, agentic-flow diagram animations) are not in scope.
-- Form validation states beyond `{component.text-input-focused}` are not extracted — error / success states would need a sign-up or feedback flow to confirm.
-- The actual Claude product surface (claude.ai chat interface) shares some tokens with the marketing site but adds many product-specific components (chat bubbles, message tools, file upload chips, conversation history sidebar) that are out of scope for this marketing-surface document.
-- The "agent" / "computer use" demo cards on certain pages display animated Claude controlling a browser — the static screenshot doesn't fully capture the animation chrome.
+- Final Sthashta logo artwork is not yet locked.
+- Exact production hand-drawn border implementation is not selected.
+- Final safety/moderation interaction details are not defined in this design file.
+- Live video technology and matching backend behavior are outside the scope of this visual design specification.
+- Final copy may change before the 11 November 2026 launch.

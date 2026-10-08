@@ -30,8 +30,8 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider';
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#faf9f5' },
-    { media: '(prefers-color-scheme: dark)', color: '#181715' },
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
   ],
   width: 'device-width',
   initialScale: 1,
