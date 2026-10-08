@@ -181,7 +181,7 @@ export default function AdminInstanceActions({ instanceId, instanceName, status 
               <button
                 onClick={handleSuspend}
                 disabled={loading}
-                className="btn-secondary !text-amber-500 !border-amber-500/30 hover:!bg-amber-500/10 text-xs py-2 px-4 font-semibold"
+                className="btn-secondary text-xs py-2 px-4 font-semibold"
               >
                 {loading ? 'Suspending...' : 'Confirm Suspend'}
               </button>
@@ -213,7 +213,7 @@ export default function AdminInstanceActions({ instanceId, instanceName, status 
               <button
                 onClick={handleTerminate}
                 disabled={loading}
-                className="btn-primary !bg-rose-600 hover:!bg-rose-500 !text-white text-xs py-2 px-4 font-bold"
+                className="btn-primary text-xs py-2 px-4 font-bold"
               >
                 {loading ? 'Terminating...' : 'Terminate Instance'}
               </button>

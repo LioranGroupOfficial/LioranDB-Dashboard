@@ -820,7 +820,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                           <button
                             type="button"
                             onClick={() => handleDeleteUser(u.username)}
-                            className="text-red-500 hover:text-red-600 px-2 py-1 rounded hover:bg-red-500/10 transition-colors text-xs font-semibold cursor-pointer"
+                            className="btn-secondary py-1 px-2 min-h-[28px] text-[11px]"
                           >
                             Delete
                           </button>
@@ -840,11 +840,11 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
       {/* ========================================================= */}
       {activeTab === 'credentials' && (
         <div className="space-y-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800 pb-4">
+          <div className="card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[var(--border)] pb-4">
               <div>
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <Key className="w-4 h-4 text-indigo-400" />
+                <h3 className="text-sm font-bold text-[var(--text-strong)] flex items-center gap-2">
+                  <Key className="w-4 h-4 text-[var(--text-strong)]" />
                   <span>Primary / Root Database Credential</span>
                 </h3>
                 <p className="text-xs text-[var(--text-muted)] mt-0.5">
@@ -855,7 +855,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               <button
                 type="button"
                 onClick={() => setConfirmRotateRoot(true)}
-                className="btn-secondary !text-amber-500 !border-amber-500/30 hover:!bg-amber-500/10 text-xs py-1.5 px-3 shrink-0 inline-flex items-center gap-1.5"
+                className="btn-secondary text-xs py-1.5 px-3 shrink-0 inline-flex items-center gap-1.5"
               >
                 <RotateCw className="w-3.5 h-3.5" />
                 <span>ROTATE ROOT PASSWORD</span>
@@ -1057,7 +1057,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                     type="button"
                     onClick={() => setShowTerminateModal(true)}
                     disabled={actionLoading}
-                    className="btn-primary !bg-rose-600 hover:!bg-rose-500 !text-white text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
+                    className="btn-primary text-xs py-1.5 px-3 inline-flex items-center gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Terminate Instance...</span>
@@ -1370,7 +1370,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                 type="button"
                 disabled={actionLoading}
                 onClick={handleRotateRoot}
-                className="btn-secondary !text-amber-500 !border-amber-500/30 hover:!bg-amber-500/10 text-xs py-2 px-4 font-semibold"
+                className="btn-primary text-xs py-2 px-4 font-semibold"
               >
                 {actionLoading ? 'Rotating...' : 'Rotate Root Password'}
               </button>
@@ -1431,7 +1431,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               <button
                 type="submit"
                 disabled={actionLoading || resetConfirmationText !== data.name}
-                className="btn-primary !bg-rose-600 hover:!bg-rose-500 !text-white text-xs py-2 px-4 font-bold disabled:opacity-40"
+                className="btn-primary text-xs py-2 px-4 font-bold disabled:opacity-40"
               >
                 {actionLoading ? 'Resetting Engine...' : 'RESET INSTANCE'}
               </button>
@@ -1491,7 +1491,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               <button
                 type="submit"
                 disabled={actionLoading || terminateConfirmationText !== data.name}
-                className="btn-primary !bg-rose-600 hover:!bg-rose-500 !text-white text-xs py-2 px-4 font-bold disabled:opacity-40"
+                className="btn-primary text-xs py-2 px-4 font-bold disabled:opacity-40"
               >
                 {actionLoading ? 'Terminating...' : 'TERMINATE INSTANCE'}
               </button>

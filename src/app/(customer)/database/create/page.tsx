@@ -122,15 +122,15 @@ export default function CreateInstancePage() {
             </div>
           </div>
 
-          <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 space-y-2">
-            <p className="font-semibold text-amber-200">
+          <div className="p-4 rounded-[10px] bg-[var(--surface-soft)] border border-[var(--border)] text-xs text-[var(--text-secondary)] space-y-2">
+            <p className="font-bold text-[var(--text-strong)]">
               ⚠️ Important: Master Database Password Generated
             </p>
             <p>
               Copy this password now. For security reasons, LioranDB does not store passwords in plaintext and you will not be able to view it again.
             </p>
             {createdResult.password && (
-              <div className="p-2.5 bg-black/40 rounded border border-amber-500/30 font-mono text-sm text-white select-all">
+              <div className="p-2.5 bg-[var(--surface)] rounded-[7px] border border-[var(--border)] font-mono text-sm text-[var(--text-strong)] font-bold select-all">
                 {createdResult.password}
               </div>
             )}
@@ -303,11 +303,11 @@ export default function CreateInstancePage() {
               </div>
               <div className="space-y-1 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
                 <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <Check className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
                   <span>Dedicated managed database instance</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <Check className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
                   <span>Dedicated compute throughput</span>
                 </div>
               </div>

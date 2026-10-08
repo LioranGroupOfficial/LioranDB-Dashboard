@@ -50,12 +50,12 @@ export default function DeleteAccountSection({
   }
 
   return (
-    <div className="card border-[var(--error)]/30 bg-[var(--surface-card)]">
+    <div className="card border-[var(--border)] bg-[var(--surface)]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-sm font-semibold text-[var(--error)] uppercase tracking-wider flex items-center gap-2">
+          <h2 className="text-sm font-bold text-[var(--text-strong)] uppercase tracking-wider flex items-center gap-2">
             <Trash2 className="w-4 h-4" />
-            Delete Account
+            <span>Delete Account</span>
           </h2>
           <p className="mt-1 text-xs text-[var(--text-secondary)] leading-relaxed">
             Permanently remove your account and all associated data from the database.
@@ -66,27 +66,27 @@ export default function DeleteAccountSection({
 
       {hasPendingPayments ? (
         <div className="alert-banner alert-banner-warning mt-4 text-xs">
-          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+          <ShieldAlert className="w-4 h-4 text-[var(--text-strong)] shrink-0" />
           <div className="flex-1">
-            <span className="font-semibold block">Outstanding Invoices Detected</span>
+            <span className="font-semibold block text-[var(--text-strong)]">Outstanding Invoices Detected</span>
             <span>
               You have {pendingCount} unpaid invoice(s) totaling ₹{pendingTotal.toLocaleString('en-IN')}. All pending invoices must be paid and verified before your account can be deleted.{' '}
             </span>
-            <Link href="/billing" className="text-[var(--primary)] underline font-medium ml-1">
+            <Link href="/billing" className="text-[var(--text-strong)] underline font-semibold ml-1">
               Go to Billing →
             </Link>
           </div>
         </div>
       ) : (
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-          <div className="text-xs text-[var(--success)] flex items-center gap-1.5 font-medium">
-            <CheckCircle className="w-3.5 h-3.5 text-[var(--success)] shrink-0" />
+          <div className="text-xs text-[var(--text-secondary)] flex items-center gap-1.5 font-medium">
+            <CheckCircle className="w-3.5 h-3.5 text-[var(--text-strong)] shrink-0" />
             <span>All invoices cleared. You are eligible to close this account.</span>
           </div>
           <button
             type="button"
             onClick={() => setShowModal(true)}
-            className="btn-danger text-xs px-4 py-2 shrink-0 self-start sm:self-auto"
+            className="btn-secondary text-xs px-4 py-2 shrink-0 self-start sm:self-auto cursor-pointer inline-flex items-center gap-1.5"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>Delete Account</span>
@@ -96,11 +96,11 @@ export default function DeleteAccountSection({
 
       {/* Confirmation Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="card border-[var(--error)]/50 bg-[var(--surface)] max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4">
-            <div className="flex items-center gap-2 text-[var(--error)]">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
+          <div className="card border-[var(--border)] bg-[var(--surface)] max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 space-y-4">
+            <div className="flex items-center gap-2 text-[var(--text-strong)] font-bold text-base">
               <AlertTriangle className="w-5 h-5" />
-              <h3 className="text-base font-normal font-serif text-[var(--text-primary)]">Confirm Account Deletion</h3>
+              <h3>Confirm Account Deletion</h3>
             </div>
 
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -114,15 +114,15 @@ export default function DeleteAccountSection({
             )}
 
             <div>
-              <label className="label text-xs">
-                Type <span className="font-mono text-[var(--error)] font-bold">DELETE</span> to confirm:
+              <label className="label text-xs mb-1.5">
+                Type <span className="font-mono text-[var(--text-strong)] font-bold">DELETE</span> to confirm:
               </label>
               <input
                 type="text"
                 value={confirmationInput}
                 onChange={(e) => setConfirmationInput(e.target.value)}
                 placeholder="DELETE"
-                className="input-field font-mono"
+                className="input-field font-mono text-xs"
               />
             </div>
 
@@ -142,7 +142,7 @@ export default function DeleteAccountSection({
                 type="button"
                 onClick={handleDelete}
                 disabled={loading || confirmationInput !== 'DELETE'}
-                className="btn-danger text-xs py-2 px-4"
+                className="btn-primary text-xs py-2 px-4 disabled:opacity-50 inline-flex items-center gap-1.5"
               >
                 {loading ? (
                   <>

@@ -59,7 +59,7 @@ export default function DatabaseActions({ db }: Props) {
         <button
           onClick={handleSuspend}
           disabled={loading}
-          className="text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2.5 py-1 rounded-full transition-colors"
+          className="btn-secondary text-xs py-1 px-2.5"
         >
           {loading ? 'Processing...' : 'Suspend'}
         </button>
@@ -67,7 +67,7 @@ export default function DatabaseActions({ db }: Props) {
         <button
           onClick={handleResume}
           disabled={loading}
-          className="text-xs font-semibold text-[var(--accent)] hover:text-white bg-[var(--accent)]/10 hover:bg-[var(--accent)]/20 border border-[var(--accent)]/30 px-2.5 py-1 rounded-full transition-colors"
+          className="btn-primary text-xs py-1 px-2.5"
         >
           {loading ? 'Processing...' : 'Resume'}
         </button>

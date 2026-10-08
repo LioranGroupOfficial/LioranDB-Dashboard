@@ -41,10 +41,8 @@ export default function CouponRowActions({ couponId, code, enabled }: Props) {
         onClick={handleToggle}
         disabled={loading}
         title={enabled ? 'Disable Coupon' : 'Enable Coupon'}
-        className={`btn text-xs py-1 px-2 inline-flex items-center gap-1 ${
-          enabled
-            ? 'btn-secondary text-amber-400 hover:text-amber-300'
-            : 'btn-secondary text-emerald-400 hover:text-emerald-300'
+        className={`text-xs py-1 px-2.5 inline-flex items-center gap-1 ${
+          enabled ? 'btn-secondary' : 'btn-primary'
         }`}
       >
         <Power className="w-3.5 h-3.5" />

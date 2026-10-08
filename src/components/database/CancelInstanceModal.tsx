@@ -56,7 +56,7 @@ export default function CancelInstanceModal({ instanceId, instanceName }: Props)
           setTypedName('');
           setError('');
         }}
-        className="py-2 px-4 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium border border-red-500/30 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+        className="btn-secondary text-xs py-2 px-4 inline-flex items-center gap-2 cursor-pointer"
       >
         <Trash2 className="w-3.5 h-3.5" />
         <span>Cancel Database Service</span>
@@ -64,16 +64,16 @@ export default function CancelInstanceModal({ instanceId, instanceName }: Props)
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-[var(--surface-card)] border border-red-500/30 rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-5">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] max-w-lg w-full p-6 shadow-2xl space-y-5">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2.5 text-red-600 dark:text-red-400 font-semibold text-base">
+              <div className="flex items-center gap-2.5 text-[var(--text-strong)] font-bold text-base">
                 <AlertTriangle className="w-5 h-5 shrink-0" />
                 <span>Cancel Database Service</span>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-[var(--muted)] hover:text-[var(--text-primary)]"
+                className="text-[var(--text-muted)] hover:text-[var(--text-strong)] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -81,9 +81,9 @@ export default function CancelInstanceModal({ instanceId, instanceName }: Props)
 
             <div className="space-y-2 text-xs text-[var(--text-secondary)]">
               <p>
-                You are about to permanently terminate instance <strong className="font-mono text-[var(--text-primary)]">&ldquo;{instanceName}&rdquo;</strong>.
+                You are about to permanently terminate instance <strong className="font-mono text-[var(--text-strong)]">&ldquo;{instanceName}&rdquo;</strong>.
               </p>
-              <ul className="list-disc list-inside space-y-1 text-[11px] text-[var(--muted)] pt-1">
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-[var(--text-muted)] pt-1">
                 <li>Hourly usage billing will immediately stop once termination completes.</li>
                 <li>Database connection access will be revoked immediately.</li>
                 <li>All stored documents and backups will be purged according to retention policy.</li>
@@ -92,8 +92,8 @@ export default function CancelInstanceModal({ instanceId, instanceName }: Props)
 
             <form onSubmit={handleCancelService} className="space-y-4 pt-2">
               <div>
-                <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-secondary)] mb-1.5">
-                  Type <span className="font-bold text-[var(--text-primary)] select-all font-mono">&ldquo;{instanceName}&rdquo;</span> to confirm:
+                <label className="label mb-1.5">
+                  Type <span className="font-bold text-[var(--text-strong)] select-all font-mono">&ldquo;{instanceName}&rdquo;</span> to confirm:
                 </label>
                 <input
                   type="text"
@@ -101,29 +101,29 @@ export default function CancelInstanceModal({ instanceId, instanceName }: Props)
                   onChange={(e) => setTypedName(e.target.value)}
                   placeholder={instanceName}
                   required
-                  className="w-full px-3.5 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm font-mono text-[var(--text-primary)] focus:outline-hidden focus:border-red-500 transition-colors"
+                  className="input-field font-mono text-xs"
                 />
               </div>
 
               {error && (
-                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs">
+                <div className="p-3 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border)] text-xs text-[var(--text-strong)]">
                   {error}
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
                   disabled={loading}
-                  className="py-2 px-4 rounded-lg bg-[var(--surface-2)] text-xs text-[var(--text-primary)] border border-[var(--border)] cursor-pointer"
+                  className="btn-secondary text-xs py-2 px-4"
                 >
                   Keep Instance
                 </button>
                 <button
                   type="submit"
                   disabled={loading || !isMatched}
-                  className="py-2 px-4 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="btn-primary text-xs py-2 px-4 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   <span>Confirm Cancellation &amp; Stop Billing</span>

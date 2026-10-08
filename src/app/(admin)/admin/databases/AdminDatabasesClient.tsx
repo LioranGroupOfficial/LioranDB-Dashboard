@@ -81,36 +81,36 @@ export default function AdminDatabasesClient({ initialDatabases }: Props) {
       case 'ACTIVE':
       case 'RUNNING':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="badge badge-active">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             ACTIVE
           </span>
         );
       case 'PROVISIONING':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-spin" />
+          <span className="badge badge-info">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-strong)] animate-spin" />
             PROVISIONING
           </span>
         );
       case 'SUSPENDED':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          <span className="badge badge-suspended">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
             SUSPENDED
           </span>
         );
       case 'RESETTING':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+          <span className="badge badge-info">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-strong)] animate-pulse" />
             RESETTING
           </span>
         );
       case 'FAILED':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+          <span className="badge badge-default">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]" />
             FAILED
           </span>
         );
@@ -118,8 +118,8 @@ export default function AdminDatabasesClient({ initialDatabases }: Props) {
       case 'DELETED':
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-medium bg-slate-800 text-slate-400 border border-slate-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+          <span className="badge badge-default">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]" />
             {status}
           </span>
         );

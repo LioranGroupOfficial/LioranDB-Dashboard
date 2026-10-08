@@ -65,7 +65,7 @@ export default function AdminInvoiceActions({ invoiceId, invoiceNumber, status }
             onClick={handleMarkPaid}
             disabled={loading}
             title="Mark as Paid"
-            className="btn btn-secondary text-xs py-1 px-2 text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1"
+            className="btn-secondary text-xs py-1 px-2.5 inline-flex items-center gap-1"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Mark Paid</span>
@@ -74,7 +74,7 @@ export default function AdminInvoiceActions({ invoiceId, invoiceNumber, status }
             onClick={handleVoid}
             disabled={loading}
             title="Void Invoice"
-            className="btn btn-secondary text-xs py-1 px-2 text-rose-400 hover:text-rose-300 inline-flex items-center gap-1"
+            className="btn-secondary text-xs py-1 px-2.5 inline-flex items-center gap-1"
           >
             <Ban className="w-3.5 h-3.5" />
             <span>Void</span>
