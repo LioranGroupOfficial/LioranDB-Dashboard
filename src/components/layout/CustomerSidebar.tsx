@@ -92,7 +92,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
                 <Database className="w-4 h-4 text-[var(--on-primary)]" />
               </div>
               <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
-                STHASHTA<span className="text-[var(--text-muted)] font-mono text-xs ml-1.5 font-normal">/ DB</span>
+                Lioran<span className="text-[var(--text-strong)]">DB</span><span className="text-[var(--text-muted)] font-mono text-xs ml-1 font-normal">Cloud</span>
               </span>
             </Link>
           ) : (
@@ -207,11 +207,11 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
                 onClick={onMobileClose}
                 className="flex items-center gap-2.5"
               >
-                <div className="w-7 h-7 rounded-lg bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center">
+                <div className="w-7 h-7 rounded-[6px] bg-[var(--primary)] text-[var(--on-primary)] font-bold flex items-center justify-center border-2 border-[var(--primary)] shadow-xs">
                   <Database className="w-4 h-4 text-[var(--on-primary)]" />
                 </div>
-                <span className="text-base font-normal font-serif tracking-tight text-[var(--text-primary)]">
-                  Lioran<span className="text-[var(--primary)] italic">DB</span>
+                <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
+                  Lioran<span className="text-[var(--text-strong)]">DB</span><span className="text-[var(--text-muted)] font-mono text-xs ml-1 font-normal">Cloud</span>
                 </span>
               </Link>
               <button

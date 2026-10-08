@@ -20,7 +20,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <Database className="w-4 h-4 text-[var(--on-primary)]" />
           </div>
           <span className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
-            STHASHTA / Lioran<span className="text-[var(--text-muted)] font-mono text-sm ml-1">Cloud</span>
+            Lioran<span className="text-[var(--text-strong)]">DB</span><span className="text-[var(--text-muted)] font-mono text-sm ml-1">Cloud</span>
           </span>
           <span className="badge badge-default text-[10px]">
             CONSOLE

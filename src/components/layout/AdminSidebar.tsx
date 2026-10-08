@@ -73,7 +73,7 @@ export default function AdminSidebar({ email: _email, mobileOpen, onMobileClose 
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
-                  STHASHTA<span className="text-[var(--text-muted)] font-mono text-xs ml-1 font-normal">/ DB</span>
+                  Lioran<span className="text-[var(--text-strong)]">DB</span><span className="text-[var(--text-muted)] font-mono text-xs ml-1 font-normal">Cloud</span>
                 </span>
                 <span className="badge badge-default text-[9px] py-0 px-1">
                   ADMIN
