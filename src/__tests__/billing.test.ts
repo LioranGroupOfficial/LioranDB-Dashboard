@@ -2,6 +2,7 @@ import {
   calculateInstanceUsage,
   getCurrentMonthPeriod,
   getPreviousMonthPeriod,
+  MIN_INVOICE_AMOUNT_PAISE,
 } from '@/lib/billing';
 import type { IManagedDatabase } from '@/lib/db';
 import mongoose from 'mongoose';
@@ -146,5 +147,31 @@ describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
     expect(usage.billableHours).toBe(2);
     expect(usage.usageAmountPaise).toBe(200); // 2 * 100 paise = ₹2.00
     expect(usage.totalPaise).toBe(200);
+  });
+
+  test('MIN_INVOICE_AMOUNT_PAISE is 500 paise (₹5.00)', () => {
+    expect(MIN_INVOICE_AMOUNT_PAISE).toBe(500);
+  });
+
+  test('usage calculation below ₹5 is recognized properly', async () => {
+    const period = {
+      start: new Date('2026-04-01T00:00:00.000Z'),
+      end: new Date('2026-04-01T02:00:00.000Z'),
+    };
+    const now = new Date('2026-04-01T02:00:00.000Z');
+
+    const mockMicroInstance = {
+      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d6'),
+      name: 'micro-run-db',
+      hourlyRatePaise: 100, // ₹1/hr
+      backupEnabled: false,
+      billingStartedAt: new Date('2026-04-01T00:00:00.000Z'),
+      billingStoppedAt: new Date('2026-04-01T02:00:00.000Z'), // 2 hours = 200 paise = ₹2.00 (< ₹5)
+      status: 'TERMINATED' as const,
+    } as unknown as IManagedDatabase;
+
+    const usage = await calculateInstanceUsage(mockMicroInstance, period, now);
+    expect(usage.totalPaise).toBe(200);
+    expect(usage.totalPaise).toBeLessThan(MIN_INVOICE_AMOUNT_PAISE);
   });
 });

@@ -227,6 +227,17 @@ export default function AdminBillingClient({
 
   // Quick single customer invoice generation
   async function handleGenerateCustomerInvoice(customerId: string, customerName: string) {
+    const customerUsage = liveUsage.find((u) => u.customerId === customerId);
+    if (customerUsage && customerUsage.totalUnbilledPaise < 500) {
+      setFeedbackMsg({
+        type: 'error',
+        text: `Cannot generate invoice for ${customerName}: Accrued unbilled amount (${formatPaiseToRupees(
+          customerUsage.totalUnbilledPaise
+        )}) is below the ₹5.00 minimum threshold.`,
+      });
+      return;
+    }
+
     if (!confirm(`Generate current usage invoice immediately for ${customerName}?`)) return;
 
     setGenerating(true);
@@ -749,15 +760,26 @@ export default function AdminBillingClient({
                             )}
                           </td>
                           <td className="px-4 py-3.5 text-right">
-                            <button
-                              type="button"
-                              disabled={generating}
-                              onClick={() => handleGenerateCustomerInvoice(u.customerId, u.customerName)}
-                              className="px-2.5 py-1 text-[11px] btn-primary inline-flex items-center gap-1.5"
-                            >
-                              <Play className="w-3 h-3 fill-current" />
-                              <span>Generate Invoice</span>
-                            </button>
+                            {u.totalUnbilledPaise < 500 ? (
+                              <button
+                                type="button"
+                                disabled
+                                title={`Minimum invoice amount is ₹5.00 (currently ${formatPaiseToRupees(u.totalUnbilledPaise)})`}
+                                className="px-2.5 py-1 text-[11px] btn-secondary opacity-50 cursor-not-allowed inline-flex items-center gap-1.5"
+                              >
+                                <span>&lt; ₹5 Min</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={generating}
+                                onClick={() => handleGenerateCustomerInvoice(u.customerId, u.customerName)}
+                                className="px-2.5 py-1 text-[11px] btn-primary inline-flex items-center gap-1.5"
+                              >
+                                <Play className="w-3 h-3 fill-current" />
+                                <span>Generate Invoice</span>
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -840,6 +862,14 @@ export default function AdminBillingClient({
                 <label htmlFor="forceGen" className="text-xs text-[var(--text-secondary)] cursor-pointer">
                   <span className="font-semibold text-[var(--text-strong)]">Allow incremental / re-run invoices:</span> Generate new invoice even if an invoice already exists for this exact period window.
                 </label>
+              </div>
+
+              {/* ₹5 Minimum Threshold Note */}
+              <div className="p-2.5 bg-[var(--surface-soft)] border border-[var(--border)] rounded-[6px] text-xs text-[var(--text-secondary)] flex items-start gap-2">
+                <Info className="w-4 h-4 text-[var(--text-strong)] shrink-0 mt-0.5" />
+                <span>
+                  <strong>₹5.00 Minimum Policy:</strong> Accrued customer balances below ₹5.00 (500 paise) are automatically skipped / rejected from invoice generation.
+                </span>
               </div>
             </div>
 

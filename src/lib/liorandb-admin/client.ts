@@ -49,10 +49,17 @@ export class LioranDBAdminClient {
    * Factory method: instantiate client from a ManagedDatabase document.
    * Decrypts the control plane token strictly server-side in memory.
    */
+  /**
+   * Factory method: instantiate client from a ManagedDatabase document.
+   * Decrypts the control plane token strictly server-side in memory,
+   * with fallback to LIORANDB_CONTROL_PLANE_TOKEN from process.env.
+   */
   public static forInstance(instance: Partial<IManagedDatabase> & { _id: unknown; name: string }): LioranDBAdminClient {
-    let token: string | undefined;
+    // 1. Check LIORANDB_CONTROL_PLANE_TOKEN from environment first
+    let token: string | undefined = process.env.LIORANDB_CONTROL_PLANE_TOKEN || process.env.LIORANDB_CONTROL_PLANE_SECRET;
 
-    if (instance.encryptedControlPlaneCredential) {
+    // 2. If not provided in env, check per-instance encrypted credential
+    if (!token && instance.encryptedControlPlaneCredential) {
       try {
         token = decrypt(instance.encryptedControlPlaneCredential);
       } catch (err) {
@@ -60,13 +67,9 @@ export class LioranDBAdminClient {
       }
     }
 
-    if (!token && process.env.LIORANDB_CONTROL_PLANE_SECRET) {
-      token = process.env.LIORANDB_CONTROL_PLANE_SECRET;
-    }
-
-    const host = instance.host || 'localhost';
+    const host = instance.host || '127.0.0.1';
     const port = instance.port || 27017;
-    const adminPort = port > 0 ? port + 1000 : 28017;
+    const adminPort = port > 0 ? (port === 27017 ? 8080 : port + 1000) : 8080;
     const endpoint =
       instance.controlPlaneEndpoint ||
       process.env.LIORANDB_CONTROL_PLANE_URL ||
@@ -106,6 +109,8 @@ export class LioranDBAdminClient {
 
         if (this.controlPlaneToken) {
           headers['Authorization'] = `Bearer ${this.controlPlaneToken}`;
+          headers['X-Control-Plane-Token'] = this.controlPlaneToken;
+          headers['X-Auth-Token'] = this.controlPlaneToken;
         }
 
         if (options.idempotencyKey) {
@@ -171,10 +176,16 @@ export class LioranDBAdminClient {
     if (process.env.LIORANDB_MOCK_DRIVER === 'true') return false;
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 600);
-      const res = await fetch(`${this.endpoint}/health`, { method: 'GET', signal: controller.signal });
+      const timer = setTimeout(() => controller.abort(), 1200);
+      const headers: Record<string, string> = {};
+      if (this.controlPlaneToken) {
+        headers['Authorization'] = `Bearer ${this.controlPlaneToken}`;
+        headers['X-Control-Plane-Token'] = this.controlPlaneToken;
+        headers['X-Auth-Token'] = this.controlPlaneToken;
+      }
+      const res = await fetch(`${this.endpoint}/health`, { method: 'GET', headers, signal: controller.signal });
       clearTimeout(timer);
-      return res.ok;
+      return res.ok || res.status === 401 || res.status === 403;
     } catch {
       return false;
     }
@@ -413,6 +424,19 @@ export class LioranDBAdminClient {
       await inst.save();
     }
 
+    const hasHttp = await this.isHttpAvailable();
+    if (hasHttp) {
+      try {
+        await this.dispatch({
+          path: '/admin/v1/operations/backup',
+          method: 'POST',
+          body: { backupId },
+        });
+      } catch (err) {
+        console.warn('[LioranDBAdminClient] Physical server backup dispatch failed:', (err as Error).message);
+      }
+    }
+
     return {
       backupId,
       status: 'COMPLETED',
@@ -423,6 +447,19 @@ export class LioranDBAdminClient {
   }
 
   public async restartInstance(): Promise<RestartResult> {
+    const hasHttp = await this.isHttpAvailable();
+    if (hasHttp) {
+      try {
+        await this.dispatch({
+          path: '/admin/v1/operations/restart',
+          method: 'POST',
+          body: { instanceId: this.instanceId },
+        });
+      } catch (err) {
+        console.warn('[LioranDBAdminClient] Physical server restart dispatch failed:', (err as Error).message);
+      }
+    }
+
     return {
       instanceId: this.instanceId,
       status: 'RESTARTED',
@@ -439,6 +476,19 @@ export class LioranDBAdminClient {
     const now = new Date();
     inst.status = 'SUSPENDED';
     inst.suspendedAt = now;
+
+    const hasHttp = await this.isHttpAvailable();
+    if (hasHttp) {
+      try {
+        await this.dispatch({
+          path: '/admin/v1/operations/suspend',
+          method: 'POST',
+          body: { instanceId: this.instanceId },
+        });
+      } catch (err) {
+        console.warn('[LioranDBAdminClient] Physical server suspend dispatch failed:', (err as Error).message);
+      }
+    }
 
     // Pause billing interval
     await BillingInterval.updateMany(
@@ -458,6 +508,19 @@ export class LioranDBAdminClient {
     const now = new Date();
     inst.status = 'ACTIVE';
     inst.suspendedAt = undefined;
+
+    const hasHttp = await this.isHttpAvailable();
+    if (hasHttp) {
+      try {
+        await this.dispatch({
+          path: '/admin/v1/operations/resume',
+          method: 'POST',
+          body: { instanceId: this.instanceId },
+        });
+      } catch (err) {
+        console.warn('[LioranDBAdminClient] Physical server resume dispatch failed:', (err as Error).message);
+      }
+    }
 
     // Create new billing interval
     await BillingInterval.create({

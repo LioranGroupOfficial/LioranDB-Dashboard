@@ -93,6 +93,56 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     }
   }
 
+  // Endpoint input auto-parsers
+  function handleDbUrlChange(val: string) {
+    let clean = val.trim();
+    // If user enters host:port (like 127.0.0.1:27018 or localhost:27018), auto-split
+    clean = clean.replace(/^(https?:\/\/|grpc:\/\/|liorandb:\/\/|mongodb:\/\/)/i, '').split('/')[0].split('?')[0];
+    if (clean.includes(':')) {
+      const [h, p] = clean.split(':');
+      setFormDbUrl(h);
+      const parsed = parseInt(p, 10);
+      if (!isNaN(parsed) && parsed > 0 && parsed <= 65535) {
+        setFormPort(parsed);
+      }
+      return;
+    }
+    setFormDbUrl(val);
+  }
+
+  function handleGrpcUrlChange(val: string) {
+    let clean = val.trim();
+    // If user enters host:port (like 127.0.0.1:27019 or localhost:50051), auto-split
+    clean = clean.replace(/^(https?:\/\/|grpc:\/\/|liorandb:\/\/|mongodb:\/\/)/i, '').split('/')[0].split('?')[0];
+    if (clean.includes(':')) {
+      const [h, p] = clean.split(':');
+      setFormGrpcUrl(h);
+      const parsed = parseInt(p, 10);
+      if (!isNaN(parsed) && parsed > 0 && parsed <= 65535) {
+        setFormGrpcPort(parsed);
+      }
+      return;
+    }
+    setFormGrpcUrl(val);
+  }
+
+  function applyLocalhostPreset() {
+    setFormName('Localhost Node (127.0.0.1)');
+    setFormSlug('localhost-node-01');
+    setFormRegion('Localhost / Development');
+    setFormDbUrl('127.0.0.1');
+    setFormPort(27018);
+    setFormProtocol('http');
+    setFormHttpPort(8080);
+    setFormGrpcUrl('127.0.0.1');
+    setFormGrpcPort(27019);
+    setFormRootUser('admin');
+    setFormStatus('ACTIVE');
+    setFormMaxCapacity(50);
+    setFormNotes('Localhost development database cluster on 127.0.0.1');
+    if (nodes.length === 0) setFormIsDefault(true);
+  }
+
   // Open Add Modal
   function openAddModal() {
     setFormName('');
@@ -405,11 +455,16 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                   return (
                     <tr key={node._id} className="hover:bg-[var(--surface-soft)] transition-colors">
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-xs font-sans text-[var(--text-strong)]">{node.name}</span>
                           {node.isDefault && (
                             <span className="px-1.5 py-0.5 rounded-[4px] text-[9px] font-mono bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-bold">
                               DEFAULT
+                            </span>
+                          )}
+                          {(node.dbUrl === '127.0.0.1' || node.dbUrl === 'localhost' || node.dbUrl.startsWith('127.') || node.dbUrl === '0.0.0.0') && (
+                            <span className="px-1.5 py-0.5 rounded-[4px] text-[9px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-semibold">
+                              LOCAL
                             </span>
                           )}
                         </div>
@@ -518,6 +573,26 @@ export default function AdminHostingClient({ initialNodes }: Props) {
               </button>
             </div>
 
+            {!editingNode && (
+              <div className="p-3 bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="text-xs">
+                  <span className="font-bold text-[var(--text-strong)] flex items-center gap-1.5">
+                    <span>⚡ Quick Localhost DB Preset</span>
+                  </span>
+                  <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                    Instantly fill in local development database cluster endpoints (127.0.0.1:27018).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={applyLocalhostPreset}
+                  className="btn-secondary py-1.5 px-3 text-xs shrink-0 self-start sm:self-auto font-medium"
+                >
+                  Use Localhost Preset
+                </button>
+              </div>
+            )}
+
             <form onSubmit={handleSaveNode} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Node Name */}
@@ -535,7 +610,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                         setFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'));
                       }
                     }}
-                    placeholder="e.g. Mumbai Primary Node 01"
+                    placeholder="e.g. Localhost Node or Mumbai Primary 01"
                     className="input-field w-full text-xs"
                   />
                 </div>
@@ -549,7 +624,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                     type="text"
                     value={formSlug}
                     onChange={(e) => setFormSlug(e.target.value)}
-                    placeholder="e.g. mumbai-node-01"
+                    placeholder="e.g. localhost-node-01 or mumbai-node-01"
                     className="input-field w-full text-xs font-mono"
                   />
                 </div>
@@ -561,11 +636,20 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                   </label>
                   <input
                     type="text"
+                    list="region-presets"
                     value={formRegion}
                     onChange={(e) => setFormRegion(e.target.value)}
-                    placeholder="e.g. Asia (Mumbai)"
+                    placeholder="e.g. Localhost / Development or Asia (Mumbai)"
                     className="input-field w-full text-xs"
                   />
+                  <datalist id="region-presets">
+                    <option value="Localhost / Development" />
+                    <option value="Asia (Mumbai)" />
+                    <option value="On-Premise / Self-Hosted" />
+                    <option value="US East (N. Virginia)" />
+                    <option value="EU Central (Frankfurt)" />
+                    <option value="Singapore" />
+                  </datalist>
                 </div>
 
                 {/* Status */}
@@ -588,9 +672,14 @@ export default function AdminHostingClient({ initialNodes }: Props) {
 
               {/* Endpoints & Networking */}
               <div className="p-3.5 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border)] space-y-3">
-                <span className="text-xs font-bold text-[var(--text-strong)] block">
-                  Endpoints &amp; Ports Configuration
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[var(--text-strong)] block">
+                    Endpoints &amp; Ports Configuration
+                  </span>
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                    Supports 127.0.0.1, localhost, or domains
+                  </span>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {/* Database Host */}
@@ -602,8 +691,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       type="text"
                       required
                       value={formDbUrl}
-                      onChange={(e) => setFormDbUrl(e.target.value)}
-                      placeholder="db-mumbai-01.liorandb.net"
+                      onChange={(e) => handleDbUrlChange(e.target.value)}
+                      placeholder="127.0.0.1 or db-mumbai-01.liorandb.net"
                       className="input-field w-full text-xs font-mono"
                     />
                   </div>
@@ -618,7 +707,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       required
                       value={formPort}
                       onChange={(e) => setFormPort(Number(e.target.value))}
-                      placeholder="27017"
+                      placeholder="27018"
                       className="input-field w-full text-xs font-mono"
                     />
                   </div>
@@ -634,8 +723,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       type="text"
                       required
                       value={formGrpcUrl}
-                      onChange={(e) => setFormGrpcUrl(e.target.value)}
-                      placeholder="grpc.mumbai-01.liorandb.net"
+                      onChange={(e) => handleGrpcUrlChange(e.target.value)}
+                      placeholder="127.0.0.1 or grpc.mumbai-01.liorandb.net"
                       className="input-field w-full text-xs font-mono"
                     />
                   </div>
@@ -650,7 +739,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       required
                       value={formGrpcPort}
                       onChange={(e) => setFormGrpcPort(Number(e.target.value))}
-                      placeholder="50051"
+                      placeholder="27019"
                       className="input-field w-full text-xs font-mono"
                     />
                   </div>

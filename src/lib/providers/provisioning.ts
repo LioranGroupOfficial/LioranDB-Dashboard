@@ -141,15 +141,24 @@ export async function provisionInstance(
     instance.host && instance.host !== 'pending-allocation'
       ? instance.host
       : `db-${regionCode}-${cleanId}.liorandb.net`;
-  const port = 27017;
+  const port = instance.port || 27017;
   const username = instance.username || `usr_${cleanId}`;
   const databaseName = instance.databaseName || `app_${cleanId}`;
   const generatedPassword = generateDatabasePassword(24);
 
+  const isLocal =
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '0.0.0.0' ||
+    host.startsWith('127.') ||
+    host === '::1' ||
+    host.includes('local');
+  const sslParam = isLocal ? 'ssl=false' : 'ssl=true';
+
   // Generate connection string and encrypt it with AES-256-GCM for control plane use
   const connectionUri = `mongodb://${username}:${encodeURIComponent(
     generatedPassword
-  )}@${host}:${port}/${databaseName}?authSource=admin&ssl=true`;
+  )}@${host}:${port}/${databaseName}?authSource=admin&${sslParam}`;
   const encryptedConnectionUri = encrypt(connectionUri);
 
   const deploymentResult = await provisioningProvider.createDeployment({

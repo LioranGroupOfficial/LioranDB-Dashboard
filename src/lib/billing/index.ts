@@ -17,6 +17,9 @@ import mongoose from 'mongoose';
 
 const IST_TIMEZONE = 'Asia/Kolkata';
 
+export const MIN_INVOICE_AMOUNT_PAISE = 500; // Minimum ₹5 (500 paise) threshold for invoice generation
+export const MIN_INVOICE_AMOUNT_RUPEES = 5;
+
 export interface BillingPeriod {
   start: Date;
   end: Date;
@@ -504,7 +507,8 @@ export async function generateMonthlyInvoice(
     }
   }
 
-  if (lineItems.length === 0 || totalPaise === 0) {
+  // Invoices below ₹5 (500 paise) are rejected to prevent micro-billing transactions
+  if (lineItems.length === 0 || totalPaise < MIN_INVOICE_AMOUNT_PAISE) {
     return null;
   }
 

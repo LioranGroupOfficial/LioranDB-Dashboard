@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
-import { generateDatabasePassword } from '@/lib/crypto';
+import { LioranDBAdminClient } from '@/lib/liorandb-admin';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
 
@@ -29,11 +29,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot delete the master database administrator user.' }, { status: 400 });
     }
 
-    instance.databaseUsers = (instance.databaseUsers || []).filter(
-      (u) => u.username.toLowerCase() !== username.toLowerCase()
-    );
-
-    await instance.save();
+    const client = LioranDBAdminClient.forInstance(instance);
+    await client.deleteUser(username);
 
     await createAuditLog({
       userId: session.userId,
@@ -69,15 +66,17 @@ export async function POST(
       }
     }
 
-    const userExists = (instance.databaseUsers || []).some(
-      (u) => u.username.toLowerCase() === username.toLowerCase()
-    ) || (instance.username && instance.username.toLowerCase() === username.toLowerCase());
+    const isMasterUser = instance.username && instance.username.toLowerCase() === username.toLowerCase();
+    const client = LioranDBAdminClient.forInstance(instance);
 
-    if (!userExists) {
-      return NextResponse.json({ error: 'User not found on this instance' }, { status: 404 });
+    let newPassword = '';
+    if (isMasterUser) {
+      const rot = await client.rotateRootCredential();
+      newPassword = rot.newGeneratedPassword;
+    } else {
+      const res = await client.resetUserPassword(username);
+      newPassword = res.newGeneratedPassword;
     }
-
-    const newPassword = generateDatabasePassword(24);
 
     await createAuditLog({
       userId: session.userId,

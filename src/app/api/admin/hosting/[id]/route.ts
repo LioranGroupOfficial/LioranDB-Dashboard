@@ -39,6 +39,8 @@ export async function GET(
   }
 }
 
+import { parseAndNormalizeEndpoint } from '../route';
+
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -60,11 +62,23 @@ export async function PUT(
 
     if (body.name !== undefined) node.name = body.name.trim();
     if (body.region !== undefined) node.region = body.region.trim();
-    if (body.dbUrl !== undefined) node.dbUrl = body.dbUrl.trim();
+    if (body.dbUrl !== undefined) {
+      const dbEndpoint = parseAndNormalizeEndpoint(body.dbUrl, body.port ? Number(body.port) : node.port);
+      node.dbUrl = dbEndpoint.host;
+      if (body.port === undefined && dbEndpoint.port !== 27017) {
+        node.port = dbEndpoint.port;
+      }
+    }
     if (body.port !== undefined) node.port = Number(body.port);
     if (body.protocol !== undefined) node.protocol = body.protocol === 'http' ? 'http' : 'https';
     if (body.httpPort !== undefined) node.httpPort = Number(body.httpPort);
-    if (body.grpcUrl !== undefined) node.grpcUrl = body.grpcUrl.trim();
+    if (body.grpcUrl !== undefined) {
+      const grpcEndpoint = parseAndNormalizeEndpoint(body.grpcUrl, body.grpcPort ? Number(body.grpcPort) : node.grpcPort);
+      node.grpcUrl = grpcEndpoint.host;
+      if (body.grpcPort === undefined && grpcEndpoint.port !== 50051) {
+        node.grpcPort = grpcEndpoint.port;
+      }
+    }
     if (body.grpcPort !== undefined) node.grpcPort = Number(body.grpcPort);
     if (body.defaultRootUsername !== undefined) node.defaultRootUsername = body.defaultRootUsername.trim();
     if (body.defaultRootPassword !== undefined) node.defaultRootPassword = body.defaultRootPassword.trim();

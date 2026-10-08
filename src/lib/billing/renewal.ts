@@ -1,5 +1,12 @@
-import { connectToDatabase, User, Invoice } from '../db';
-import { getPreviousMonthPeriod, getCurrentMonthPeriod, generateMonthlyInvoice, BillingPeriod } from './index';
+import { connectToDatabase, User, Invoice, ManagedDatabase, IManagedDatabase } from '../db';
+import {
+  getPreviousMonthPeriod,
+  getCurrentMonthPeriod,
+  generateMonthlyInvoice,
+  calculateInstanceUsage,
+  MIN_INVOICE_AMOUNT_PAISE,
+  BillingPeriod,
+} from './index';
 import { createNotification } from '../notifications';
 import { sendEmail } from '../email';
 import { formatPaiseToRupees } from '../plans';
@@ -26,12 +33,19 @@ export interface MonthlyBillingResult {
   invoicesGenerated: number;
   totalAmountPaise: number;
   invoices: GeneratedInvoiceSummary[];
+  skippedBelowMinimumCount: number;
+  skippedBelowMinimum: Array<{
+    customerId: string;
+    customerName: string;
+    amountPaise: number;
+  }>;
   overdueInvoicesCount: number;
   errors: Array<{ customerId: string; error: string }>;
 }
 
 /**
  * Scheduled cron or manual admin execution to generate usage-based monthly invoices for customers.
+ * Rejects and skips any invoices with accrued usage below ₹5 (500 paise).
  */
 export async function processMonthlyBillingInvoices(
   options: BillingCycleOptions = {}
@@ -60,6 +74,8 @@ export async function processMonthlyBillingInvoices(
     invoicesGenerated: 0,
     totalAmountPaise: 0,
     invoices: [],
+    skippedBelowMinimumCount: 0,
+    skippedBelowMinimum: [],
     overdueInvoicesCount: 0,
     errors: [],
   };
@@ -125,6 +141,30 @@ export async function processMonthlyBillingInvoices(
           });
         } catch {
           // Email dispatch is best-effort
+        }
+      } else {
+        // Check if customer had active usage that was rejected because it fell below ₹5 (500 paise)
+        const instances = await ManagedDatabase.find({
+          $and: [
+            { $or: [{ customerId: customer._id }, { userId: customer._id }] },
+            { billingStartedAt: { $exists: true, $ne: null, $lte: period.end } },
+            { $or: [{ billingStoppedAt: { $exists: false } }, { billingStoppedAt: null }, { billingStoppedAt: { $gte: period.start } }] },
+          ],
+        }).lean();
+
+        let totalAccruedPaise = 0;
+        for (const inst of instances) {
+          const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, period, period.end);
+          totalAccruedPaise += calc.totalPaise;
+        }
+
+        if (totalAccruedPaise > 0 && totalAccruedPaise < MIN_INVOICE_AMOUNT_PAISE) {
+          result.skippedBelowMinimumCount++;
+          result.skippedBelowMinimum.push({
+            customerId: customer._id.toString(),
+            customerName: customer.profile?.fullName || customer.email.split('@')[0],
+            amountPaise: totalAccruedPaise,
+          });
         }
       }
     } catch (err: unknown) {

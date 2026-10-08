@@ -28,15 +28,24 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    const isLocal =
+      inst.host === 'localhost' ||
+      inst.host === '127.0.0.1' ||
+      inst.host === '0.0.0.0' ||
+      inst.host?.startsWith('127.') ||
+      inst.host === '::1' ||
+      inst.host?.includes('local');
+    const sslParam = isLocal ? 'ssl=false' : 'ssl=true';
+
     let connectionUri = '';
     if (inst.encryptedConnectionUri) {
       try {
         connectionUri = decrypt(inst.encryptedConnectionUri);
       } catch {
-        connectionUri = `mongodb://${inst.username}:••••••••@${inst.host}:${inst.port}/${inst.databaseName}?authSource=admin&ssl=true`;
+        connectionUri = `mongodb://${inst.username}:••••••••@${inst.host}:${inst.port}/${inst.databaseName}?authSource=admin&${sslParam}`;
       }
     } else {
-      connectionUri = `mongodb://${inst.username}:••••••••@${inst.host}:${inst.port}/${inst.databaseName}?authSource=admin&ssl=true`;
+      connectionUri = `mongodb://${inst.username}:••••••••@${inst.host}:${inst.port}/${inst.databaseName}?authSource=admin&${sslParam}`;
     }
 
     await createAuditLog({

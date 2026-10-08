@@ -32,6 +32,32 @@ export async function GET(_req: NextRequest) {
   }
 }
 
+export function parseAndNormalizeEndpoint(
+  input: string,
+  fallbackPort?: number
+): { host: string; port: number } {
+  let cleaned = (input || '').trim();
+
+  // Strip leading protocols
+  cleaned = cleaned.replace(/^(https?:\/\/|grpc:\/\/|liorandb:\/\/|mongodb:\/\/)/i, '');
+  // Strip trailing paths / query parameters
+  cleaned = cleaned.split('/')[0].split('?')[0];
+
+  let port = fallbackPort || 27017;
+
+  // Check if contains :port (e.g. 127.0.0.1:27018 or localhost:50051)
+  if (cleaned.includes(':')) {
+    const parts = cleaned.split(':');
+    cleaned = parts[0];
+    const parsedPort = parseInt(parts[1], 10);
+    if (!isNaN(parsedPort) && parsedPort > 0 && parsedPort <= 65535) {
+      port = parsedPort;
+    }
+  }
+
+  return { host: cleaned, port };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const admin = await requireAdminAPI();
@@ -77,6 +103,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Parse and normalize host and port for DB & gRPC
+    const dbEndpoint = parseAndNormalizeEndpoint(dbUrl, Number(port) || 27017);
+    const grpcEndpoint = parseAndNormalizeEndpoint(grpcUrl, Number(grpcPort) || 50051);
+
     // If marked default, unset other defaults
     if (isDefault) {
       await HostingNode.updateMany({}, { isDefault: false });
@@ -86,12 +116,12 @@ export async function POST(req: NextRequest) {
       name: name.trim(),
       slug: nodeSlug,
       region: region || 'Asia (Mumbai)',
-      dbUrl: dbUrl.trim(),
-      port: Number(port) || 27017,
+      dbUrl: dbEndpoint.host,
+      port: Number(port) || dbEndpoint.port,
       protocol: protocol === 'http' ? 'http' : 'https',
-      httpPort: Number(httpPort) || 443,
-      grpcUrl: grpcUrl.trim(),
-      grpcPort: Number(grpcPort) || 50051,
+      httpPort: Number(httpPort) || (protocol === 'http' ? 80 : 443),
+      grpcUrl: grpcEndpoint.host,
+      grpcPort: Number(grpcPort) || grpcEndpoint.port,
       defaultRootUsername: (defaultRootUsername || 'admin').trim(),
       defaultRootPassword: defaultRootPassword ? defaultRootPassword.trim() : undefined,
       status: status || 'ACTIVE',

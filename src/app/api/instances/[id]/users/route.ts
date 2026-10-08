@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
+import { LioranDBAdminClient } from '@/lib/liorandb-admin';
 import { generateDatabasePassword } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
@@ -70,19 +71,11 @@ export async function POST(
       return NextResponse.json({ error: 'Cannot add users to a terminated instance.' }, { status: 400 });
     }
 
-    const existingUsers = instance.databaseUsers || [];
-    if (existingUsers.some((u) => u.username.toLowerCase() === trimmedUsername.toLowerCase())) {
-      return NextResponse.json({ error: 'A user with this username already exists on this instance.' }, { status: 400 });
-    }
-
-    const temporaryPassword = generateDatabasePassword(24);
-
-    instance.databaseUsers.push({
+    const client = LioranDBAdminClient.forInstance(instance);
+    const result = await client.createUser({
       username: trimmedUsername,
-      createdAt: new Date(),
+      role: 'readWrite',
     });
-
-    await instance.save();
 
     await createAuditLog({
       userId: session.userId,
@@ -94,9 +87,9 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      username: trimmedUsername,
-      generatedPassword: temporaryPassword,
-      password: temporaryPassword,
+      username: result.username,
+      generatedPassword: result.generatedPassword,
+      password: result.generatedPassword,
       message: 'Database user created. Copy this password now; it will not be displayed again.',
     });
   } catch (error: unknown) {
