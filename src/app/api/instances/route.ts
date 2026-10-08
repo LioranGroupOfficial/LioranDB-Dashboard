@@ -4,6 +4,7 @@ import { connectToDatabase, User, ManagedDatabase, HostingNode } from '@/lib/db'
 import { getPlan, formatPaiseToRupees, formatPaiseToInr, PLANS } from '@/lib/plans';
 import { validateCoupon, incrementCouponRedemption } from '@/lib/billing/coupons';
 import { provisionInstance } from '@/lib/providers/provisioning';
+import { reconcileHostingNodes } from '@/lib/providers/reconciliation';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { generateDatabasePassword } from '@/lib/crypto';
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
   try {
     const sessionUser = await requireAccountVerifiedUserAPI();
     await connectToDatabase();
+    await reconcileHostingNodes();
 
     const user = await User.findById(sessionUser.userId);
     if (!user) {

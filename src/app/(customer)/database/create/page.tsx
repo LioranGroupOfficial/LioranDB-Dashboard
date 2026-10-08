@@ -1,6 +1,7 @@
 import React from 'react';
 import { requireAccountVerifiedUser } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase, HostingNode } from '@/lib/db';
+import { reconcileHostingNodes } from '@/lib/providers/reconciliation';
 import CreateDatabaseClient from './CreateDatabaseClient';
 import Link from 'next/link';
 import { Database, ArrowLeft, ShieldAlert, Mail, Server } from 'lucide-react';
@@ -11,6 +12,7 @@ export const metadata = { title: 'Create Database Instance — LioranDB' };
 export default async function CreateInstancePage() {
   const sessionUser = await requireAccountVerifiedUser();
   await connectToDatabase();
+  await reconcileHostingNodes();
 
   const MAX_DATABASES = 2;
   const [activeDatabasesCount, allActiveHostingNodes, occupiedNodes] = await Promise.all([
@@ -18,7 +20,7 @@ export default async function CreateInstancePage() {
       $or: [{ customerId: sessionUser.userId }, { userId: sessionUser.userId }],
       status: { $nin: ['TERMINATED', 'DELETED'] },
     }),
-    HostingNode.find({ status: 'ACTIVE' }).lean(),
+    HostingNode.find({ status: { $in: ['AVAILABLE', 'ACTIVE'] } }).lean(),
     ManagedDatabase.find({
       status: { $nin: ['TERMINATED', 'DELETED'] },
       hostingNodeId: { $exists: true, $ne: null },
