@@ -6,11 +6,9 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
-  Server,
   CreditCard,
   TicketPercent,
   Shield,
-  LifeBuoy,
   Scale,
   LogOut,
   PanelLeftClose,
@@ -26,7 +24,6 @@ const NAV = [
   { label: 'Billing', href: '/admin/billing', icon: CreditCard },
   { label: 'Coupons', href: '/admin/coupons', icon: TicketPercent },
   { label: 'Audit', href: '/admin/audit', icon: Shield },
-  { label: 'Support', href: '/admin/support', icon: LifeBuoy },
   { label: 'Policies', href: '/admin/policies', icon: Scale },
 ];
 
@@ -148,11 +145,11 @@ export default function AdminSidebar({ email: _email, mobileOpen, onMobileClose 
           <button
             onClick={handleLogout}
             title={collapsed ? 'Sign out' : undefined}
-            className={`sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-lg cursor-pointer ${
+            className={`sidebar-link w-full text-left text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] rounded-[7px] cursor-pointer ${
               collapsed ? 'justify-center px-0' : 'px-3.5'
             }`}
           >
-            <LogOut className="w-4 h-4 shrink-0 text-red-500" />
+            <LogOut className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
             {!collapsed && <span className="text-xs font-medium">Sign Out</span>}
           </button>
         </div>
@@ -177,10 +174,10 @@ export default function AdminSidebar({ email: _email, mobileOpen, onMobileClose 
                   <Database className="w-4 h-4 text-[var(--on-primary)]" />
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-base font-normal font-serif tracking-tight text-[var(--text-primary)]">
-                    Lioran<span className="text-[var(--primary)] italic">DB</span>
+                  <span className="text-base font-bold tracking-tight text-[var(--text-primary)]">
+                    Lioran<span className="text-[var(--text-strong)]">DB</span>
                   </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--surface-cream-strong)] text-[var(--text-strong)] border border-[var(--border)] font-sans font-semibold">
+                  <span className="badge badge-default text-[9px] py-0 px-1">
                     ADMIN
                   </span>
                 </div>
@@ -224,9 +221,9 @@ export default function AdminSidebar({ email: _email, mobileOpen, onMobileClose 
             <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
               <button
                 onClick={handleLogout}
-                className="sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3.5 rounded-lg cursor-pointer"
+                className="sidebar-link w-full text-left text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] px-3.5 rounded-[7px] cursor-pointer"
               >
-                <LogOut className="w-4 h-4 shrink-0 text-red-500" />
+                <LogOut className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
                 <span className="text-xs font-medium">Sign Out</span>
               </button>
             </div>

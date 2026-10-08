@@ -178,11 +178,11 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
           <button
             onClick={handleLogout}
             title={collapsed ? 'Sign out' : undefined}
-            className={`sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-lg cursor-pointer ${
+            className={`sidebar-link w-full text-left text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] rounded-[7px] cursor-pointer ${
               collapsed ? 'justify-center px-0' : 'px-3.5'
             }`}
           >
-            <LogOut className="w-4 h-4 shrink-0 text-red-500" />
+            <LogOut className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
             {!collapsed && <span className="text-xs font-medium">Sign Out</span>}
           </button>
         </div>
@@ -267,9 +267,9 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
             <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
               <button
                 onClick={handleLogout}
-                className="sidebar-link w-full text-left text-red-500 hover:text-red-600 hover:bg-red-500/10 px-3.5 rounded-lg cursor-pointer"
+                className="sidebar-link w-full text-left text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] px-3.5 rounded-[7px] cursor-pointer"
               >
-                <LogOut className="w-4 h-4 shrink-0 text-red-500" />
+                <LogOut className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
                 <span className="text-xs font-medium">Sign Out</span>
               </button>
             </div>
