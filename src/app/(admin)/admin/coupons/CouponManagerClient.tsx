@@ -97,63 +97,63 @@ export default function CouponManagerClient({ initialCoupons }: Props) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-sm font-medium text-slate-400">Manage Discount Codes</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-strong)]">Manage Discount Codes</h2>
         </div>
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-xs"
+          className="btn-primary py-1.5 px-3 min-h-[36px] text-xs inline-flex items-center gap-1.5"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Create Coupon</span>
         </button>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      <div className="card p-0 overflow-hidden shadow-2xs">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[var(--surface-2)] text-[var(--muted)] uppercase font-mono border-b border-[var(--border)]">
               <tr>
-                <th className="px-5 py-3 font-medium">Code</th>
-                <th className="px-5 py-3 font-medium">Discount</th>
-                <th className="px-5 py-3 font-medium">Scope</th>
-                <th className="px-5 py-3 font-medium">Redemptions</th>
-                <th className="px-5 py-3 font-medium">Expires</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium text-right">Actions</th>
+                <th className="px-4 py-3 font-medium">Code</th>
+                <th className="px-4 py-3 font-medium">Discount</th>
+                <th className="px-4 py-3 font-medium">Scope</th>
+                <th className="px-4 py-3 font-medium">Redemptions</th>
+                <th className="px-4 py-3 font-medium">Expires</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-[var(--border)] font-mono">
               {coupons.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-slate-500 text-xs">
+                  <td colSpan={7} className="px-6 py-10 text-center text-[var(--muted)] text-xs font-sans">
                     No promotional coupons configured yet.
                   </td>
                 </tr>
               ) : (
                 coupons.map((c) => (
-                  <tr key={c._id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="px-5 py-3.5 font-mono text-xs font-bold text-white">
+                  <tr key={c._id} className="hover:bg-[var(--surface-soft)] transition-colors">
+                    <td className="px-4 py-3.5 font-mono text-xs font-bold text-[var(--text-strong)]">
                       {c.code}
                     </td>
-                    <td className="px-5 py-3.5 font-mono text-xs text-emerald-400 font-semibold">
+                    <td className="px-4 py-3.5 font-mono text-xs text-[var(--text-strong)] font-bold">
                       {c.discountPercentage}% OFF
                     </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-400">{c.scope}</td>
-                    <td className="px-5 py-3.5 text-xs font-mono text-slate-300">
+                    <td className="px-4 py-3.5 text-xs text-[var(--text-muted)] font-sans">{c.scope}</td>
+                    <td className="px-4 py-3.5 text-xs font-mono text-[var(--text-secondary)]">
                       {c.redemptionCount} {c.maxRedemptions ? `/ ${c.maxRedemptions}` : 'used'}
                     </td>
-                    <td className="px-5 py-3.5 text-xs text-slate-400">
+                    <td className="px-4 py-3.5 text-xs text-[var(--text-muted)] font-mono">
                       {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : 'Never'}
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-4 py-3.5">
                       <button
                         type="button"
                         onClick={() => handleToggle(c._id, c.enabled)}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono transition-colors ${
+                        className={`badge cursor-pointer ${
                           c.enabled
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-slate-800 text-slate-500 border border-slate-700'
+                            ? 'badge-active'
+                            : 'badge-default'
                         }`}
                       >
                         {c.enabled ? (
@@ -167,11 +167,11 @@ export default function CouponManagerClient({ initialCoupons }: Props) {
                         )}
                       </button>
                     </td>
-                    <td className="px-5 py-3.5 text-right">
+                    <td className="px-4 py-3.5 text-right">
                       <button
                         type="button"
                         onClick={() => handleDelete(c._id)}
-                        className="text-slate-400 hover:text-rose-400 p-1.5 rounded hover:bg-slate-800 transition-colors"
+                        className="text-[var(--text-muted)] hover:text-red-500 p-1.5 rounded hover:bg-[var(--surface-soft)] transition-colors cursor-pointer"
                         title="Delete coupon"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -186,40 +186,40 @@ export default function CouponManagerClient({ initialCoupons }: Props) {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <form
             onSubmit={handleCreate}
-            className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl"
+            className="bg-[var(--surface-card)] border border-[var(--border)] rounded-[10px] max-w-md w-full p-6 space-y-4 shadow-2xl"
           >
             <div>
-              <h3 className="text-base font-bold text-white">Create Discount Coupon</h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <h3 className="text-base font-bold text-[var(--text-strong)]">Create Discount Coupon</h3>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
                 Generate promotional percentage discounts for usage invoices.
               </p>
             </div>
 
             {error && (
-              <div className="p-3 rounded-lg bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <div className="p-3 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--hairline-strong)] text-[var(--text-strong)] text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[var(--text-strong)]" />
                 <span>{error}</span>
               </div>
             )}
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block font-medium text-slate-300 mb-1">Coupon Code</label>
+                <label className="label">Coupon Code</label>
                 <input
                   type="text"
                   required
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
                   placeholder="e.g. LAUNCH50"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono uppercase focus:outline-none focus:border-indigo-500"
+                  className="input-field font-mono uppercase"
                 />
               </div>
 
               <div>
-                <label className="block font-medium text-slate-300 mb-1">
+                <label className="label">
                   Discount Percentage (1 - 100%)
                 </label>
                 <input
@@ -229,16 +229,16 @@ export default function CouponManagerClient({ initialCoupons }: Props) {
                   required
                   value={discountPercentage}
                   onChange={(e) => setDiscountPercentage(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono focus:outline-none focus:border-indigo-500"
+                  className="input-field font-mono"
                 />
               </div>
 
               <div>
-                <label className="block font-medium text-slate-300 mb-1">Scope</label>
+                <label className="label">Scope</label>
                 <select
                   value={scope}
                   onChange={(e) => setScope(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+                  className="input-field"
                 >
                   <option value="ALL">All Plans &amp; Instances</option>
                   <option value="PLAN">Selected Plan Only</option>
@@ -248,7 +248,7 @@ export default function CouponManagerClient({ initialCoupons }: Props) {
               </div>
 
               <div>
-                <label className="block font-medium text-slate-300 mb-1">
+                <label className="label">
                   Max Redemptions (Optional)
                 </label>
                 <input
@@ -257,35 +257,35 @@ export default function CouponManagerClient({ initialCoupons }: Props) {
                   value={maxRedemptions}
                   onChange={(e) => setMaxRedemptions(e.target.value)}
                   placeholder="Unlimited"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono focus:outline-none focus:border-indigo-500"
+                  className="input-field font-mono"
                 />
               </div>
 
               <div>
-                <label className="block font-medium text-slate-300 mb-1">
+                <label className="label">
                   Expiration Date (Optional)
                 </label>
                 <input
                   type="date"
                   value={expiresAt}
                   onChange={(e) => setExpiresAt(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+                  className="input-field"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-[var(--border)]">
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
+                className="btn-secondary py-1.5 px-3.5 min-h-[36px] text-xs"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || !code}
-                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                className="btn-primary py-1.5 px-4 min-h-[36px] text-xs disabled:opacity-50"
               >
                 {loading ? 'Creating...' : 'Create Coupon'}
               </button>

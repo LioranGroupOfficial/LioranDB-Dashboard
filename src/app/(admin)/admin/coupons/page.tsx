@@ -27,8 +27,8 @@ export default async function AdminCouponsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Coupon Management</h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <h1 className="text-2xl font-bold text-[var(--text-strong)] tracking-tight">Coupon Management</h1>
+        <p className="text-xs text-[var(--text-muted)] mt-1">
           Create and manage promotional discount coupons for database instances and plans.
         </p>
       </div>

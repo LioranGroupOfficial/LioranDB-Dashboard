@@ -130,8 +130,8 @@ export default function AdminDatabasesClient({ initialDatabases }: Props) {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Managed Databases</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-[var(--text-strong)] tracking-tight">Managed Databases</h1>
+          <p className="text-xs text-[var(--text-muted)] mt-1">
             Privileged infrastructure control plane for all LioranDB managed database servers.
           </p>
         </div>
@@ -139,111 +139,111 @@ export default function AdminDatabasesClient({ initialDatabases }: Props) {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="card p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Total Managed</span>
-            <Server className="w-4 h-4 text-indigo-400" />
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">Total Managed</span>
+            <Server className="w-4 h-4 text-[var(--text-strong)]" />
           </div>
-          <p className="text-2xl font-bold text-white mt-2">{initialDatabases.length}</p>
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{initialDatabases.length}</p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="card p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Active</span>
-            <Database className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">Active</span>
+            <Database className="w-4 h-4 text-[var(--text-strong)]" />
           </div>
-          <p className="text-2xl font-bold text-emerald-400 mt-2">{activeCount}</p>
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{activeCount}</p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="card p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Suspended</span>
-            <Clock className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">Suspended</span>
+            <Clock className="w-4 h-4 text-[var(--text-strong)]" />
           </div>
-          <p className="text-2xl font-bold text-amber-400 mt-2">{suspendedCount}</p>
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{suspendedCount}</p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="card p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Resetting / Terminated</span>
-            <AlertCircle className="w-4 h-4 text-slate-500" />
+            <span className="text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">Resetting / Terminated</span>
+            <AlertCircle className="w-4 h-4 text-[var(--text-muted)]" />
           </div>
-          <p className="text-2xl font-bold text-slate-400 mt-2">
+          <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">
             {resettingCount + terminatedCount}
           </p>
         </div>
       </div>
 
       {/* Filters & Search */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-3">
+      <div className="card p-4 flex flex-col sm:flex-row items-center gap-3">
         <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by instance name, ID, host, or customer..."
-            className="w-full pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="input-field pl-9"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-400">
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] text-xs text-[var(--text-secondary)]">
             <Filter className="w-3.5 h-3.5" />
-            <span>Status:</span>
+            <span className="font-mono text-[11px]">Status:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               aria-label="Filter databases by status"
-              className="bg-transparent text-white focus:outline-none cursor-pointer"
+              className="bg-transparent text-[var(--text-strong)] focus:outline-hidden cursor-pointer font-medium"
             >
-              <option value="ALL" className="bg-slate-900">All Statuses</option>
-              <option value="ACTIVE" className="bg-slate-900">Active</option>
-              <option value="PROVISIONING" className="bg-slate-900">Provisioning</option>
-              <option value="SUSPENDED" className="bg-slate-900">Suspended</option>
-              <option value="RESETTING" className="bg-slate-900">Resetting</option>
-              <option value="TERMINATED" className="bg-slate-900">Terminated</option>
-              <option value="FAILED" className="bg-slate-900">Failed</option>
+              <option value="ALL" className="bg-[var(--surface)] text-[var(--text-primary)]">All Statuses</option>
+              <option value="ACTIVE" className="bg-[var(--surface)] text-[var(--text-primary)]">Active</option>
+              <option value="PROVISIONING" className="bg-[var(--surface)] text-[var(--text-primary)]">Provisioning</option>
+              <option value="SUSPENDED" className="bg-[var(--surface)] text-[var(--text-primary)]">Suspended</option>
+              <option value="RESETTING" className="bg-[var(--surface)] text-[var(--text-primary)]">Resetting</option>
+              <option value="TERMINATED" className="bg-[var(--surface)] text-[var(--text-primary)]">Terminated</option>
+              <option value="FAILED" className="bg-[var(--surface)] text-[var(--text-primary)]">Failed</option>
             </select>
           </div>
 
-          <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-400">
-            <span>Plan:</span>
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] text-xs text-[var(--text-secondary)]">
+            <span className="font-mono text-[11px]">Plan:</span>
             <select
               value={planFilter}
               onChange={(e) => setPlanFilter(e.target.value)}
               aria-label="Filter databases by plan"
-              className="bg-transparent text-white focus:outline-none cursor-pointer"
+              className="bg-transparent text-[var(--text-strong)] focus:outline-hidden cursor-pointer font-medium"
             >
-              <option value="ALL" className="bg-slate-900">All Plans</option>
-              <option value="shared" className="bg-slate-900">Shared (₹1/hr)</option>
-              <option value="dedicated" className="bg-slate-900">Dedicated (₹8/hr)</option>
-              <option value="high-capacity" className="bg-slate-900">High Capacity</option>
+              <option value="ALL" className="bg-[var(--surface)] text-[var(--text-primary)]">All Plans</option>
+              <option value="shared" className="bg-[var(--surface)] text-[var(--text-primary)]">Shared (₹1/hr)</option>
+              <option value="dedicated" className="bg-[var(--surface)] text-[var(--text-primary)]">Dedicated</option>
+              <option value="high-capacity" className="bg-[var(--surface)] text-[var(--text-primary)]">High Capacity</option>
             </select>
           </div>
         </div>
       </div>
 
       {/* Databases Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      <div className="card p-0 overflow-hidden shadow-2xs">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[var(--surface-2)] text-[var(--muted)] uppercase font-mono border-b border-[var(--border)]">
               <tr>
-                <th className="px-5 py-3 font-medium">Database / Instance</th>
-                <th className="px-5 py-3 font-medium">Customer</th>
-                <th className="px-5 py-3 font-medium">Plan & Rate</th>
-                <th className="px-5 py-3 font-medium">Server / Endpoint</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium">Users</th>
-                <th className="px-5 py-3 font-medium">Backups</th>
-                <th className="px-5 py-3 font-medium">Billing</th>
-                <th className="px-5 py-3 font-medium text-right">Actions</th>
+                <th className="px-4 py-3 font-medium">Database / Instance</th>
+                <th className="px-4 py-3 font-medium">Customer</th>
+                <th className="px-4 py-3 font-medium">Plan &amp; Rate</th>
+                <th className="px-4 py-3 font-medium">Server / Endpoint</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Users</th>
+                <th className="px-4 py-3 font-medium">Backups</th>
+                <th className="px-4 py-3 font-medium">Billing</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-[var(--border)] font-mono">
               {filteredDatabases.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-slate-500">
-                    <Database className="w-8 h-8 mx-auto mb-2 text-slate-600" />
-                    <p className="text-sm">No managed database instances found matching criteria.</p>
+                  <td colSpan={9} className="px-6 py-12 text-center text-[var(--muted)]">
+                    <Database className="w-8 h-8 mx-auto mb-2 text-[var(--muted)]" />
+                    <p className="text-sm font-sans">No managed database instances found matching criteria.</p>
                   </td>
                 </tr>
               ) : (
@@ -254,112 +254,117 @@ export default function AdminDatabasesClient({ initialDatabases }: Props) {
                     !inst.billingStoppedAt;
 
                   return (
-                    <tr key={inst._id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="px-5 py-4">
+                    <tr key={inst._id} className="hover:bg-[var(--surface-soft)] transition-colors">
+                      <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
-                            <Database className="w-4 h-4" />
+                          <div className="w-7 h-7 rounded-[6px] bg-[var(--surface-soft)] border border-[var(--border)] flex items-center justify-center text-[var(--text-strong)] shrink-0">
+                            <Database className="w-3.5 h-3.5" />
                           </div>
                           <div>
                             <Link
                               href={`/admin/databases/${inst._id}`}
-                              className="font-medium text-white hover:text-indigo-400 transition-colors block"
+                              className="font-bold font-sans text-sm text-[var(--text-strong)] hover:underline block"
                             >
                               {inst.name}
                             </Link>
-                            <span className="font-mono text-[11px] text-slate-500">
+                            <span className="font-mono text-[11px] text-[var(--muted)]">
                               {inst._id}
                             </span>
                           </div>
                         </div>
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         {inst.customer ? (
                           <div>
                             <Link
                               href={`/admin/customers/${inst.customer._id}`}
-                              className="text-white hover:text-indigo-400 text-xs font-medium block"
+                              className="text-[var(--text-strong)] hover:underline text-xs font-semibold block font-sans"
                             >
                               {inst.customer.fullName || inst.customer.email.split('@')[0]}
                             </Link>
-                            <span className="text-[11px] text-slate-500 block truncate max-w-[140px]">
+                            <span className="text-[11px] text-[var(--muted)] block truncate max-w-[140px]">
                               {inst.customer.email}
                             </span>
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-500">—</span>
+                          <span className="text-xs text-[var(--muted)]">—</span>
                         )}
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         <div>
-                          <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono text-[11px] text-slate-300">
+                          <span className="px-1.5 py-0.5 rounded-[4px] bg-[var(--surface-soft)] border border-[var(--border)] font-mono text-[11px] text-[var(--text-secondary)] font-semibold">
                             {inst.planName || (inst.planId === 'dedicated' ? 'Dedicated' : 'Shared')}
                           </span>
-                          <span className="text-xs text-slate-400 block mt-1">
+                          <span className="text-xs text-[var(--muted)] block mt-1">
                             {formatPaiseToRupees(inst.hourlyRatePaise)}/hr
                           </span>
                         </div>
                       </td>
 
-                      <td className="px-5 py-4">
-                        <span className="font-mono text-xs text-slate-300">
+                      <td className="px-4 py-3.5">
+                        <span className="font-mono text-xs text-[var(--text-secondary)]">
                           {inst.host}:{inst.port}
                         </span>
                       </td>
 
-                      <td className="px-5 py-4 whitespace-nowrap">
-                        {renderStatusBadge(inst.status)}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className={`badge ${
+                          inst.status === 'ACTIVE' || inst.status === 'RUNNING'
+                            ? 'badge-active'
+                            : inst.status === 'PROVISIONING'
+                            ? 'badge-info'
+                            : inst.status === 'SUSPENDED'
+                            ? 'badge-suspended'
+                            : 'badge-default'
+                        }`}>
+                          {inst.status}
+                        </span>
                       </td>
 
-                      <td className="px-5 py-4">
-                        <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-                          <Users className="w-3 h-3" />
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                          <Users className="w-3.5 h-3.5 text-[var(--muted)]" />
                           {inst.databaseUsersCount}
                         </span>
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         {inst.backupEnabled ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400">
-                            <ShieldCheck className="w-3.5 h-3.5" />
+                          <span className="badge badge-active text-[10px]">
                             Active
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-                            <ShieldAlert className="w-3.5 h-3.5" />
+                          <span className="badge badge-default text-[10px]">
                             Disabled
                           </span>
                         )}
                       </td>
 
-                      <td className="px-5 py-4">
+                      <td className="px-4 py-3.5">
                         {isBillingActive ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span className="badge badge-active text-[10px]">
                             Accruing
                           </span>
                         ) : inst.status === 'SUSPENDED' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          <span className="badge badge-suspended text-[10px]">
                             Paused
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                          <span className="badge badge-default text-[10px]">
                             Stopped
                           </span>
                         )}
                       </td>
 
-                      <td className="px-5 py-4 text-right">
+                      <td className="px-4 py-3.5 text-right">
                         <Link
                           href={`/admin/databases/${inst._id}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-xs"
+                          className="btn-secondary py-1 px-2.5 min-h-[30px] text-xs inline-flex items-center gap-1"
                         >
                           <span>Manage</span>
-                          <ArrowUpRight className="w-3.5 h-3.5" />
+                          <ArrowUpRight className="w-3 h-3" />
                         </Link>
                       </td>
                     </tr>

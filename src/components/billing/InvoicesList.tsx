@@ -246,7 +246,7 @@ export default function InvoicesList({ initialInvoices }: Props) {
                         <button
                           type="button"
                           onClick={() => setSelectedInvoice(inv)}
-                          className="py-1 px-2.5 rounded bg-[var(--surface-2)] hover:bg-[var(--surface-card)] text-[var(--text-primary)] border border-[var(--border)] transition-colors cursor-pointer text-[11px]"
+                          className="btn-secondary py-1 px-2.5 min-h-[30px] text-[11px]"
                         >
                           View
                         </button>
@@ -255,7 +255,7 @@ export default function InvoicesList({ initialInvoices }: Props) {
                             type="button"
                             onClick={() => handlePayInvoice(inv)}
                             disabled={payingId === inv.id}
-                            className="py-1 px-2.5 rounded bg-[var(--primary)] hover:opacity-95 text-white font-medium transition-all cursor-pointer text-[11px] disabled:opacity-50 inline-flex items-center gap-1"
+                            className="btn-primary py-1 px-2.5 min-h-[30px] text-[11px] inline-flex items-center gap-1"
                           >
                             {payingId === inv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                             <span>Pay</span>

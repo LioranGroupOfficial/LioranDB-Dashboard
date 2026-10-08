@@ -106,7 +106,7 @@ export default function AdminInstanceActions({ instanceId, instanceName, status 
 
   return (
     <div className="flex items-center space-x-2">
-      {error && <span className="text-xs text-red-500 mr-2">{error}</span>}
+      {error && <span className="text-xs text-rose-500 mr-2">{error}</span>}
 
       {status === 'ACTIVE' && (
         <button
@@ -135,7 +135,7 @@ export default function AdminInstanceActions({ instanceId, instanceName, status 
           <button
             onClick={handleResetPassword}
             disabled={loading}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition"
+            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] rounded-lg transition"
             title="Reset Master Password"
           >
             <Key className="w-4 h-4" />
@@ -143,7 +143,7 @@ export default function AdminInstanceActions({ instanceId, instanceName, status 
           <button
             onClick={() => setShowTerminateModal(true)}
             disabled={loading}
-            className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition"
+            className="p-1.5 text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
             title="Terminate Instance"
           >
             <Trash2 className="w-4 h-4" />
@@ -153,33 +153,35 @@ export default function AdminInstanceActions({ instanceId, instanceName, status 
 
       {/* Suspend Modal */}
       {showSuspendModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 text-slate-100 shadow-2xl">
-            <h3 className="text-lg font-semibold text-white mb-2">Suspend Instance</h3>
-            <p className="text-sm text-slate-400 mb-4">
-              Suspending <strong>{instanceName}</strong> will immediately halt access and stop billing accumulation.
-            </p>
-            <div className="mb-4">
-              <label className="block text-xs font-medium text-slate-300 mb-1">Reason for suspension</label>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md w-full p-6 text-[var(--text-primary)] shadow-2xl space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-[var(--text-strong)]">Suspend Instance</h3>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Suspending <strong className="text-[var(--text-strong)]">{instanceName}</strong> will immediately halt access and stop billing accumulation.
+              </p>
+            </div>
+            <div>
+              <label className="label">Reason for suspension</label>
               <input
                 type="text"
                 value={suspendReason}
                 onChange={(e) => setSuspendReason(e.target.value)}
                 placeholder="e.g. Non-payment, Terms violation"
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                className="input-field"
               />
             </div>
-            <div className="flex justify-end space-x-3">
+            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
               <button
                 onClick={() => setShowSuspendModal(false)}
-                className="px-4 py-2 text-sm text-slate-400 hover:text-white rounded-lg"
+                className="btn-secondary text-xs py-2 px-3.5"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSuspend}
                 disabled={loading}
-                className="px-4 py-2 text-sm font-medium bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition"
+                className="btn-secondary !text-amber-500 !border-amber-500/30 hover:!bg-amber-500/10 text-xs py-2 px-4 font-semibold"
               >
                 {loading ? 'Suspending...' : 'Confirm Suspend'}
               </button>
@@ -190,28 +192,28 @@ export default function AdminInstanceActions({ instanceId, instanceName, status 
 
       {/* Terminate Modal */}
       {showTerminateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-red-500/30 rounded-xl max-w-md w-full p-6 text-slate-100 shadow-2xl">
-            <div className="flex items-center space-x-3 mb-3">
-              <div className="p-2 rounded-lg bg-red-500/10 text-red-400">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-[var(--surface)] border border-rose-500/30 rounded-2xl max-w-md w-full p-6 text-[var(--text-primary)] shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 rounded-lg bg-rose-500/10 text-rose-500">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <h3 className="text-lg font-semibold text-white">Terminate Instance</h3>
+              <h3 className="text-lg font-bold text-[var(--text-strong)]">Terminate Instance</h3>
             </div>
-            <p className="text-sm text-slate-400 mb-4">
-              Are you sure you want to permanently terminate <strong>{instanceName}</strong>? All data will be erased and the current billing cycle will be closed.
+            <p className="text-xs text-[var(--text-muted)]">
+              Are you sure you want to permanently terminate <strong className="text-[var(--text-strong)]">{instanceName}</strong>? All data will be erased and the current billing cycle will be closed.
             </p>
-            <div className="flex justify-end space-x-3">
+            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border)]">
               <button
                 onClick={() => setShowTerminateModal(false)}
-                className="px-4 py-2 text-sm text-slate-400 hover:text-white rounded-lg"
+                className="btn-secondary text-xs py-2 px-3.5"
               >
                 Cancel
               </button>
               <button
                 onClick={handleTerminate}
                 disabled={loading}
-                className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-500 text-white rounded-lg transition"
+                className="btn-primary !bg-rose-600 hover:!bg-rose-500 !text-white text-xs py-2 px-4 font-bold"
               >
                 {loading ? 'Terminating...' : 'Terminate Instance'}
               </button>
@@ -222,29 +224,29 @@ export default function AdminInstanceActions({ instanceId, instanceName, status 
 
       {/* Password Reset Modal */}
       {showResetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 text-slate-100 shadow-2xl">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-semibold text-white">New Master Password</h3>
-              <button onClick={() => setShowResetModal(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-md w-full p-6 text-[var(--text-primary)] shadow-2xl space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold text-[var(--text-strong)]">New Master Password</h3>
+              <button onClick={() => setShowResetModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-strong)]">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-sm text-slate-400 mb-4">
-              The master password for <strong>{instanceName}</strong> was reset. It is not stored in plaintext and will not be displayed again:
+            <p className="text-xs text-[var(--text-muted)]">
+              The master password for <strong className="text-[var(--text-strong)]">{instanceName}</strong> was reset. It is not stored in plaintext and will not be displayed again:
             </p>
-            <div className="flex items-center justify-between bg-slate-950 border border-slate-800 p-3 rounded-lg mb-4 font-mono text-sm text-emerald-400">
+            <div className="flex items-center justify-between bg-[var(--surface-soft)] border border-[var(--border)] p-3 rounded-lg font-mono text-sm text-emerald-600 dark:text-emerald-400 font-bold">
               <span className="truncate mr-2">{newPassword}</span>
               <button
                 onClick={handleCopy}
-                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded transition"
+                className="btn-secondary text-xs py-1 px-2.5"
               >
                 {copied ? 'Copied!' : 'Copy'}
               </button>
             </div>
             <button
               onClick={() => setShowResetModal(false)}
-              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition"
+              className="btn-primary w-full py-2.5 text-xs font-semibold"
             >
               Done
             </button>

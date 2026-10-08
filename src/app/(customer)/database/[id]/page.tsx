@@ -92,7 +92,7 @@ export default async function InstanceDetailsPage({
       <div>
         <Link
           href="/database"
-          className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors mb-3"
+          className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors mb-3 font-semibold"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Database Instances</span>
@@ -101,24 +101,24 @@ export default async function InstanceDetailsPage({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="font-serif text-3xl font-normal text-white tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-strong)] tracking-tight">
                 {instance.name}
               </h1>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-mono uppercase tracking-wider ${
+                className={`badge ${
                   instance.status === 'ACTIVE' || instance.status === 'RUNNING'
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    ? 'badge-active'
                     : instance.status === 'PROVISIONING'
-                    ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                    ? 'badge-info'
                     : instance.status === 'SUSPENDED'
-                    ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                    ? 'badge-suspended'
+                    : 'badge-default'
                 }`}
               >
                 {instance.status}
               </span>
             </div>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
               {instance.planName || plan?.name || 'Shared'} Plan • {instance.region || 'ap-south-1 (Mumbai)'}
             </p>
           </div>
@@ -128,7 +128,7 @@ export default async function InstanceDetailsPage({
               href="https://studio.liorandb.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="py-2 px-3.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white border border-slate-700 transition-colors inline-flex items-center gap-1.5"
+              className="btn-secondary py-1.5 px-3.5 min-h-[38px] text-xs inline-flex items-center gap-1.5"
             >
               <span>Open Studio</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -136,7 +136,7 @@ export default async function InstanceDetailsPage({
 
             <Link
               href="/billing"
-              className="py-2 px-3.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-white border border-slate-700 transition-colors inline-flex items-center gap-1.5"
+              className="btn-secondary py-1.5 px-3.5 min-h-[38px] text-xs inline-flex items-center gap-1.5"
             >
               <CreditCard className="w-3.5 h-3.5" />
               <span>Billing</span>
@@ -147,42 +147,42 @@ export default async function InstanceDetailsPage({
 
       {/* Specifications & Usage Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <div className="flex items-center gap-1.5 text-slate-400 text-xs font-mono uppercase tracking-wider mb-1">
-            <CreditCard className="w-3.5 h-3.5 text-indigo-400" />
+        <div className="card p-4">
+          <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-[11px] font-mono uppercase tracking-wider mb-1">
+            <CreditCard className="w-3.5 h-3.5 text-[var(--text-strong)]" />
             <span>Hourly Rate</span>
           </div>
-          <p className="font-serif text-lg font-medium text-white">
+          <p className="font-mono text-lg font-bold text-[var(--text-strong)]">
             {formatPaiseToRupees(hourlyRatePaise)}/hr
           </p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <div className="flex items-center gap-1.5 text-slate-400 text-xs font-mono uppercase tracking-wider mb-1">
-            <Clock className="w-3.5 h-3.5 text-indigo-400" />
+        <div className="card p-4">
+          <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-[11px] font-mono uppercase tracking-wider mb-1">
+            <Clock className="w-3.5 h-3.5 text-[var(--text-strong)]" />
             <span>Current Usage</span>
           </div>
-          <p className="font-serif text-lg font-medium text-white">
+          <p className="font-mono text-lg font-bold text-[var(--text-strong)]">
             {usageEstimate.billableHours.toFixed(1)} hrs
           </p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <div className="flex items-center gap-1.5 text-slate-400 text-xs font-mono uppercase tracking-wider mb-1">
-            <Activity className="w-3.5 h-3.5 text-indigo-400" />
+        <div className="card p-4">
+          <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-[11px] font-mono uppercase tracking-wider mb-1">
+            <Activity className="w-3.5 h-3.5 text-[var(--text-strong)]" />
             <span>Estimated Cost</span>
           </div>
-          <p className="font-serif text-lg font-medium text-emerald-400">
+          <p className="font-mono text-lg font-bold text-[var(--text-strong)]">
             {formatPaiseToRupees(usageEstimate.totalPaise)}
           </p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <div className="flex items-center gap-1.5 text-slate-400 text-xs font-mono uppercase tracking-wider mb-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+        <div className="card p-4">
+          <div className="flex items-center gap-1.5 text-[var(--text-muted)] text-[11px] font-mono uppercase tracking-wider mb-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-[var(--text-strong)]" />
             <span>Managed Backup</span>
           </div>
-          <p className="font-serif text-lg font-medium text-white">
+          <p className="font-mono text-lg font-bold text-[var(--text-strong)]">
             {instance.backupEnabled ? '₹200/mo' : 'Disabled'}
           </p>
         </div>
@@ -190,14 +190,14 @@ export default async function InstanceDetailsPage({
 
       {/* Applied Discount Coupon Banner */}
       {instance.couponCode && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center justify-between">
+        <div className="p-3.5 rounded-[10px] bg-[var(--surface-card)] border-2 border-[var(--hairline-strong)] text-[var(--text-strong)] text-xs flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Tag className="w-4 h-4" />
+            <Tag className="w-4 h-4 text-[var(--text-strong)]" />
             <span>
               Promo discount <strong>{instance.couponDiscountPercentage}% OFF</strong> applied ({instance.couponCode}).
             </span>
           </div>
-          <span className="font-mono text-emerald-300">Active</span>
+          <span className="badge badge-active">Active</span>
         </div>
       )}
 
@@ -213,11 +213,11 @@ export default async function InstanceDetailsPage({
 
       {/* Danger Zone */}
       {instance.status !== 'TERMINATED' && instance.status !== 'DELETED' && (
-        <div className="bg-slate-900 border border-red-500/20 rounded-xl p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-red-400">
+        <div className="card border-2 border-[var(--border)] p-6 space-y-4">
+          <h2 className="text-sm font-bold text-[var(--text-strong)] uppercase tracking-wider">
             Danger Zone
           </h2>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-[var(--text-secondary)]">
             Terminating this database instance stops hourly usage accumulation and closes the current billing interval. All stored documents will be erased.
           </p>
           <div className="pt-2">
