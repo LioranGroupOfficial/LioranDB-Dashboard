@@ -55,7 +55,7 @@ export default async function AdminDashboardPage() {
           <span className="text-xs text-slate-500 mt-1 block">Registered verified accounts</span>
         </Link>
 
-        <Link href="/admin/instances" className="bg-slate-900 border border-slate-800 p-5 rounded-xl hover:border-slate-700 transition">
+        <Link href="/admin/databases" className="bg-slate-900 border border-slate-800 p-5 rounded-xl hover:border-slate-700 transition">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-xs uppercase tracking-wider font-medium">Active Instances</span>
             <Server className="w-4 h-4 text-emerald-400" />
@@ -95,8 +95,8 @@ export default async function AdminDashboardPage() {
             <h3>Database Fleet</h3>
           </div>
           <p className="text-xs text-slate-400">Inspect instances, reset master passwords, suspend or terminate deployments.</p>
-          <Link href="/admin/instances" className="inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
-            Manage Fleet →
+          <Link href="/admin/databases" className="inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
+            Manage Databases →
           </Link>
         </div>
 

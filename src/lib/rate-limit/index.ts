@@ -17,6 +17,27 @@ const LIMITS: Record<string, RateLimitOptions> = {
   admin_action: { maxRequests: 60, windowMs: 60 * 1000 },
 };
 
+export async function rateLimit(
+  key: string,
+  maxRequests = 60,
+  windowMs = 60000
+): Promise<boolean> {
+  const now = Date.now();
+  const entry = store.get(key);
+
+  if (!entry || now > entry.resetAt) {
+    store.set(key, { count: 1, resetAt: now + windowMs });
+    return false; // Not limited
+  }
+
+  if (entry.count >= maxRequests) {
+    return true; // Is limited
+  }
+
+  entry.count++;
+  return false;
+}
+
 export function checkRateLimit(
   action: string,
   identifier: string

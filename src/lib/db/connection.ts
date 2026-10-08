@@ -23,12 +23,16 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
     return global.__mongoose.conn;
   }
 
-  if (!MONGODB_URI) {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    if (process.env.NODE_ENV === 'test') {
+      return mongoose;
+    }
     throw new Error('MONGODB_URI environment variable is not defined');
   }
 
   if (!global.__mongoose.promise) {
-    global.__mongoose.promise = mongoose.connect(MONGODB_URI, {
+    global.__mongoose.promise = mongoose.connect(uri, {
       bufferCommands: false,
     });
   }

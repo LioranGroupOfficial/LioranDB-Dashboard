@@ -1,132 +1,97 @@
 import {
-  getNextBillingDate,
-  getBillingStatus,
-  formatCurrency,
-  calculateInstanceDeletionRefund,
+  calculateInstanceUsage,
+  getCurrentMonthPeriod,
+  getPreviousMonthPeriod,
 } from '@/lib/billing';
+import type { IManagedDatabase } from '@/lib/db';
+import mongoose from 'mongoose';
 
-describe('Billing Module', () => {
-  test('getNextBillingDate always returns 1st of next month in IST', () => {
-    const ref = new Date('2026-03-15T12:00:00Z');
-    const next = getNextBillingDate(ref);
-    const istMonth = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Kolkata',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(next);
-
-    expect(istMonth).toContain('04-01');
+describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
+  test('getCurrentMonthPeriod returns start and end dates', () => {
+    const period = getCurrentMonthPeriod();
+    expect(period.start).toBeInstanceOf(Date);
+    expect(period.end).toBeInstanceOf(Date);
+    expect(period.end.getTime()).toBeGreaterThan(period.start.getTime());
   });
 
-  test('formatCurrency formats Indian Rupee correctly', () => {
-    const formatted = formatCurrency(5000, 'INR');
-    expect(formatted).toContain('5,000');
+  test('getPreviousMonthPeriod returns start and end dates', () => {
+    const period = getPreviousMonthPeriod();
+    expect(period.start).toBeInstanceOf(Date);
+    expect(period.end).toBeInstanceOf(Date);
+    expect(period.end.getTime()).toBeGreaterThan(period.start.getTime());
   });
 
-  test('getBillingStatus correctly detects states', () => {
-    expect(getBillingStatus({ subscriptionStatus: 'SUSPENDED' })).toBe('SUSPENDED');
-    expect(getBillingStatus({ subscriptionStatus: 'CANCELLED' })).toBe('CANCELLED');
-    expect(getBillingStatus({ subscriptionStatus: 'PAST_DUE' })).toBe('PAST_DUE');
+  test('calculateInstanceUsage calculates integer paise accurately without float drift', async () => {
+    const period = {
+      start: new Date('2026-04-01T00:00:00.000Z'),
+      end: new Date('2026-05-01T00:00:00.000Z'),
+    };
+    const now = new Date('2026-05-02T00:00:00.000Z');
 
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 20);
-    expect(
-      getBillingStatus({
-        subscriptionStatus: 'ACTIVE',
-        nextPaymentDate: futureDate,
-      })
-    ).toBe('ACTIVE');
+    const mockInstance = {
+      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d1'),
+      name: 'prod-shared-db',
+      hourlyRatePaise: 100, // ₹1/hr
+      backupEnabled: true,
+      backupMonthlyPaise: 20000, // ₹200/mo
+      billingStartedAt: new Date('2026-04-01T00:00:00.000Z'),
+      billingStoppedAt: undefined,
+      status: 'ACTIVE' as const,
+    } as unknown as IManagedDatabase;
 
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 2);
-    expect(
-      getBillingStatus({
-        subscriptionStatus: 'ACTIVE',
-        nextPaymentDate: pastDate,
-      })
-    ).toBe('DUE');
+    const usage = await calculateInstanceUsage(mockInstance, period, now);
+
+    // 30 days in April = 720 hours = 2,592,000 seconds
+    expect(usage.billableHours).toBe(720);
+    expect(usage.usageAmountPaise).toBe(72000); // ₹720.00
+    expect(usage.backupAmountPaise).toBe(20000); // ₹200.00
+    expect(usage.totalPaise).toBe(92000); // ₹920.00
   });
 
-  describe('Instance Deletion Tiered Refund Policy', () => {
-    const basePaise = 149900; // ₹1,499.00
-    const now = new Date('2026-09-25T12:00:00.000Z');
+  test('calculateInstanceUsage handles partial hours down to second precision', async () => {
+    const period = {
+      start: new Date('2026-04-01T00:00:00.000Z'),
+      end: new Date('2026-04-02T00:00:00.000Z'),
+    };
+    const now = new Date('2026-04-02T00:00:00.000Z');
 
-    test('refunds 100% when deleted under 15 minutes', () => {
-      // 5 minutes after creation
-      const created5m = new Date(now.getTime() - 5 * 60 * 1000);
-      const quote5m = calculateInstanceDeletionRefund(created5m, basePaise, now);
-      expect(quote5m.refundPercentage).toBe(100);
-      expect(quote5m.refundAmountPaise).toBe(149900);
-      expect(quote5m.refundAmountRupees).toBe(1499);
-      expect(quote5m.tierLabel).toContain('100%');
+    const mockInstance = {
+      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d2'),
+      name: 'test-db-short',
+      hourlyRatePaise: 800, // ₹8/hr for Dedicated
+      backupEnabled: false,
+      backupMonthlyPaise: 0,
+      billingStartedAt: new Date('2026-04-01T00:00:00.000Z'),
+      billingStoppedAt: new Date('2026-04-01T12:30:00.000Z'), // 12.5 hours
+      status: 'TERMINATED' as const,
+    } as unknown as IManagedDatabase;
 
-      // Exactly 15 minutes after creation
-      const created15m = new Date(now.getTime() - 15 * 60 * 1000);
-      const quote15m = calculateInstanceDeletionRefund(created15m, basePaise, now);
-      expect(quote15m.refundPercentage).toBe(100);
-      expect(quote15m.refundAmountPaise).toBe(149900);
-    });
+    const usage = await calculateInstanceUsage(mockInstance, period, now);
 
-    test('refunds 90% when deleted under 1 hour (between 15 and 60 minutes)', () => {
-      // 16 minutes after creation
-      const created16m = new Date(now.getTime() - 16 * 60 * 1000);
-      const quote16m = calculateInstanceDeletionRefund(created16m, basePaise, now);
-      expect(quote16m.refundPercentage).toBe(90);
-      expect(quote16m.refundAmountPaise).toBe(134910);
-      expect(quote16m.refundAmountRupees).toBe(1349.1);
-      expect(quote16m.tierLabel).toContain('90%');
+    expect(usage.billableHours).toBeCloseTo(12.5, 1);
+    expect(usage.usageAmountPaise).toBe(10000); // 12.5 * 800 paise = 10,000 paise (₹100)
+    expect(usage.backupAmountPaise).toBe(0);
+    expect(usage.totalPaise).toBe(10000);
+  });
 
-      // 45 minutes after creation
-      const created45m = new Date(now.getTime() - 45 * 60 * 1000);
-      const quote45m = calculateInstanceDeletionRefund(created45m, basePaise, now);
-      expect(quote45m.refundPercentage).toBe(90);
-      expect(quote45m.refundAmountPaise).toBe(134910);
+  test('calculateInstanceUsage does not bill un-started instances', async () => {
+    const period = {
+      start: new Date('2026-04-01T00:00:00.000Z'),
+      end: new Date('2026-05-01T00:00:00.000Z'),
+    };
+    const now = new Date('2026-05-02T00:00:00.000Z');
 
-      // Exactly 60 minutes after creation
-      const created60m = new Date(now.getTime() - 60 * 60 * 1000);
-      const quote60m = calculateInstanceDeletionRefund(created60m, basePaise, now);
-      expect(quote60m.refundPercentage).toBe(90);
-      expect(quote60m.refundAmountPaise).toBe(134910);
-    });
+    const mockUnstarted = {
+      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d3'),
+      name: 'provisioning-db',
+      hourlyRatePaise: 100,
+      backupEnabled: false,
+      status: 'PROVISIONING' as const,
+      billingStartedAt: undefined,
+    } as unknown as IManagedDatabase;
 
-    test('refunds 60% when deleted between 1 hour and 3 hours (60 to 180 minutes)', () => {
-      // 61 minutes after creation
-      const created61m = new Date(now.getTime() - 61 * 60 * 1000);
-      const quote61m = calculateInstanceDeletionRefund(created61m, basePaise, now);
-      expect(quote61m.refundPercentage).toBe(60);
-      expect(quote61m.refundAmountPaise).toBe(89940);
-      expect(quote61m.refundAmountRupees).toBe(899.4);
-      expect(quote61m.tierLabel).toContain('60%');
-
-      // 2 hours (120 minutes) after creation
-      const created2h = new Date(now.getTime() - 120 * 60 * 1000);
-      const quote2h = calculateInstanceDeletionRefund(created2h, basePaise, now);
-      expect(quote2h.refundPercentage).toBe(60);
-      expect(quote2h.refundAmountPaise).toBe(89940);
-
-      // Exactly 3 hours (180 minutes) after creation
-      const created3h = new Date(now.getTime() - 180 * 60 * 1000);
-      const quote3h = calculateInstanceDeletionRefund(created3h, basePaise, now);
-      expect(quote3h.refundPercentage).toBe(60);
-      expect(quote3h.refundAmountPaise).toBe(89940);
-    });
-
-    test('refunds 0% (no refund) when deleted after 3 hours (> 180 minutes)', () => {
-      // 181 minutes (3 hours 1 min) after creation
-      const created181m = new Date(now.getTime() - 181 * 60 * 1000);
-      const quote181m = calculateInstanceDeletionRefund(created181m, basePaise, now);
-      expect(quote181m.refundPercentage).toBe(0);
-      expect(quote181m.refundAmountPaise).toBe(0);
-      expect(quote181m.refundAmountRupees).toBe(0);
-      expect(quote181m.tierLabel).toContain('No refund');
-
-      // 24 hours after creation
-      const created24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const quote24h = calculateInstanceDeletionRefund(created24h, basePaise, now);
-      expect(quote24h.refundPercentage).toBe(0);
-      expect(quote24h.refundAmountPaise).toBe(0);
-      expect(quote24h.refundAmountRupees).toBe(0);
-    });
+    const usage = await calculateInstanceUsage(mockUnstarted, period, now);
+    expect(usage.billableSeconds).toBe(0);
+    expect(usage.totalPaise).toBe(0);
   });
 });
-

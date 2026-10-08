@@ -22,7 +22,7 @@ import {
 const NAV = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Customers', href: '/admin/customers', icon: Users },
-  { label: 'Instances', href: '/admin/instances', icon: Server },
+  { label: 'Databases', href: '/admin/databases', icon: Database },
   { label: 'Billing', href: '/admin/billing', icon: CreditCard },
   { label: 'Coupons', href: '/admin/coupons', icon: TicketPercent },
   { label: 'Audit', href: '/admin/audit', icon: Shield },

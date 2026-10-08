@@ -7,6 +7,7 @@ export type DatabaseStatus =
   | 'RUNNING'
   | 'STOPPED'
   | 'SUSPENDED'
+  | 'RESETTING'
   | 'FAILED'
   | 'DELETING'
   | 'TERMINATED'
@@ -16,7 +17,10 @@ export type DatabaseType = 'shared' | 'dedicated';
 
 export interface IDatabaseUser {
   username: string;
+  role?: string;
+  status?: 'ACTIVE' | 'DISABLED';
   createdAt: Date;
+  updatedAt?: Date;
 }
 
 export interface IManagedDatabase extends Document {
@@ -27,6 +31,14 @@ export interface IManagedDatabase extends Document {
   slug?: string;
   type?: DatabaseType;
   username: string;
+  rootUsername?: string;
+  rootRotatedAt?: Date;
+  lastCredentialRotationAt?: Date;
+  encryptedControlPlaneCredential?: string;
+  controlPlaneEndpoint?: string;
+  credentialVersion?: number;
+  serverVersion?: string;
+  serverHealth?: string;
   encryptedConnectionUri?: string;
   host: string;
   port: number;
@@ -63,7 +75,10 @@ export interface IManagedDatabase extends Document {
 const DatabaseUserSchema = new Schema<IDatabaseUser>(
   {
     username: { type: String, required: true, trim: true },
+    role: { type: String, default: 'readWrite', trim: true },
+    status: { type: String, enum: ['ACTIVE', 'DISABLED'], default: 'ACTIVE' },
     createdAt: { type: Date, required: true, default: () => new Date() },
+    updatedAt: { type: Date, default: () => new Date() },
   },
   { _id: false }
 );
@@ -74,8 +89,15 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     name: { type: String, required: true, trim: true },
     slug: { type: String, trim: true },
-    type: { type: String, enum: ['shared', 'dedicated'], default: 'shared' },
-    username: { type: String, required: true, trim: true },
+    username: { type: String, trim: true, default: 'admin' },
+    rootUsername: { type: String, trim: true, default: 'admin' },
+    rootRotatedAt: { type: Date },
+    lastCredentialRotationAt: { type: Date },
+    encryptedControlPlaneCredential: { type: String },
+    controlPlaneEndpoint: { type: String },
+    credentialVersion: { type: Number, default: 1 },
+    serverVersion: { type: String, default: 'LioranDB Engine v2.4.1' },
+    serverHealth: { type: String, default: 'HEALTHY' },
     encryptedConnectionUri: { type: String },
     host: { type: String, required: true, trim: true },
     port: { type: Number, required: true, default: 27017 },
@@ -89,6 +111,7 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
         'RUNNING',
         'STOPPED',
         'SUSPENDED',
+        'RESETTING',
         'FAILED',
         'DELETING',
         'TERMINATED',

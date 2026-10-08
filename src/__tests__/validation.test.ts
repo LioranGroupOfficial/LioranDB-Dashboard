@@ -2,7 +2,9 @@ import {
   emailSchema,
   passwordSchema,
   VerifyOTPSchema,
-  ApplicationSchema,
+  CreateInstanceSchema,
+  CreateDatabaseUserSchema,
+  CouponValidationSchema,
 } from '@/lib/validation/schemas';
 
 describe('Validation Schemas', () => {
@@ -27,26 +29,56 @@ describe('Validation Schemas', () => {
     expect(VerifyOTPSchema.safeParse({ otp: 'abcdef' }).success).toBe(false);
   });
 
-  test('ApplicationSchema validates mandatory fields', () => {
-    const validApp = {
-      fullName: 'Jane Doe',
-      workEmail: 'jane@company.com',
-      country: 'India',
-      companyName: 'TechCorp',
-      description: 'We build enterprise scale document workflows across industries.',
-      stage: 'Growth',
-      whyLioranDB: 'We need high performance document database storage with predictable latency and managed support.',
-      appDescription: 'Our application processes invoice records and PDF metadata across multiple microservices.',
-      expectedDocumentCount: '100,000 – 500,000',
-      expectedMonthlyUsers: '10,000',
-      readTrafficLevel: 'Moderate (100–1,000 req/s)',
-      writeTrafficLevel: 'Light (under 100 req/s)',
-      estimatedStorage: '5–10 GB',
-      isProduction: true,
-      pricingResponse: 'yes',
-    };
+  test('CreateInstanceSchema validates name format and planId', () => {
+    expect(
+      CreateInstanceSchema.safeParse({
+        name: 'prod-analytics-01',
+        planId: 'shared',
+        backupEnabled: true,
+      }).success
+    ).toBe(true);
 
-    expect(ApplicationSchema.safeParse(validApp).success).toBe(true);
+    expect(
+      CreateInstanceSchema.safeParse({
+        name: 'Invalid Name With Spaces',
+        planId: 'shared',
+      }).success
+    ).toBe(false);
+
+    expect(
+      CreateInstanceSchema.safeParse({
+        name: 'valid-name',
+        planId: 'unknown-plan',
+      }).success
+    ).toBe(false);
+  });
+
+  test('CreateDatabaseUserSchema validates username format and role', () => {
+    expect(
+      CreateDatabaseUserSchema.safeParse({
+        username: 'app_service',
+        role: 'readWrite',
+      }).success
+    ).toBe(true);
+
+    expect(
+      CreateDatabaseUserSchema.safeParse({
+        username: 'ab', // too short (< 3)
+      }).success
+    ).toBe(false);
+  });
+
+  test('CouponValidationSchema validates coupon code', () => {
+    expect(
+      CouponValidationSchema.safeParse({
+        code: 'PROMO50',
+      }).success
+    ).toBe(true);
+
+    expect(
+      CouponValidationSchema.safeParse({
+        code: '',
+      }).success
+    ).toBe(false);
   });
 });
-
