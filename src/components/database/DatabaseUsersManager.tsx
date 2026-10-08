@@ -116,7 +116,7 @@ export default function DatabaseUsersManager({
       setNewUsername('');
       const newUser: DatabaseUser = {
         username,
-        role: 'readWrite',
+        role: data.role || 'read_write',
         status: 'ACTIVE',
         password: data.generatedPassword,
         createdAt: new Date().toISOString(),

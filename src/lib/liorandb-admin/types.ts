@@ -116,7 +116,7 @@ export interface LioranDBServerStatus {
   rawEngineStatus?: unknown;
 }
 
-export type DatabaseUserRole = 'readWrite' | 'read' | 'admin' | 'dbAdmin';
+export type DatabaseUserRole = 'read_write' | 'read_only' | 'write_only' | 'admin' | 'readWrite' | 'read' | 'dbAdmin';
 export type DatabaseUserStatus = 'ACTIVE' | 'DISABLED';
 
 export interface LioranDBUser {

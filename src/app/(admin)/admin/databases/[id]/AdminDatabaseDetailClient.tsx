@@ -120,7 +120,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
   // User Management Modals
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [newUsername, setNewUsername] = useState('');
-  const [newUserRole, setNewUserRole] = useState('readWrite');
+  const [newUserRole, setNewUserRole] = useState('read_write');
   const [confirmResetUser, setConfirmResetUser] = useState<string | null>(null);
 
   // Operations Modals
@@ -1310,9 +1310,9 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
                   onChange={(e) => setNewUserRole(e.target.value)}
                   className="input-field cursor-pointer"
                 >
-                  <option value="readWrite">readWrite (Standard app access)</option>
-                  <option value="read">read (Read-only query access)</option>
-                  <option value="dbAdmin">dbAdmin (Database administrative)</option>
+                  <option value="read_write">read_write (Standard read & write access)</option>
+                  <option value="read_only">read_only (Read-only query access)</option>
+                  <option value="write_only">write_only (Write-only data ingestion)</option>
                   <option value="admin">admin (Full cluster administrator)</option>
                 </select>
               </div>

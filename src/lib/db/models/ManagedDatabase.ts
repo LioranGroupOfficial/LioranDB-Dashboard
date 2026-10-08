@@ -79,7 +79,7 @@ export interface IManagedDatabase extends Document {
 const DatabaseUserSchema = new Schema<IDatabaseUser>(
   {
     username: { type: String, required: true, trim: true },
-    role: { type: String, default: 'readWrite', trim: true },
+    role: { type: String, default: 'read_write', trim: true },
     status: { type: String, enum: ['ACTIVE', 'DISABLED'], default: 'ACTIVE' },
     encryptedPassword: { type: String },
     createdAt: { type: Date, required: true, default: () => new Date() },

@@ -67,7 +67,9 @@ export const CreateDatabaseUserSchema = z.object({
     .min(3, 'Username must be at least 3 characters')
     .max(32, 'Username cannot exceed 32 characters')
     .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain alphanumeric characters and underscores'),
-  role: z.enum(['readWrite', 'read', 'dbAdmin']).default('readWrite'),
+  role: z
+    .enum(['read_write', 'read_only', 'write_only', 'admin', 'readWrite', 'read', 'dbAdmin'])
+    .default('read_write'),
 });
 
 export const CouponValidationSchema = z.object({

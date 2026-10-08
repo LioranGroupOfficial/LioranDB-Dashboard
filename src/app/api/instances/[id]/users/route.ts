@@ -60,7 +60,7 @@ export async function POST(
     const session = await requireAccountVerifiedUserAPI();
     const { id } = await params;
     const body = await req.json();
-    const { username } = body;
+    const { username, role: requestedRole } = body;
 
     const trimmedUsername = (username || '').trim();
     if (!trimmedUsername || !/^[a-zA-Z0-9_-]{3,32}$/.test(trimmedUsername)) {
@@ -104,9 +104,10 @@ export async function POST(
     }
 
     const client = LioranDBAdminClient.forInstance(instance);
+    const effectiveRole = requestedRole || 'read_write';
     const result = await client.createUser({
       username: trimmedUsername,
-      role: 'readWrite',
+      role: effectiveRole,
     });
 
     // Store encrypted password on the database user record
@@ -116,7 +117,7 @@ export async function POST(
     if (!instance.databaseUsers) instance.databaseUsers = [];
     instance.databaseUsers.push({
       username: trimmedUsername,
-      role: 'readWrite',
+      role: result.role || 'read_write',
       status: 'ACTIVE',
       encryptedPassword,
       createdAt: new Date(),

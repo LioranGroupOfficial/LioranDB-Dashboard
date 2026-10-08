@@ -57,6 +57,13 @@ describe('Validation Schemas', () => {
     expect(
       CreateDatabaseUserSchema.safeParse({
         username: 'app_service',
+        role: 'read_write',
+      }).success
+    ).toBe(true);
+
+    expect(
+      CreateDatabaseUserSchema.safeParse({
+        username: 'app_service',
         role: 'readWrite',
       }).success
     ).toBe(true);

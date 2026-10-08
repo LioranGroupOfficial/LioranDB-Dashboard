@@ -47,6 +47,15 @@ export interface LioranDBClientOptions {
   timeoutMs?: number;
 }
 
+export function normalizeRole(role?: string): string {
+  const normalized = (role || '').trim().toLowerCase().replace(/[-_\s]/g, '');
+  if (normalized === 'readwrite' || normalized === 'rw') return 'read_write';
+  if (normalized === 'readonly' || normalized === 'read' || normalized === 'ro') return 'read_only';
+  if (normalized === 'writeonly' || normalized === 'write' || normalized === 'wo') return 'write_only';
+  if (normalized === 'admin' || normalized === 'dbadmin' || normalized === 'superadmin') return 'admin';
+  return role || 'read_write';
+}
+
 export class LioranDBAdminClient {
   public readonly instanceId?: string;
   public readonly instanceName?: string;
@@ -299,17 +308,21 @@ export class LioranDBAdminClient {
       method: 'GET',
     });
 
-    return (users || []).map((u) => ({
-      userId: u.user_id || u.id || '',
-      username: u.username,
-      role: u.role || (u.roles && u.roles[0]) || 'readWrite',
-      roles: u.roles || (u.role ? [u.role] : []),
-      status: u.enabled || u.is_active ? 'ACTIVE' : 'DISABLED',
-      enabled: u.enabled ?? u.is_active ?? true,
-      mustChangePassword: Boolean(u.must_change_password),
-      createdAt: u.created_at_ms ? new Date(u.created_at_ms).toISOString() : new Date().toISOString(),
-      updatedAt: u.updated_at_ms ? new Date(u.updated_at_ms).toISOString() : undefined,
-    }));
+    return (users || []).map((u) => {
+      const rawRole = u.role || (u.roles && u.roles[0]) || 'read_write';
+      const rawRoles = u.roles || (u.role ? [u.role] : ['read_write']);
+      return {
+        userId: u.user_id || u.id || '',
+        username: u.username,
+        role: normalizeRole(rawRole),
+        roles: rawRoles.map(normalizeRole),
+        status: u.enabled || u.is_active ? 'ACTIVE' : 'DISABLED',
+        enabled: u.enabled ?? u.is_active ?? true,
+        mustChangePassword: Boolean(u.must_change_password),
+        createdAt: u.created_at_ms ? new Date(u.created_at_ms).toISOString() : new Date().toISOString(),
+        updatedAt: u.updated_at_ms ? new Date(u.updated_at_ms).toISOString() : undefined,
+      };
+    });
   }
 
   /**
@@ -322,11 +335,14 @@ export class LioranDBAdminClient {
       method: 'GET',
     });
 
+    const rawRole = u.role || (u.roles && u.roles[0]) || 'read_write';
+    const rawRoles = u.roles || (u.role ? [u.role] : ['read_write']);
+
     return {
       userId: u.user_id || u.id || '',
       username: u.username,
-      role: u.role || (u.roles && u.roles[0]) || 'readWrite',
-      roles: u.roles || (u.role ? [u.role] : []),
+      role: normalizeRole(rawRole),
+      roles: rawRoles.map(normalizeRole),
       status: u.enabled || u.is_active ? 'ACTIVE' : 'DISABLED',
       enabled: u.enabled ?? u.is_active ?? true,
       mustChangePassword: Boolean(u.must_change_password),
@@ -344,9 +360,11 @@ export class LioranDBAdminClient {
       throw new LioranDBAdminError('Username must be 3-64 alphanumeric characters', { statusCode: 400 });
     }
 
-    const roles = params.roles && params.roles.length > 0
+    const inputRoles = params.roles && params.roles.length > 0
       ? params.roles
-      : [params.role || 'readWrite'];
+      : [params.role || 'read_write'];
+
+    const roles = inputRoles.map(normalizeRole);
 
     const response = await this.dispatch<any>({
       path: '/v1/admin/users',
@@ -363,8 +381,8 @@ export class LioranDBAdminClient {
     return {
       userId: user.user_id || user.id || user.userId || '',
       username: user.username,
-      role: user.role || roles[0],
-      roles: user.roles || roles,
+      role: normalizeRole(user.role || roles[0]),
+      roles: (user.roles || roles).map(normalizeRole),
       status: user.enabled || user.is_active ? 'ACTIVE' : 'DISABLED',
       generatedPassword: response.generated_password || response.password || params.password,
       createdAt: user.created_at_ms ? new Date(user.created_at_ms).toISOString() : new Date().toISOString(),

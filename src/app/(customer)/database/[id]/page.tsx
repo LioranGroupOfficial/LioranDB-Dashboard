@@ -124,7 +124,7 @@ export default async function InstanceDetailsPage({
     }
     return {
       username: u.username,
-      role: u.role || 'readWrite',
+      role: u.role || 'read_write',
       status: u.status || 'ACTIVE',
       password: password || undefined,
       createdAt: u.createdAt || instance.createdAt,

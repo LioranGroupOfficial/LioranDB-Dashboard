@@ -71,7 +71,7 @@ export async function GET(
 
     const safeUsers = (instance.databaseUsers || []).map((u: IDatabaseUser) => ({
       username: u.username,
-      role: u.role || 'readWrite',
+      role: u.role || 'read_write',
       status: u.status || 'ACTIVE',
       createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : new Date().toISOString(),
       updatedAt: u.updatedAt ? new Date(u.updatedAt).toISOString() : new Date().toISOString(),

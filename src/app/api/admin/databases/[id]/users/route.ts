@@ -53,7 +53,7 @@ export async function POST(
 
     const body = await req.json().catch(() => ({}));
     const username = body.username?.trim();
-    const role = body.role?.trim() || 'readWrite';
+    const role = body.role?.trim() || 'read_write';
 
     if (!username || !/^[a-zA-Z0-9_.-]{3,32}$/.test(username)) {
       return NextResponse.json(

@@ -133,8 +133,8 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         const userResult = await client.createUser({
           username: params.username,
           password: params.password,
-          role: 'readWrite',
-          roles: ['readWrite'],
+          role: 'read_write',
+          roles: ['read_write'],
         });
         activeUsername = userResult.username;
         activePassword = userResult.generatedPassword || params.password || rootPassword;
