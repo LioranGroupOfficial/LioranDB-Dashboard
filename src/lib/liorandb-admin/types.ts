@@ -104,6 +104,7 @@ export interface LioranDBServerStatus {
   version: string;
   uptimeSeconds: number;
   storageBytes: number;
+  memoryBytesUsed?: number;
   databaseCount: number;
   collectionCount: number;
   documentCount?: number;
@@ -164,8 +165,8 @@ export interface RotateRootResult {
 }
 
 export interface ResetInstanceParams {
-  confirmation: string;
-  instanceId: string;
+  confirmation?: string;
+  instanceId?: string;
   idempotencyKey?: string;
 }
 
@@ -174,9 +175,34 @@ export interface ResetInstanceResult {
   rootUsername: string;
   newGeneratedRootPassword: string;
   state: string;
+  collectionsRemoved?: number;
+  documentsRemoved?: number;
+  usersRemoved?: number;
   resetCompletedAt: string;
   status: 'ACTIVE' | 'READY';
   message: string;
+}
+
+export interface CleanStateResult {
+  isClean: boolean;
+  reasons: string[];
+  reason?: string;
+  status?: LioranDBServerStatus;
+}
+
+export interface PurgeAndResetTenantResult {
+  success: boolean;
+  instanceId: string;
+  verifiedClean: boolean;
+  preResetMemoryBytes?: number;
+  postResetMemoryBytes?: number;
+  reclaimedMemoryBytes?: number;
+  collectionsRemoved?: number;
+  documentsRemoved?: number;
+  usersRemoved?: number;
+  rotatedRootPassword?: string;
+  resetCompletedAt?: string;
+  error?: string;
 }
 
 export interface BackupResult {

@@ -80,7 +80,8 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     if (!node) {
       // Select an available unassigned dedicated hosting node
       node = await HostingNode.findOne({
-        status: { $in: ['AVAILABLE', 'ACTIVE'] },
+        status: 'AVAILABLE',
+        healthStatus: 'HEALTHY',
         currentAssignedCount: 0,
       });
     }
@@ -96,7 +97,20 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     const client = LioranDBAdminClient.forNode(node);
 
     try {
-      // 1. Verify live server status & readiness
+      // 1. Verify clean state and live server status before allocation
+      const cleanCheck = await client.verifyCleanState();
+      if (!cleanCheck.isClean) {
+        console.error(`[Provisioning] Node '${node.name}' failed pre-provision clean state check: ${cleanCheck.reasons.join(', ')}`);
+        node.status = 'QUARANTINED';
+        node.healthStatus = 'DEGRADED';
+        node.adminNotes = `Pre-provision clean state failed: ${cleanCheck.reasons.join(', ')}`;
+        await node.save();
+        return {
+          success: false,
+          error: `Target hosting node '${node.name}' contains residual state and has been quarantined.`,
+        };
+      }
+
       const status = await client.getServerStatus();
       if (status.status !== 'HEALTHY' && status.state !== 'Ready') {
         return {
@@ -290,38 +304,91 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
   async terminateDeployment(instanceId: string): Promise<{ success: boolean; error?: string }> {
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(instanceId);
+    let instance = await ManagedDatabase.findById(instanceId);
+    if (!instance) {
+      instance = await ManagedDatabase.findOne({ providerDeploymentId: instanceId });
+    }
     if (!instance) return { success: false, error: 'Instance not found' };
 
+    if (instance.status === 'TERMINATED') {
+      return { success: true };
+    }
+
     const now = new Date();
-    instance.status = 'TERMINATED';
-    instance.terminatedAt = now;
+
+    // 1. Atomically mark instance DELETING and immediately revoke customer credentials
+    instance.status = 'DELETING';
+    instance.databaseUsers = [];
+    instance.billingStoppedAt = now;
+    if (instance.backupEnabled) {
+      instance.backupStoppedAt = now;
+    }
     await instance.save();
 
+    // 2. Stop active billing intervals
     await BillingInterval.updateMany(
-      { instanceId: instance._id, stoppedAt: { $exists: false } },
-      { $set: { stoppedAt: now } }
+      { instanceId: instance._id, endedAt: { $exists: false } },
+      { $set: { endedAt: now, stoppedAt: now } }
     );
 
-    // Release hosting node if dedicated
+    // 3. If assigned to a hosting node, lock node to RESETTING and execute comprehensive purge
     if (instance.hostingNodeId) {
       const node = await HostingNode.findById(instance.hostingNodeId);
       if (node) {
+        // Lock node in RESETTING state to prevent concurrent allocation
+        node.status = 'RESETTING';
+        await node.save();
+
         try {
           const client = LioranDBAdminClient.forNode(node);
-          const serverStatus = await client.getServerStatus();
-          await client.resetInstance({ instanceId: serverStatus.instanceId || 'node-1' });
+          const purgeResult = await client.purgeAndResetTenant({
+            instanceId: instance._id.toString(),
+            expectedInstanceName: instance.name,
+          });
+
+          if (!purgeResult.verifiedClean) {
+            throw new Error(`Clean state verification failed post-reset. Residual data detected.`);
+          }
+
+          // Successful cleanup: return node to AVAILABLE
           node.status = 'AVAILABLE';
           node.currentAssignedCount = 0;
+          node.healthStatus = 'HEALTHY';
           node.lastResetAt = now;
+          node.lastCredentialRotationAt = now;
+          node.adminNotes = `Purged and reset on ${now.toISOString()}. Pre-mem: ${purgeResult.preResetMemoryBytes || 'N/A'}, Post-mem: ${purgeResult.postResetMemoryBytes || 'N/A'}`;
           await node.save();
-        } catch (err) {
-          console.error(`[Provisioning] Failed to reset node ${node._id} on termination:`, (err as Error).message);
+
+          instance.status = 'TERMINATED';
+          instance.terminatedAt = now;
+          await instance.save();
+
+          return { success: true };
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : 'Unknown termination error';
+          console.error(`[Provisioning] CRITICAL: Failed to clean and verify node ${node.name || node._id} on termination: ${errMsg}`);
+
+          // Quarantine dirty node to prevent other customers from receiving it
           node.status = 'QUARANTINED';
+          node.healthStatus = 'DEGRADED';
+          node.adminNotes = `QUARANTINED: Cleanup failed during termination: ${errMsg}`;
           await node.save();
+
+          instance.status = 'FAILED';
+          instance.adminNotes = `Cleanup failed during deletion: ${errMsg}. Node quarantined.`;
+          await instance.save();
+
+          return {
+            success: false,
+            error: `Failed to safely clean database engine on node ${node.name}. The node has been quarantined: ${errMsg}`,
+          };
         }
       }
     }
+
+    instance.status = 'TERMINATED';
+    instance.terminatedAt = now;
+    await instance.save();
 
     return { success: true };
   }
@@ -349,6 +416,16 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
  * Mock Provider for testing environments only
  */
 export class MockProvisioningProvider implements LioranProvisioningProvider {
+  public instances = new Map<string, {
+    databaseCount: number;
+    collectionCount: number;
+    documentCount: number;
+    userCount: number;
+    memoryBytesUsed: number;
+    isQuarantined?: boolean;
+    status: 'ACTIVE' | 'SUSPENDED' | 'DELETING' | 'TERMINATED' | 'FAILED';
+  }>();
+
   async createDeployment(params: DeploymentParams): Promise<DeploymentResult> {
     const password = params.password || 'mock_secret_pass_123';
     const nativeUri = buildLioranDBConnectionUri({
@@ -358,20 +435,35 @@ export class MockProvisioningProvider implements LioranProvisioningProvider {
       port: params.port || 27018,
       database: params.databaseName || 'default',
     });
+
+    const deploymentId = `mock-dep-${Date.now()}`;
+    this.instances.set(deploymentId, {
+      databaseCount: 0,
+      collectionCount: 0,
+      documentCount: 0,
+      userCount: 1,
+      memoryBytesUsed: 52428800, // 50 MB baseline
+      status: 'ACTIVE',
+    });
+
     return {
       success: true,
-      providerDeploymentId: `mock-dep-${Date.now()}`,
+      providerDeploymentId: deploymentId,
       serverVersion: '2.4.1-mock',
       nativeConnectionUri: nativeUri,
       generatedPassword: password,
     };
   }
 
-  async suspendDeployment(_providerDeploymentId?: string, _reason?: string): Promise<{ success: boolean }> {
+  async suspendDeployment(providerDeploymentId: string, _reason?: string): Promise<{ success: boolean }> {
+    const inst = this.instances.get(providerDeploymentId);
+    if (inst) inst.status = 'SUSPENDED';
     return { success: true };
   }
 
-  async resumeDeployment(_providerDeploymentId?: string): Promise<{ success: boolean }> {
+  async resumeDeployment(providerDeploymentId: string): Promise<{ success: boolean }> {
+    const inst = this.instances.get(providerDeploymentId);
+    if (inst) inst.status = 'ACTIVE';
     return { success: true };
   }
 
@@ -379,16 +471,41 @@ export class MockProvisioningProvider implements LioranProvisioningProvider {
     return { success: true, temporaryPassword: 'mock_new_password_456' };
   }
 
-  async resetDeployment(_instanceId?: string, _confirmation?: string): Promise<{ success: boolean }> {
+  async resetDeployment(instanceId: string, _confirmation?: string): Promise<{ success: boolean }> {
+    const inst = this.instances.get(instanceId);
+    if (inst) {
+      inst.databaseCount = 0;
+      inst.collectionCount = 0;
+      inst.documentCount = 0;
+      inst.userCount = 0;
+      inst.memoryBytesUsed = 52428800; // Reset to 50 MB baseline
+    }
     return { success: true };
   }
 
-  async terminateDeployment(_instanceId?: string): Promise<{ success: boolean }> {
+  async terminateDeployment(instanceId: string): Promise<{ success: boolean; error?: string }> {
+    const inst = this.instances.get(instanceId);
+    if (inst) {
+      if (inst.isQuarantined) {
+        return { success: false, error: 'Instance failed cleanup and has been quarantined' };
+      }
+      inst.status = 'TERMINATED';
+      inst.databaseCount = 0;
+      inst.collectionCount = 0;
+      inst.documentCount = 0;
+      inst.userCount = 0;
+      inst.memoryBytesUsed = 52428800; // Flushed memory baseline
+    }
     return { success: true };
   }
 
-  async getDeploymentStatus(_instanceId?: string): Promise<DeploymentStatusResult> {
-    return { status: 'ACTIVE', version: '2.4.1-mock', uptimeSeconds: 3600 };
+  async getDeploymentStatus(instanceId: string): Promise<DeploymentStatusResult> {
+    const inst = this.instances.get(instanceId);
+    return {
+      status: inst?.status === 'SUSPENDED' ? 'SUSPENDED' : inst?.status === 'FAILED' ? 'FAILED' : 'ACTIVE',
+      version: '2.4.1-mock',
+      uptimeSeconds: 3600,
+    };
   }
 }
 
@@ -444,10 +561,11 @@ export async function provisionInstance(
   }
 
   if (!node) {
-    // Atomically find and reserve an AVAILABLE node
+    // Atomically find and reserve an strictly AVAILABLE & HEALTHY node
     node = await HostingNode.findOneAndUpdate(
       {
-        status: { $in: ['AVAILABLE', 'ACTIVE'] },
+        status: 'AVAILABLE',
+        healthStatus: 'HEALTHY',
         currentAssignedCount: 0,
       },
       {
@@ -506,10 +624,13 @@ export async function provisionInstance(
     instance.adminNotes = deploymentResult.error || 'Failed to provision on Rust server';
     await instance.save();
 
-    // Release node reservation on failure
-    node.status = 'AVAILABLE';
-    node.currentAssignedCount = 0;
-    await node.save();
+    // Do NOT blindly make node AVAILABLE if it was quarantined during pre-check
+    const refreshedNode = await HostingNode.findById(node._id);
+    if (refreshedNode && refreshedNode.status !== 'QUARANTINED') {
+      refreshedNode.status = 'AVAILABLE';
+      refreshedNode.currentAssignedCount = 0;
+      await refreshedNode.save();
+    }
 
     throw new Error(deploymentResult.error || 'Failed to provision database infrastructure');
   }

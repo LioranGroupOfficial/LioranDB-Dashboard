@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase, BillingInterval } from '@/lib/db';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin';
+import { provisioningProvider } from '@/lib/providers/provisioning';
 import { createAuditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 
@@ -32,21 +33,16 @@ export async function POST(
 
     const now = new Date();
 
-    // 1. Close current billing interval
-    await BillingInterval.updateMany(
-      { instanceId: instance._id, stoppedAt: { $exists: false } },
-      { $set: { stoppedAt: now } }
-    );
-
-    // 2. Safely reset engine to wipe customer collections/documents/users
-    try {
-      const client = await LioranDBAdminClient.forInstanceAsync(instance);
-      await client.resetInstance({ confirmation: instance.name });
-    } catch (resetErr) {
-      console.warn('[API Admin Database Terminate] Engine wipe warning:', (resetErr as Error).message);
+    // 1. Terminate and purge node safely
+    const termResult = await provisioningProvider.terminateDeployment(instance._id.toString());
+    if (!termResult.success) {
+      return NextResponse.json(
+        { error: termResult.error || 'Failed to safely clean and terminate database instance' },
+        { status: 500 }
+      );
     }
 
-    // 3. Update database instance state
+    // 2. Update database instance state
     instance.status = 'TERMINATED';
     instance.terminatedAt = now;
     instance.terminationReason = reason;

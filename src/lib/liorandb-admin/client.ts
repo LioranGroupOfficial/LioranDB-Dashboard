@@ -25,6 +25,8 @@ import {
   ResetPasswordResult,
   RotateRootResult,
   ResetInstanceResult,
+  PurgeAndResetTenantResult,
+  CleanStateResult,
   LioranDBAdminRequestOptions,
 } from './types';
 import {
@@ -67,11 +69,11 @@ export class LioranDBAdminClient {
   private gatewayToken?: string;
   private timeoutMs: number;
 
-  constructor(options: LioranDBClientOptions) {
+  constructor(options: LioranDBClientOptions & { token?: string }) {
     this.instanceId = options.instanceId;
     this.instanceName = options.instanceName;
     this.endpoint = normalizeControlPlaneUrl(options.endpoint);
-    this.controlPlaneToken = options.controlPlaneToken;
+    this.controlPlaneToken = options.controlPlaneToken || options.token;
     this.gatewayToken = options.gatewayToken || process.env.LIORANDB_MANAGEMENT_GATEWAY_TOKEN?.trim() || undefined;
     this.timeoutMs = options.timeoutMs || 10000;
   }
@@ -376,10 +378,11 @@ export class LioranDBAdminClient {
       instanceId: rawData.instance_id,
       version: rawData.server_version || rawData.version || 'v2.4.1',
       uptimeSeconds: Math.floor((rawData.uptime_ms || (rawData.uptime_seconds ? rawData.uptime_seconds * 1000 : 0)) / 1000),
-      storageBytes: rawData.storage_usage?.engine_accounted_bytes || (rawData as any).memory_bytes_used || 0,
-      databaseCount: rawData.database_count || (rawData as any).total_databases || 0,
-      collectionCount: rawData.collection_count || (rawData as any).total_collections || 0,
-      documentCount: rawData.document_count || (rawData as any).total_documents || (rawData as any).total_collections || 0,
+      storageBytes: rawData.storage_usage?.engine_accounted_bytes || (rawData as any).memory_bytes || (rawData as any).memory_bytes_used || 0,
+      memoryBytesUsed: (rawData as any).memory_bytes || (rawData as any).memory_bytes_used || rawData.storage_usage?.engine_accounted_bytes || 0,
+      databaseCount: rawData.database_count !== undefined ? rawData.database_count : ((rawData as any).total_databases || 0),
+      collectionCount: rawData.collection_count !== undefined ? rawData.collection_count : ((rawData as any).total_collections || 0),
+      documentCount: rawData.document_count !== undefined ? rawData.document_count : ((rawData as any).total_documents !== undefined ? (rawData as any).total_documents : ((rawData as any).total_collections !== undefined ? (rawData as any).total_collections : (rawData.collection_count || 0))),
       userCount: rawData.user_count || 0,
       state: rawData.state || rawData.status || 'Ready',
       rawEngineStatus: rawData.engine_status,
@@ -391,12 +394,18 @@ export class LioranDBAdminClient {
    * Path: GET /v1/admin/users
    */
   public async listUsers(): Promise<LioranDBUser[]> {
-    const users = await this.dispatch<RustUserSafeView[]>({
+    const usersResponse = await this.dispatch<any>({
       path: '/v1/admin/users',
       method: 'GET',
     });
 
-    return (users || []).map((u) => {
+    const rawUsers: any[] = Array.isArray(usersResponse)
+      ? usersResponse
+      : Array.isArray(usersResponse?.users)
+      ? usersResponse.users
+      : [];
+
+    return rawUsers.map((u) => {
       const rawRole = u.role || (u.roles && u.roles[0]) || 'read_write';
       const rawRoles = u.roles || (u.role ? [u.role] : ['read_write']);
       return {
@@ -638,15 +647,19 @@ export class LioranDBAdminClient {
    * Requires SUPER_ADMIN role.
    */
   public async rotateRootCredential(): Promise<RotateRootResult> {
-    const credential = await this.dispatch<RustGeneratedCredential>({
+    const credential = await this.dispatch<any>({
       path: '/v1/admin/root/rotate',
       method: 'POST',
     });
 
+    const user = credential?.user || credential || {};
+    const pass = credential?.password || credential?.new_generated_password || credential?.newGeneratedPassword || user?.password || '';
+    const username = credential?.username || credential?.root_username || user?.username || 'admin';
+
     return {
-      userId: credential.user_id,
-      rootUsername: credential.username,
-      newGeneratedPassword: credential.password,
+      userId: credential?.user_id || user?.user_id || user?.id,
+      rootUsername: username,
+      newGeneratedPassword: pass,
       rotatedAt: new Date().toISOString(),
     };
   }
@@ -669,7 +682,7 @@ export class LioranDBAdminClient {
     }
 
     try {
-      const result = await this.dispatch<RustResetInstanceResponse>({
+      const result = await this.dispatch<any>({
         path: '/v1/admin/instance/reset',
         method: 'POST',
         body: {
@@ -681,19 +694,28 @@ export class LioranDBAdminClient {
       });
 
       const rootPass =
-        result.bootstrap_credential?.password ||
-        (result as any).root_credential?.password ||
+        result?.bootstrap_credential?.password ||
+        result?.new_generated_root_password ||
+        result?.newGeneratedRootPassword ||
+        result?.root_credential?.password ||
+        result?.password ||
         '';
       const rootUser =
-        result.bootstrap_credential?.username ||
-        (result as any).root_credential?.username ||
+        result?.bootstrap_credential?.username ||
+        result?.root_username ||
+        result?.rootUsername ||
+        result?.root_credential?.username ||
+        result?.username ||
         'admin';
 
       return {
-        instanceId: result.instance_id || instanceId,
+        instanceId: result?.instance_id || instanceId,
         rootUsername: rootUser,
         newGeneratedRootPassword: rootPass,
-        state: result.state,
+        state: result?.state || 'Ready',
+        collectionsRemoved: result?.collections_removed !== undefined ? result.collections_removed : result?.collectionsRemoved,
+        documentsRemoved: result?.documents_removed !== undefined ? result.documents_removed : result?.documentsRemoved,
+        usersRemoved: result?.users_removed !== undefined ? result.users_removed : result?.usersRemoved,
         resetCompletedAt: new Date().toISOString(),
         status: 'ACTIVE',
         message: `Instance ${instanceId} was successfully wiped, sanitized, and reinitialized with fresh root credentials.`,
@@ -708,26 +730,159 @@ export class LioranDBAdminClient {
 
   /**
    * Validates that the server is in a clean, sanitized state ready for new customer provisioning.
+   * Verifies 0 customer databases, 0 customer collections, 0 customer users, and healthy engine status.
    */
-  public async verifyCleanState(expectedInstanceId?: string): Promise<{ isClean: boolean; reason?: string }> {
+  public async verifyCleanState(expectedInstanceId?: string): Promise<CleanStateResult> {
+    const reasons: string[] = [];
     try {
       const status = await this.getServerStatus();
 
       if (expectedInstanceId && status.instanceId && status.instanceId !== expectedInstanceId) {
-        return { isClean: false, reason: `Server instance ID mismatch: expected '${expectedInstanceId}', found '${status.instanceId}'` };
+        reasons.push(`Server instance ID mismatch: expected '${expectedInstanceId}', found '${status.instanceId}'`);
       }
 
       if (status.status !== 'HEALTHY') {
-        return { isClean: false, reason: `Server status is '${status.status}', expected 'HEALTHY'` };
+        reasons.push(`Server status is '${status.status}', expected 'HEALTHY'`);
       }
 
       if (status.databaseCount > 0) {
-        return { isClean: false, reason: `Server contains ${status.databaseCount} customer database(s), expected clean state (0)` };
+        reasons.push(`Residual databases detected (${status.databaseCount})`);
       }
 
-      return { isClean: true };
+      if (status.collectionCount > 0) {
+        reasons.push(`Residual collections detected (${status.collectionCount})`);
+      }
+
+      if (status.documentCount !== undefined && status.documentCount > 0) {
+        reasons.push(`Residual documents detected (${status.documentCount})`);
+      }
+
+      // Verify users catalog: no customer users should remain
+      try {
+        const users = await this.listUsers();
+        const nonRootUsers = (users || []).filter((u) => u.username !== 'admin' && u.username !== 'root');
+        if (nonRootUsers.length > 0) {
+          reasons.push(`Residual customer users detected: ${nonRootUsers.map((u) => u.username).join(', ')}`);
+        }
+      } catch (userErr) {
+        // If users endpoint fails, log and continue verification
+        console.warn('[ControlPlane] verifyCleanState user list probe warning:', (userErr as Error).message);
+      }
+
+      const isClean = reasons.length === 0;
+      return {
+        isClean,
+        reasons,
+        reason: reasons.length > 0 ? reasons.join('; ') : undefined,
+        status,
+      };
     } catch (err) {
-      return { isClean: false, reason: `Failed to verify server state: ${(err as Error).message}` };
+      const msg = `Failed to verify server state: ${(err as Error).message}`;
+      return {
+        isClean: false,
+        reasons: [msg],
+        reason: msg,
+      };
+    }
+  }
+
+  /**
+   * Executes full tenant data purge, authoritative instance reset, engine restart for memory reclamation,
+   * credential rotation, and clean state verification.
+   */
+  public async purgeAndResetTenant(options?: {
+    instanceId?: string;
+    expectedInstanceName?: string;
+  }): Promise<PurgeAndResetTenantResult> {
+    const targetId = options?.instanceId || this.instanceId || 'primary';
+    let preResetMemoryBytes: number | undefined;
+    let postResetMemoryBytes: number | undefined;
+    let preCollections = 0;
+    let preDocuments = 0;
+    let preUsers = 0;
+
+    try {
+      // 1. Pre-cleanup memory & status inspection
+      try {
+        const preStatus = await this.getServerStatus();
+        preResetMemoryBytes = preStatus.memoryBytesUsed !== undefined ? preStatus.memoryBytesUsed : preStatus.storageBytes;
+        preCollections = preStatus.collectionCount || 0;
+        preDocuments = preStatus.documentCount || 0;
+        preUsers = preStatus.userCount || 0;
+      } catch {
+        // Continue if pre-status inspection fails
+      }
+
+      // 2. Authoritative Rust engine factory reset (wipes databases, collections, documents, customer users)
+      const resetResult = await this.resetInstance({
+        instanceId: targetId,
+        confirmation: options?.expectedInstanceName,
+      });
+
+      // 3. Restart instance to release document cache, indexes, and memory allocations
+      try {
+        await this.restartInstance();
+      } catch (restartErr) {
+        console.warn(`[ControlPlane] Engine restart warning on ${targetId}:`, (restartErr as Error).message);
+      }
+
+      // 4. Rotate root/admin password to a fresh cryptographically random secret
+      let newRootPass = resetResult.newGeneratedRootPassword;
+      try {
+        const rotated = await this.rotateRootCredential();
+        if (rotated.newGeneratedPassword) {
+          newRootPass = rotated.newGeneratedPassword;
+        }
+      } catch (rotErr) {
+        console.warn(`[ControlPlane] Post-reset root rotation warning on ${targetId}:`, (rotErr as Error).message);
+      }
+
+      // 5. Authoritatively verify clean state before returning success
+      const verify = await this.verifyCleanState(targetId);
+      if (!verify.isClean) {
+        return {
+          success: false,
+          instanceId: targetId,
+          verifiedClean: false,
+          error: `Post-reset verification failed: ${verify.reason || verify.reasons.join(', ')}`,
+        };
+      }
+
+      // 6. Post-cleanup memory inspection
+      if (verify.status) {
+        postResetMemoryBytes = verify.status.memoryBytesUsed !== undefined ? verify.status.memoryBytesUsed : verify.status.storageBytes;
+      }
+
+      const reclaimedMemoryBytes =
+        preResetMemoryBytes !== undefined && postResetMemoryBytes !== undefined
+          ? Math.max(0, preResetMemoryBytes - postResetMemoryBytes)
+          : undefined;
+
+      const collectionsRemoved = resetResult.collectionsRemoved !== undefined ? resetResult.collectionsRemoved : preCollections;
+      const documentsRemoved = resetResult.documentsRemoved !== undefined ? resetResult.documentsRemoved : preDocuments;
+      const usersRemoved = resetResult.usersRemoved !== undefined ? resetResult.usersRemoved : preUsers;
+
+      return {
+        success: true,
+        instanceId: targetId,
+        verifiedClean: true,
+        preResetMemoryBytes,
+        postResetMemoryBytes,
+        reclaimedMemoryBytes,
+        collectionsRemoved,
+        documentsRemoved,
+        usersRemoved,
+        rotatedRootPassword: newRootPass,
+        resetCompletedAt: new Date().toISOString(),
+      };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      return {
+        success: false,
+        instanceId: targetId,
+        verifiedClean: false,
+        error: `Tenant purge and reset failed: ${errMsg}`,
+      };
     }
   }
 }

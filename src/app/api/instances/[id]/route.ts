@@ -100,7 +100,13 @@ export async function DELETE(
     const now = new Date();
 
     // 1. Invoke termination and real server reset on assigned node
-    await provisioningProvider.terminateDeployment(instance._id.toString());
+    const termResult = await provisioningProvider.terminateDeployment(instance._id.toString());
+    if (!termResult.success) {
+      return NextResponse.json(
+        { error: termResult.error || 'Failed to safely clean and terminate database instance.' },
+        { status: 500 }
+      );
+    }
 
     // 2. Mark instance terminated and record billingStoppedAt
     instance.status = 'TERMINATED';

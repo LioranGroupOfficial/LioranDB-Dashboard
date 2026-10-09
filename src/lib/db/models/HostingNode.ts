@@ -48,6 +48,7 @@ export interface IHostingNode extends Document {
   lastCredentialRotationAt?: Date;
   defaultRootUsername?: string;
   notes?: string;
+  adminNotes?: string;
   isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -103,6 +104,7 @@ const HostingNodeSchema = new Schema<IHostingNode>(
     lastCredentialRotationAt: { type: Date },
     defaultRootUsername: { type: String, default: 'admin', trim: true },
     notes: { type: String },
+    adminNotes: { type: String },
     isDefault: { type: Boolean, default: false },
   },
   { timestamps: true }

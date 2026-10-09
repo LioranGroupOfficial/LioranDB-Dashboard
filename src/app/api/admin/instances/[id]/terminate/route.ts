@@ -25,8 +25,12 @@ export async function POST(
       return NextResponse.json({ error: 'Instance is already terminated' }, { status: 400 });
     }
 
-    if (instance.providerDeploymentId) {
-      await provisioningProvider.terminateDeployment(instance.providerDeploymentId);
+    const termResult = await provisioningProvider.terminateDeployment(instance._id.toString());
+    if (!termResult.success) {
+      return NextResponse.json(
+        { error: termResult.error || 'Failed to safely clean and terminate instance' },
+        { status: 500 }
+      );
     }
 
     const now = new Date();
