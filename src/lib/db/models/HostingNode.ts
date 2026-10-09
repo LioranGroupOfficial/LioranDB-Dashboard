@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type HostingNodeStatus =
   | 'AVAILABLE'
@@ -24,7 +24,7 @@ export type HostingAllocationMode = 'DEDICATED' | 'SHARED';
 export type HostingProtocol = 'http' | 'https';
 
 export interface IHostingNode extends Document {
-  _id: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
   name: string;
   slug: string;
   region: string;
@@ -112,10 +112,8 @@ const HostingNodeSchema = new Schema<IHostingNode>(
 
 HostingNodeSchema.index({ status: 1, allocationMode: 1, currentAssignedCount: 1 });
 
-if (mongoose.models.HostingNode) {
-  delete (mongoose.models as Record<string, unknown>).HostingNode;
-}
-
-const HostingNode: Model<IHostingNode> = mongoose.model<IHostingNode>('HostingNode', HostingNodeSchema);
+const HostingNode: Model<IHostingNode> =
+  models.HostingNode ||
+  model<IHostingNode>('HostingNode', HostingNodeSchema);
 
 export default HostingNode;

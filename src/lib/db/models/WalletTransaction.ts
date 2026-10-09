@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type WalletTransactionType = 'credit' | 'debit' | 'refund' | 'adjustment';
 
@@ -11,9 +11,9 @@ export type WalletTransactionCategory =
   | 'admin_adjustment';
 
 export interface IWalletTransaction extends Document {
-  _id: mongoose.Types.ObjectId;
-  userId: mongoose.Types.ObjectId;
-  walletId: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  walletId: Types.ObjectId;
   type: WalletTransactionType;
   category: WalletTransactionCategory;
   amountPaise: number; // Always positive integer paise
@@ -22,8 +22,8 @@ export interface IWalletTransaction extends Document {
   description: string;
   razorpayPaymentId?: string;
   razorpayOrderId?: string;
-  instanceId?: mongoose.Types.ObjectId;
-  subscriptionId?: mongoose.Types.ObjectId;
+  instanceId?: Types.ObjectId;
+  subscriptionId?: Types.ObjectId;
   idempotencyKey?: string;
   metadata?: Record<string, unknown>;
   createdAt: Date;
@@ -116,8 +116,7 @@ const WalletTransactionSchema = new Schema<IWalletTransaction>(
 WalletTransactionSchema.index({ userId: 1, createdAt: -1 });
 
 const WalletTransaction: Model<IWalletTransaction> =
-  mongoose.models.WalletTransaction ||
-  mongoose.model<IWalletTransaction>('WalletTransaction', WalletTransactionSchema);
+  models.WalletTransaction ||
+  model<IWalletTransaction>('WalletTransaction', WalletTransactionSchema);
 
 export default WalletTransaction;
-

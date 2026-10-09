@@ -1,9 +1,10 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 import type { UserRole } from './User';
 
 export interface ITicketMessage extends Document {
-  ticketId: mongoose.Types.ObjectId;
-  authorId: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  ticketId: Types.ObjectId;
+  authorId: Types.ObjectId;
   authorRole: UserRole;
   body: string;
   isInternal: boolean;
@@ -34,7 +35,7 @@ TicketMessageSchema.index({ ticketId: 1, createdAt: 1 });
 TicketMessageSchema.index({ ticketId: 1, isInternal: 1 });
 
 const TicketMessage: Model<ITicketMessage> =
-  mongoose.models.TicketMessage ||
-  mongoose.model<ITicketMessage>('TicketMessage', TicketMessageSchema);
+  models.TicketMessage ||
+  model<ITicketMessage>('TicketMessage', TicketMessageSchema);
 
 export default TicketMessage;

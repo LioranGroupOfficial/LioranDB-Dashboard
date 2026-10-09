@@ -1,7 +1,8 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export interface IPasswordReset extends Document {
-  userId: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
   tokenHash: string;
   expiresAt: Date;
   usedAt?: Date;
@@ -25,7 +26,7 @@ const PasswordResetSchema = new Schema<IPasswordReset>(
 PasswordResetSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const PasswordReset: Model<IPasswordReset> =
-  mongoose.models.PasswordReset ||
-  mongoose.model<IPasswordReset>('PasswordReset', PasswordResetSchema);
+  models.PasswordReset ||
+  model<IPasswordReset>('PasswordReset', PasswordResetSchema);
 
 export default PasswordReset;

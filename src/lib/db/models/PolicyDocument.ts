@@ -1,6 +1,7 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export interface IPolicyDocument extends Document {
+  _id: Types.ObjectId;
   slug: string;
   title: string;
   version: string;
@@ -29,7 +30,7 @@ PolicyDocumentSchema.index({ slug: 1, version: 1 }, { unique: true });
 PolicyDocumentSchema.index({ slug: 1, active: 1 });
 
 const PolicyDocument: Model<IPolicyDocument> =
-  mongoose.models.PolicyDocument ||
-  mongoose.model<IPolicyDocument>('PolicyDocument', PolicyDocumentSchema);
+  models.PolicyDocument ||
+  model<IPolicyDocument>('PolicyDocument', PolicyDocumentSchema);
 
 export default PolicyDocument;

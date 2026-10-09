@@ -1,11 +1,12 @@
-import mongoose from 'mongoose';
-import argon2 from 'argon2';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 // Load .env.local first, then .env
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+import argon2 from 'argon2';
+import { connectToDatabase, disconnectFromDatabase, User } from '../src/lib/db';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 const SEED_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL;
@@ -29,30 +30,8 @@ const ARGON2_OPTIONS = {
 };
 
 async function seedAdmin() {
-  console.log(`Connecting to MongoDB at ${MONGODB_URI}...`);
-  await mongoose.connect(MONGODB_URI!);
-
-  const UserSchema = new mongoose.Schema(
-    {
-      email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-      passwordHash: { type: String, required: true },
-      role: { type: String, enum: ['customer', 'admin', 'support'], default: 'customer' },
-      emailVerified: { type: Boolean, default: false },
-      emailVerifiedAt: { type: Date },
-      profile: {
-        fullName: String,
-        company: String,
-        phone: String,
-        country: String,
-      },
-      onboardingStage: { type: String, default: 'ACTIVE' },
-      isActive: { type: Boolean, default: true },
-      lastLoginAt: Date,
-    },
-    { timestamps: true }
-  );
-
-  const User = mongoose.models.User || mongoose.model('User', UserSchema);
+  console.log(`Connecting to LioranDB via ${MONGODB_URI}...`);
+  await connectToDatabase();
 
   const email = SEED_ADMIN_EMAIL!.toLowerCase().trim();
   const passwordHash = await argon2.hash(SEED_ADMIN_PASSWORD!, ARGON2_OPTIONS);
@@ -84,7 +63,7 @@ async function seedAdmin() {
     console.log(`✅ Initial admin account created successfully for: ${email}`);
   }
 
-  await mongoose.disconnect();
+  await disconnectFromDatabase();
   console.log('🎉 Done! You can now log in at http://localhost:3000/login');
 }
 
@@ -92,4 +71,3 @@ seedAdmin().catch((err) => {
   console.error('Seed error:', err);
   process.exit(1);
 });
-

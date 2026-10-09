@@ -1,20 +1,20 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type PaymentStatus = 'PENDING' | 'SUBMITTED' | 'PAID' | 'FAILED' | 'REFUNDED';
 export type PaymentType = 'invoice' | 'instance_subscription' | 'backup_addon' | 'account_verification';
 
 export interface IPayment extends Document {
-  _id: mongoose.Types.ObjectId;
-  invoiceId?: mongoose.Types.ObjectId;
-  subscriptionId?: mongoose.Types.ObjectId;
-  userId: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  invoiceId?: Types.ObjectId;
+  subscriptionId?: Types.ObjectId;
+  userId: Types.ObjectId;
   amount: number; // in Rupees
   amountPaise: number; // in integer paise (e.g., 70592 for ₹705.92)
   currency: string;
   status: PaymentStatus;
   type?: PaymentType;
   planId?: string;
-  instanceId?: mongoose.Types.ObjectId;
+  instanceId?: Types.ObjectId;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
   razorpaySignature?: string;
@@ -26,7 +26,7 @@ export interface IPayment extends Document {
   paidAt?: Date;
   transactionReference?: string;
   notes?: string;
-  recordedBy?: mongoose.Types.ObjectId;
+  recordedBy?: Types.ObjectId;
   metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -82,10 +82,6 @@ PaymentSchema.index({ userId: 1, status: 1 });
 PaymentSchema.index({ userId: 1, type: 1, status: 1 });
 PaymentSchema.index({ invoiceId: 1, createdAt: -1 });
 
-if (mongoose.models.Payment) {
-  delete (mongoose.models as Record<string, unknown>).Payment;
-}
-
-const Payment: Model<IPayment> = mongoose.model<IPayment>('Payment', PaymentSchema);
+const Payment: Model<IPayment> = models.Payment || model<IPayment>('Payment', PaymentSchema);
 
 export default Payment;

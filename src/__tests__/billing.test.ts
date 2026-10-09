@@ -5,7 +5,7 @@ import {
   MIN_INVOICE_AMOUNT_PAISE,
 } from '@/lib/billing';
 import type { IManagedDatabase } from '@/lib/db';
-import mongoose from 'mongoose';
+import { Types } from '@/lib/db';
 
 describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
   test('getCurrentMonthPeriod returns start and end dates', () => {
@@ -30,7 +30,7 @@ describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
     const now = new Date('2026-05-02T00:00:00.000Z');
 
     const mockInstance = {
-      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d1'),
+      _id: new Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d1'),
       name: 'prod-shared-db',
       hourlyRatePaise: 100, // ₹1/hr
       backupEnabled: true,
@@ -57,7 +57,7 @@ describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
     const now = new Date('2026-04-02T00:00:00.000Z');
 
     const mockInstance = {
-      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d2'),
+      _id: new Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d2'),
       name: 'test-db-short',
       hourlyRatePaise: 800, // ₹8/hr for Dedicated
       backupEnabled: false,
@@ -83,7 +83,7 @@ describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
     const now = new Date('2026-05-02T00:00:00.000Z');
 
     const mockUnstarted = {
-      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d3'),
+      _id: new Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d3'),
       name: 'provisioning-db',
       hourlyRatePaise: 100,
       backupEnabled: false,
@@ -104,7 +104,7 @@ describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
     const now = new Date('2026-05-02T00:00:00.000Z');
 
     const mockDiscounted = {
-      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d4'),
+      _id: new Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d4'),
       name: 'discounted-db',
       hourlyRatePaise: 200, // ₹2/hr
       backupEnabled: false,
@@ -133,7 +133,7 @@ describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
     const now = new Date('2026-04-01T16:00:00.000Z');
 
     const mockRunningInstance = {
-      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d5'),
+      _id: new Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d5'),
       name: 'incremental-db',
       hourlyRatePaise: 100, // ₹1/hr
       backupEnabled: false,
@@ -161,7 +161,7 @@ describe('LioranDB Postpaid Usage-Based Billing Engine', () => {
     const now = new Date('2026-04-01T02:00:00.000Z');
 
     const mockMicroInstance = {
-      _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d6'),
+      _id: new Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d6'),
       name: 'micro-run-db',
       hourlyRatePaise: 100, // ₹1/hr
       backupEnabled: false,

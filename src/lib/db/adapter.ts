@@ -1,0 +1,1038 @@
+import { LioranDBClient, Collection as LioranCollection, Db as LioranDb, Filter as LioranFilter, Sort as LioranSort } from '@liorandb/driver';
+import { ObjectId, Types } from './object-id';
+
+export { ObjectId, Types };
+
+export interface SchemaOptions {
+  timestamps?: boolean | { createdAt?: boolean | string; updatedAt?: boolean | string };
+  _id?: boolean;
+  collection?: string;
+  toJSON?: Record<string, unknown>;
+  toObject?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export type SchemaDefinition = Record<string, any>;
+
+export class Schema<T = any> {
+  public readonly definition: SchemaDefinition;
+  public readonly options: SchemaOptions;
+  public static readonly Types = {
+    ObjectId,
+    String: String,
+    Number: Number,
+    Boolean: Boolean,
+    Date: Date,
+    Mixed: Object,
+    Buffer: Buffer,
+    Array: Array,
+  };
+
+  public readonly statics: Record<string, Function> = {};
+  public readonly methods: Record<string, Function> = {};
+  public readonly virtuals: Record<string, any> = {};
+  public readonly indexes: Array<{ fields: Record<string, number | string>; options?: any }> = [];
+
+  constructor(definition?: SchemaDefinition, options?: SchemaOptions) {
+    this.definition = definition || {};
+    this.options = options || {};
+  }
+
+  public index(fields: Record<string, number | string>, options?: any): this {
+    this.indexes.push({ fields, options });
+    return this;
+  }
+
+  public pre(event: string, fn: Function): this {
+    return this;
+  }
+
+  public post(event: string, fn: Function): this {
+    return this;
+  }
+
+  public virtual(name: string): { get(fn: Function): any; set(fn: Function): any } {
+    return {
+      get: (fn: Function) => {
+        this.virtuals[name] = { ...this.virtuals[name], get: fn };
+        return this;
+      },
+      set: (fn: Function) => {
+        this.virtuals[name] = { ...this.virtuals[name], set: fn };
+        return this;
+      },
+    };
+  }
+
+  public static(name: string, fn: Function): this {
+    this.statics[name] = fn;
+    return this;
+  }
+
+  public method(name: string, fn: Function): this {
+    this.methods[name] = fn;
+    return this;
+  }
+}
+
+export interface Document {
+  _id: any;
+  createdAt?: Date;
+  updatedAt?: Date;
+  [key: string]: any;
+  save(options?: any): Promise<this>;
+  toObject(options?: any): any;
+  toJSON(): any;
+}
+
+export interface UpdateResult {
+  matchedCount: number;
+  modifiedCount: number;
+  upsertedId: any;
+  acknowledged?: boolean;
+}
+
+export interface DeleteResult {
+  deletedCount: number;
+  acknowledged?: boolean;
+}
+
+export interface QueryOptions {
+  upsert?: boolean;
+  new?: boolean;
+  returnDocument?: 'before' | 'after';
+  sort?: any;
+  session?: any;
+  projection?: any;
+  lean?: boolean;
+  [key: string]: any;
+}
+
+// In-memory collection fallback for local offline testing / CI
+const memoryStore = new Map<string, Map<string, any>>();
+
+export function getMemoryCollection(name: string): Map<string, any> {
+  if (!memoryStore.has(name)) {
+    memoryStore.set(name, new Map());
+  }
+  return memoryStore.get(name)!;
+}
+
+export function clearMemoryStore(): void {
+  memoryStore.clear();
+}
+
+/**
+ * Normalizes filter values, converting ObjectId instances to strings for database transmission.
+ */
+export function normalizeFilter(filter: any): any {
+  if (!filter || typeof filter !== 'object') return filter;
+  if (filter instanceof ObjectId) return filter.toString();
+  if (filter instanceof Date) return filter;
+  if (filter instanceof RegExp) return { $regex: filter.source, $options: filter.flags };
+  if (Array.isArray(filter)) return filter.map(normalizeFilter);
+
+  const out: Record<string, any> = {};
+  for (const [key, val] of Object.entries(filter)) {
+    if (val === undefined) continue;
+    if (key === '_id') {
+      if (val instanceof ObjectId) {
+        out._id = val.toString();
+      } else if (typeof val === 'string') {
+        out._id = val;
+      } else if (val && typeof val === 'object') {
+        out._id = normalizeFilter(val);
+      } else {
+        out._id = val;
+      }
+    } else if (val instanceof ObjectId) {
+      out[key] = val.toString();
+    } else if (val && typeof val === 'object' && !(val instanceof Date)) {
+      out[key] = normalizeFilter(val);
+    } else {
+      out[key] = val;
+    }
+  }
+  return out;
+}
+
+/**
+ * Normalizes document fields before storing or returning.
+ */
+export function normalizeDocument(doc: any): any {
+  if (!doc || typeof doc !== 'object') return doc;
+  if (doc instanceof ObjectId || doc instanceof Date) return doc;
+  if (Array.isArray(doc)) return doc.map(normalizeDocument);
+
+  const out: Record<string, any> = {};
+  for (const [key, val] of Object.entries(doc)) {
+    if (key === '_id') {
+      out._id = val instanceof ObjectId ? val : new ObjectId(val as any);
+    } else if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
+      // Parse ISO date strings back to Date objects
+      const parsed = new Date(val);
+      out[key] = isNaN(parsed.getTime()) ? val : parsed;
+    } else if (val && typeof val === 'object' && !(val instanceof ObjectId) && !(val instanceof Date)) {
+      out[key] = normalizeDocument(val);
+    } else {
+      out[key] = val;
+    }
+  }
+  return out;
+}
+
+/**
+ * In-memory document matching engine supporting MongoDB operators
+ */
+export function matchesFilter(doc: any, filter: any): boolean {
+  if (!filter || Object.keys(filter).length === 0) return true;
+
+  for (const [key, expected] of Object.entries(filter)) {
+    if (key === '$or' && Array.isArray(expected)) {
+      const matchAny = expected.some((subFilter) => matchesFilter(doc, subFilter));
+      if (!matchAny) return false;
+      continue;
+    }
+    if (key === '$and' && Array.isArray(expected)) {
+      const matchAll = expected.every((subFilter) => matchesFilter(doc, subFilter));
+      if (!matchAll) return false;
+      continue;
+    }
+
+    // Resolving dotted field path (e.g., 'profile.fullName')
+    const actual = getNestedValue(doc, key);
+
+    if (expected && typeof expected === 'object' && !(expected instanceof Date) && !(expected instanceof ObjectId) && !(expected instanceof RegExp)) {
+      // Comparison / operator object
+      for (const [op, opVal] of Object.entries(expected)) {
+        if (op === '$eq') {
+          if (!areValuesEqual(actual, opVal)) return false;
+        } else if (op === '$ne') {
+          if (areValuesEqual(actual, opVal)) return false;
+        } else if (op === '$in' && Array.isArray(opVal)) {
+          const matchIn = opVal.some((item) => areValuesEqual(actual, item));
+          if (!matchIn) return false;
+        } else if (op === '$nin' && Array.isArray(opVal)) {
+          const matchNin = opVal.some((item) => areValuesEqual(actual, item));
+          if (matchNin) return false;
+        } else if (op === '$gt') {
+          if (compareValues(actual, opVal) <= 0) return false;
+        } else if (op === '$gte') {
+          if (compareValues(actual, opVal) < 0) return false;
+        } else if (op === '$lt') {
+          if (compareValues(actual, opVal) >= 0) return false;
+        } else if (op === '$lte') {
+          if (compareValues(actual, opVal) > 0) return false;
+        } else if (op === '$exists') {
+          const exists = actual !== undefined;
+          if (exists !== Boolean(opVal)) return false;
+        } else if (op === '$regex') {
+          const flags = (expected as any).$options || '';
+          const regex = new RegExp(String(opVal), flags);
+          if (!regex.test(String(actual ?? ''))) return false;
+        }
+      }
+    } else if (expected instanceof RegExp) {
+      if (!expected.test(String(actual ?? ''))) return false;
+    } else {
+      if (!areValuesEqual(actual, expected)) return false;
+    }
+  }
+
+  return true;
+}
+
+function getNestedValue(obj: any, path: string): any {
+  if (!obj) return undefined;
+  if (!path.includes('.')) return obj[path];
+  const parts = path.split('.');
+  let current = obj;
+  for (const part of parts) {
+    if (current === null || current === undefined) return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+function setNestedValue(obj: any, path: string, value: any): void {
+  if (!obj) return;
+  if (!path.includes('.')) {
+    obj[path] = value;
+    return;
+  }
+  const parts = path.split('.');
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (!current[part] || typeof current[part] !== 'object') {
+      current[part] = {};
+    }
+    current = current[part];
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
+function deleteNestedValue(obj: any, path: string): void {
+  if (!obj) return;
+  if (!path.includes('.')) {
+    delete obj[path];
+    return;
+  }
+  const parts = path.split('.');
+  let current = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (!current[part] || typeof current[part] !== 'object') return;
+    current = current[part];
+  }
+  delete current[parts[parts.length - 1]];
+}
+
+function areValuesEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (a instanceof ObjectId || b instanceof ObjectId) {
+    return String(a) === String(b);
+  }
+  if (a instanceof Date && b instanceof Date) {
+    return a.getTime() === b.getTime();
+  }
+  if (typeof a === 'string' && b instanceof Date) {
+    return new Date(a).getTime() === b.getTime();
+  }
+  if (a instanceof Date && typeof b === 'string') {
+    return a.getTime() === new Date(b).getTime();
+  }
+  return false;
+}
+
+function compareValues(a: any, b: any): number {
+  if (a instanceof Date || b instanceof Date) {
+    const timeA = a instanceof Date ? a.getTime() : new Date(a).getTime();
+    const timeB = b instanceof Date ? b.getTime() : new Date(b).getTime();
+    return timeA - timeB;
+  }
+  if (typeof a === 'number' && typeof b === 'number') {
+    return a - b;
+  }
+  if (typeof a === 'string' && typeof b === 'string') {
+    return a.localeCompare(b);
+  }
+  return 0;
+}
+
+/**
+ * Applies MongoDB update operators to a document in-place.
+ */
+export function applyUpdate(doc: any, update: any): void {
+  if (!update || typeof update !== 'object') return;
+
+  let hasOperators = false;
+  for (const key of Object.keys(update)) {
+    if (key.startsWith('$')) {
+      hasOperators = true;
+      break;
+    }
+  }
+
+  if (!hasOperators) {
+    // Direct replacement / assignment
+    for (const [key, val] of Object.entries(update)) {
+      setNestedValue(doc, key, val);
+    }
+    return;
+  }
+
+  if (update.$set) {
+    for (const [key, val] of Object.entries(update.$set)) {
+      setNestedValue(doc, key, val);
+    }
+  }
+
+  if (update.$inc) {
+    for (const [key, val] of Object.entries(update.$inc)) {
+      const current = Number(getNestedValue(doc, key) || 0);
+      setNestedValue(doc, key, current + Number(val));
+    }
+  }
+
+  if (update.$push) {
+    for (const [key, val] of Object.entries(update.$push)) {
+      const current = getNestedValue(doc, key);
+      const arr = Array.isArray(current) ? current : [];
+      if (val && typeof val === 'object' && '$each' in val && Array.isArray((val as any).$each)) {
+        arr.push(...(val as any).$each);
+      } else {
+        arr.push(val);
+      }
+      setNestedValue(doc, key, arr);
+    }
+  }
+
+  if (update.$pull) {
+    for (const [key, val] of Object.entries(update.$pull)) {
+      const current = getNestedValue(doc, key);
+      if (Array.isArray(current)) {
+        const filtered = current.filter((item) => {
+          if (val && typeof val === 'object') {
+            return !matchesFilter(item, val);
+          }
+          return !areValuesEqual(item, val);
+        });
+        setNestedValue(doc, key, filtered);
+      }
+    }
+  }
+
+  if (update.$unset) {
+    for (const key of Object.keys(update.$unset)) {
+      deleteNestedValue(doc, key);
+    }
+  }
+}
+
+/**
+ * Query Builder supporting chaining methods: .sort(), .skip(), .limit(), .select(), .populate(), .lean(), .session(), .exec()
+ */
+export class Query<T = any, TLean = any> implements PromiseLike<T> {
+  private model: Model<any>;
+  private filter: any;
+  private projection?: any;
+  private sortOptions?: any;
+  private skipCount?: number;
+  private limitCount?: number;
+  private populateOptions: Array<{ path: string; select?: string }> = [];
+  private isLean = false;
+  private single = false;
+  private countQuery = false;
+
+  constructor(model: Model<any>, filter: any, projection?: any, single = false, count = false) {
+    this.model = model;
+    this.filter = filter || {};
+    this.projection = projection;
+    this.single = single;
+    this.countQuery = count;
+  }
+
+  public sort(sort: any): this {
+    this.sortOptions = sort;
+    return this;
+  }
+
+  public skip(skip: number): this {
+    this.skipCount = skip;
+    return this;
+  }
+
+  public limit(limit: number): this {
+    this.limitCount = limit;
+    return this;
+  }
+
+  public select<TResult = T>(fields: any): Query<TResult, TLean> {
+    this.projection = fields;
+    return this as unknown as Query<TResult, TLean>;
+  }
+
+  public populate<TResult = T>(path: string, select?: string): Query<TResult, TLean> {
+    this.populateOptions.push({ path, select });
+    return this as unknown as Query<TResult, TLean>;
+  }
+
+  public lean<TResult = TLean>(_lean = true): Query<TResult, TResult> {
+    this.isLean = _lean;
+    return this as unknown as Query<TResult, TResult>;
+  }
+
+  public session(_session: any): this {
+    return this;
+  }
+
+  public async exec(): Promise<T> {
+    const rawResult = await this.model._executeQuery({
+      filter: this.filter,
+      projection: this.projection,
+      sort: this.sortOptions,
+      skip: this.skipCount,
+      limit: this.limitCount,
+      single: this.single,
+      count: this.countQuery,
+      isLean: this.isLean,
+      populate: this.populateOptions,
+    });
+    return rawResult as T;
+  }
+
+  public then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2> {
+    return this.exec().then(onfulfilled, onrejected);
+  }
+
+  public catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<T | TResult> {
+    return this.exec().catch(onrejected);
+  }
+
+  public finally(onfinally?: (() => void) | null): Promise<T> {
+    return this.exec().finally(onfinally);
+  }
+}
+
+export type HydratedDocument<T> = T & Document;
+
+export class Model<T = any> {
+  public readonly modelName: string;
+  public readonly collectionName: string;
+  public readonly schema: Schema<T>;
+
+  constructor(name: string, schema: Schema<T>, collectionName?: string) {
+    this.modelName = name;
+    this.schema = schema;
+    this.collectionName =
+      collectionName || schema.options.collection || `${name.toLowerCase()}s`;
+
+    // Bind custom statics
+    for (const [staticName, fn] of Object.entries(schema.statics)) {
+      (this as any)[staticName] = fn.bind(this);
+    }
+  }
+
+  /**
+   * Instantiates a new document
+   */
+  public hydrate(data: any): HydratedDocument<T> {
+    const docData = normalizeDocument(this._applyDefaults(data));
+    const model = this;
+
+    const doc: any = {
+      ...docData,
+      _id: docData._id instanceof ObjectId ? docData._id : new ObjectId(docData._id),
+      save: async function (this: any): Promise<any> {
+        return model._saveDocument(this);
+      },
+      toObject: function (this: any): any {
+        const clone = { ...this };
+        delete clone.save;
+        delete clone.toObject;
+        delete clone.toJSON;
+        return clone;
+      },
+      toJSON: function (this: any): any {
+        return this.toObject();
+      },
+      toString: function (this: any): string {
+        return `[Document ${model.modelName} ${this._id}]`;
+      },
+    };
+
+    // Attach custom methods
+    for (const [methodName, fn] of Object.entries(this.schema.methods)) {
+      doc[methodName] = fn.bind(doc);
+    }
+
+    return doc as HydratedDocument<T>;
+  }
+
+  private _applyDefaults(data: any): any {
+    const out = { ...data };
+    if (!out._id) {
+      out._id = new ObjectId();
+    }
+
+    // Apply schema defaults
+    for (const [field, def] of Object.entries(this.schema.definition)) {
+      if (out[field] === undefined) {
+        if (def && typeof def === 'object' && 'default' in def) {
+          out[field] = typeof def.default === 'function' ? def.default() : def.default;
+        }
+      }
+    }
+
+    if (this.schema.options.timestamps) {
+      const now = new Date();
+      if (!out.createdAt) out.createdAt = now;
+      if (!out.updatedAt) out.updatedAt = now;
+    }
+
+    return out;
+  }
+
+  public find(filter?: any, projection?: any): Query<Array<HydratedDocument<T>>, Array<T>> {
+    return new Query<Array<HydratedDocument<T>>, Array<T>>(this, filter, projection, false, false);
+  }
+
+  public findOne(filter?: any, projection?: any): Query<HydratedDocument<T> | null, T | null> {
+    return new Query<HydratedDocument<T> | null, T | null>(this, filter, projection, true, false);
+  }
+
+  public findById(id: any, projection?: any): Query<HydratedDocument<T> | null, T | null> {
+    const normalizedId = id instanceof ObjectId ? id.toString() : String(id);
+    return new Query<HydratedDocument<T> | null, T | null>(this, { _id: normalizedId }, projection, true, false);
+  }
+
+  public countDocuments(filter?: any): Query<number, number> {
+    return new Query<number, number>(this, filter, undefined, false, true);
+  }
+
+  public async create(docs: any | any[], options?: any): Promise<any> {
+    if (Array.isArray(docs)) {
+      const hydrated = docs.map((d) => this.hydrate(d));
+      for (const doc of hydrated) {
+        await this._saveDocument(doc);
+      }
+      return hydrated;
+    }
+    const hydrated = this.hydrate(docs);
+    await this._saveDocument(hydrated);
+    return hydrated;
+  }
+
+  public async insertMany(docs: any[], _options?: any): Promise<Array<HydratedDocument<T>>> {
+    const hydrated = docs.map((d) => this.hydrate(d));
+    for (const doc of hydrated) {
+      await this._saveDocument(doc);
+    }
+    return hydrated;
+  }
+
+  public async updateOne(filter: any, update: any, options?: QueryOptions): Promise<UpdateResult> {
+    const normFilter = normalizeFilter(filter);
+    const collection = await this._getLioranCollection();
+
+    if (collection) {
+      try {
+        const res = await collection.updateOne(normFilter, update, { upsert: options?.upsert });
+        return {
+          matchedCount: res.matchedCount,
+          modifiedCount: res.modifiedCount,
+          upsertedId: res.upsertedId,
+          acknowledged: true,
+        };
+      } catch (err) {
+        // Fallback to in-memory store
+      }
+    }
+
+    // In-memory update
+    const store = getMemoryCollection(this.collectionName);
+    let matched = 0;
+    let modified = 0;
+    let upsertedId: any = null;
+
+    for (const [id, doc] of store.entries()) {
+      if (matchesFilter(doc, normFilter)) {
+        matched++;
+        applyUpdate(doc, update);
+        if (this.schema.options.timestamps) doc.updatedAt = new Date();
+        store.set(id, doc);
+        modified++;
+        break;
+      }
+    }
+
+    if (matched === 0 && options?.upsert) {
+      const newDoc = this.hydrate({ ...normFilter });
+      applyUpdate(newDoc, update);
+      store.set(String(newDoc._id), newDoc);
+      upsertedId = newDoc._id;
+      modified = 1;
+    }
+
+    return { matchedCount: matched, modifiedCount: modified, upsertedId, acknowledged: true };
+  }
+
+  public async updateMany(filter: any, update: any, options?: QueryOptions): Promise<UpdateResult> {
+    const normFilter = normalizeFilter(filter);
+    const collection = await this._getLioranCollection();
+
+    if (collection) {
+      try {
+        const res = await collection.updateMany(normFilter, update, { upsert: options?.upsert });
+        return {
+          matchedCount: res.matchedCount,
+          modifiedCount: res.modifiedCount,
+          upsertedId: res.upsertedId,
+          acknowledged: true,
+        };
+      } catch (err) {
+        // Fallback to in-memory store
+      }
+    }
+
+    const store = getMemoryCollection(this.collectionName);
+    let matched = 0;
+    let modified = 0;
+
+    for (const [id, doc] of store.entries()) {
+      if (matchesFilter(doc, normFilter)) {
+        matched++;
+        applyUpdate(doc, update);
+        if (this.schema.options.timestamps) doc.updatedAt = new Date();
+        store.set(id, doc);
+        modified++;
+      }
+    }
+
+    return { matchedCount: matched, modifiedCount: modified, upsertedId: null, acknowledged: true };
+  }
+
+  public async deleteOne(filter: any): Promise<DeleteResult> {
+    const normFilter = normalizeFilter(filter);
+    const collection = await this._getLioranCollection();
+
+    if (collection) {
+      try {
+        const res = await collection.deleteOne(normFilter);
+        return { deletedCount: res.deletedCount, acknowledged: true };
+      } catch (err) {
+        // Fallback
+      }
+    }
+
+    const store = getMemoryCollection(this.collectionName);
+    let deleted = 0;
+    for (const [id, doc] of store.entries()) {
+      if (matchesFilter(doc, normFilter)) {
+        store.delete(id);
+        deleted = 1;
+        break;
+      }
+    }
+    return { deletedCount: deleted, acknowledged: true };
+  }
+
+  public async deleteMany(filter: any): Promise<DeleteResult> {
+    const normFilter = normalizeFilter(filter);
+    const collection = await this._getLioranCollection();
+
+    if (collection) {
+      try {
+        const res = await collection.deleteMany(normFilter);
+        return { deletedCount: res.deletedCount, acknowledged: true };
+      } catch (err) {
+        // Fallback
+      }
+    }
+
+    const store = getMemoryCollection(this.collectionName);
+    let deleted = 0;
+    for (const [id, doc] of Array.from(store.entries())) {
+      if (matchesFilter(doc, normFilter)) {
+        store.delete(id);
+        deleted++;
+      }
+    }
+    return { deletedCount: deleted, acknowledged: true };
+  }
+
+  public async findOneAndUpdate(filter: any, update: any, options?: QueryOptions): Promise<HydratedDocument<T> | null> {
+    const returnAfter = options?.new || options?.returnDocument === 'after';
+    const normFilter = normalizeFilter(filter);
+
+    let doc = await this.findOne(normFilter).exec();
+    if (!doc && options?.upsert) {
+      const newDoc = this.hydrate({ ...normFilter });
+      applyUpdate(newDoc, update);
+      await this._saveDocument(newDoc);
+      return newDoc;
+    }
+
+    if (!doc) return null;
+
+    const beforeState = this.hydrate(JSON.parse(JSON.stringify(doc)));
+    applyUpdate(doc, update);
+    if (this.schema.options.timestamps) {
+      doc.updatedAt = new Date();
+    }
+    await this._saveDocument(doc);
+
+    return returnAfter ? doc : beforeState;
+  }
+
+  public async findByIdAndUpdate(id: any, update: any, options?: QueryOptions): Promise<HydratedDocument<T> | null> {
+    const normalizedId = id instanceof ObjectId ? id.toString() : String(id);
+    return this.findOneAndUpdate({ _id: normalizedId }, update, options);
+  }
+
+  public async findOneAndDelete(filter: any): Promise<HydratedDocument<T> | null> {
+    const doc = await this.findOne(filter).exec();
+    if (doc) {
+      await this.deleteOne({ _id: doc._id });
+    }
+    return doc;
+  }
+
+  public async findByIdAndDelete(id: any): Promise<HydratedDocument<T> | null> {
+    const normalizedId = id instanceof ObjectId ? id.toString() : String(id);
+    return this.findOneAndDelete({ _id: normalizedId });
+  }
+
+  public async aggregate<TResult = any>(pipeline: any[]): Promise<TResult[]> {
+    const collection = await this._getLioranCollection();
+    if (collection) {
+      try {
+        const cursor = collection.aggregate<TResult>(pipeline);
+        const results = await cursor.toArray();
+        return Array.from(results);
+      } catch (err) {
+        // Fallback
+      }
+    }
+
+    // In-memory aggregation engine for basic pipelines ($match, $group, $sort, $limit, $skip)
+    let docs = Array.from(getMemoryCollection(this.collectionName).values()).map(normalizeDocument);
+
+    for (const stage of pipeline) {
+      if (stage.$match) {
+        docs = docs.filter((d) => matchesFilter(d, stage.$match));
+      } else if (stage.$group) {
+        const groupSpec = stage.$group;
+        const groups = new Map<string, any>();
+
+        for (const doc of docs) {
+          let groupId: any;
+          if (typeof groupSpec._id === 'string' && groupSpec._id.startsWith('$')) {
+            groupId = getNestedValue(doc, groupSpec._id.substring(1));
+          } else if (groupSpec._id && typeof groupSpec._id === 'object') {
+            const composite: Record<string, any> = {};
+            for (const [k, v] of Object.entries(groupSpec._id)) {
+              if (typeof v === 'string' && v.startsWith('$')) {
+                composite[k] = getNestedValue(doc, v.substring(1));
+              } else {
+                composite[k] = v;
+              }
+            }
+            groupId = composite;
+          } else {
+            groupId = groupSpec._id;
+          }
+
+          const groupKey = JSON.stringify(groupId);
+          if (!groups.has(groupKey)) {
+            groups.set(groupKey, { _id: groupId, count: 0, items: [] });
+          }
+          const groupObj = groups.get(groupKey);
+          groupObj.count++;
+          groupObj.items.push(doc);
+
+          for (const [accField, accExpr] of Object.entries(groupSpec)) {
+            if (accField === '_id') continue;
+            if (accExpr && typeof accExpr === 'object' && '$sum' in (accExpr as any)) {
+              const sumVal = (accExpr as any).$sum;
+              const increment =
+                typeof sumVal === 'number'
+                  ? sumVal
+                  : typeof sumVal === 'string' && sumVal.startsWith('$')
+                  ? Number(getNestedValue(doc, sumVal.substring(1)) || 0)
+                  : 1;
+              groupObj[accField] = (groupObj[accField] || 0) + increment;
+            }
+          }
+        }
+        docs = Array.from(groups.values());
+      } else if (stage.$sort) {
+        docs.sort((a, b) => {
+          for (const [sortField, dir] of Object.entries(stage.$sort)) {
+            const factor = dir === -1 || dir === 'desc' ? -1 : 1;
+            const comp = compareValues(getNestedValue(a, sortField), getNestedValue(b, sortField));
+            if (comp !== 0) return comp * factor;
+          }
+          return 0;
+        });
+      } else if (stage.$skip) {
+        docs = docs.slice(stage.$skip);
+      } else if (stage.$limit) {
+        docs = docs.slice(0, stage.$limit);
+      }
+    }
+
+    return docs as TResult[];
+  }
+
+  public async _saveDocument(doc: any): Promise<HydratedDocument<T>> {
+    const raw = doc.toObject ? doc.toObject() : { ...doc };
+    delete raw.save;
+    delete raw.toObject;
+    delete raw.toJSON;
+
+    const idStr = String(raw._id);
+    const store = getMemoryCollection(this.collectionName);
+    store.set(idStr, raw);
+
+    const collection = await this._getLioranCollection();
+    if (collection) {
+      try {
+        const payload = normalizeFilter(raw);
+        await collection.updateOne({ _id: idStr }, { $set: payload }, { upsert: true });
+      } catch (err) {
+        // In-memory copy already saved
+      }
+    }
+
+    return this.hydrate(raw);
+  }
+
+  public async _executeQuery(params: {
+    filter: any;
+    projection?: any;
+    sort?: any;
+    skip?: number;
+    limit?: number;
+    single: boolean;
+    count: boolean;
+    isLean: boolean;
+    populate: Array<{ path: string; select?: string }>;
+  }): Promise<any> {
+    const normFilter = normalizeFilter(params.filter);
+    const collection = await this._getLioranCollection();
+
+    let docs: any[] = [];
+    let fromRemote = false;
+
+    if (collection) {
+      try {
+        if (params.count) {
+          const count = await collection.countDocuments(normFilter);
+          return count;
+        }
+
+        if (params.single) {
+          const found = await collection.findOne(normFilter, {
+            sort: params.sort,
+            projection: params.projection,
+          });
+          if (found) {
+            docs = [found];
+            fromRemote = true;
+          }
+        } else {
+          const cursor = collection.find(normFilter, {
+            sort: params.sort,
+            skip: params.skip,
+            limit: params.limit,
+            projection: params.projection,
+          });
+          docs = (await cursor.toArray()) as any[];
+          fromRemote = true;
+        }
+      } catch (err) {
+        // Fallback to in-memory store
+      }
+    }
+
+    if (!fromRemote) {
+      // Query in-memory store
+      const store = getMemoryCollection(this.collectionName);
+      docs = Array.from(store.values()).filter((d) => matchesFilter(d, normFilter));
+
+      if (params.sort) {
+        docs.sort((a, b) => {
+          for (const [sortField, dir] of Object.entries(params.sort)) {
+            const factor = dir === -1 || dir === 'desc' ? -1 : 1;
+            const comp = compareValues(getNestedValue(a, sortField), getNestedValue(b, sortField));
+            if (comp !== 0) return comp * factor;
+          }
+          return 0;
+        });
+      }
+
+      if (params.skip) {
+        docs = docs.slice(params.skip);
+      }
+
+      if (params.limit) {
+        docs = docs.slice(0, params.limit);
+      }
+
+      if (params.count) {
+        return docs.length;
+      }
+
+      if (params.single) {
+        docs = docs.slice(0, 1);
+      }
+    }
+
+    // Populate references if requested
+    if (params.populate && params.populate.length > 0) {
+      for (const pop of params.populate) {
+        const refField = pop.path;
+        const schemaDef = this.schema.definition[refField];
+        const refModelName = schemaDef?.ref || (schemaDef && typeof schemaDef === 'object' && schemaDef.type && schemaDef.type.ref);
+
+        if (refModelName && modelsRegistry[refModelName]) {
+          const targetModel = modelsRegistry[refModelName];
+          for (const doc of docs) {
+            const refVal = doc[refField];
+            if (refVal) {
+              const targetId = refVal instanceof ObjectId ? refVal.toString() : String(refVal);
+              const refDoc = await targetModel.findById(targetId).lean().exec();
+              if (refDoc) {
+                if (pop.select) {
+                  const allowedFields = pop.select.split(' ').filter(Boolean);
+                  const projected: Record<string, any> = { _id: refDoc._id };
+                  for (const f of allowedFields) {
+                    projected[f] = refDoc[f];
+                  }
+                  doc[refField] = projected;
+                } else {
+                  doc[refField] = refDoc;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (params.single) {
+      if (docs.length === 0) return null;
+      const normalized = normalizeDocument(docs[0]);
+      return params.isLean ? normalized : this.hydrate(normalized);
+    }
+
+    const normalizedList = docs.map(normalizeDocument);
+    return params.isLean ? normalizedList : normalizedList.map((d) => this.hydrate(d));
+  }
+
+  private async _getLioranCollection(): Promise<LioranCollection | null> {
+    try {
+      const { getDb } = await import('./connection');
+      const db = await getDb();
+      if (db) {
+        return db.collection(this.collectionName);
+      }
+    } catch {
+      // In-memory fallback
+    }
+    return null;
+  }
+}
+
+// Global registry of models
+export const modelsRegistry: Record<string, Model<any>> = {};
+
+export function model<T = any>(name: string, schema?: Schema<T>, collection?: string): Model<T> {
+  if (!schema) {
+    if (modelsRegistry[name]) {
+      return modelsRegistry[name];
+    }
+    throw new Error(`Model '${name}' has not been registered.`);
+  }
+
+  const inst = new Model<T>(name, schema, collection);
+  modelsRegistry[name] = inst;
+  return inst;
+}
+
+export const models = modelsRegistry;
+
+export default {
+  Schema,
+  model,
+  models,
+  Types,
+  ObjectId,
+};

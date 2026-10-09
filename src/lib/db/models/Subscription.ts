@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type SubscriptionStatus =
   | 'PENDING'
@@ -10,9 +10,10 @@ export type SubscriptionStatus =
   | 'CANCELLED';
 
 export interface ISubscription extends Document {
-  userId: mongoose.Types.ObjectId;
-  databaseId?: mongoose.Types.ObjectId;
-  instanceId?: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  databaseId?: Types.ObjectId;
+  instanceId?: Types.ObjectId;
   planId: string;
   planName: string;
   amount: number; // monthly amount in Rupees
@@ -96,7 +97,7 @@ SubscriptionSchema.index({ status: 1, nextBillingAt: 1 });
 SubscriptionSchema.index({ status: 1, gracePeriodEndsAt: 1 });
 
 const Subscription: Model<ISubscription> =
-  mongoose.models.Subscription ||
-  mongoose.model<ISubscription>('Subscription', SubscriptionSchema);
+  models.Subscription ||
+  model<ISubscription>('Subscription', SubscriptionSchema);
 
 export default Subscription;

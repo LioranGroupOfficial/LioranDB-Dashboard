@@ -5,10 +5,10 @@ import {
 } from '@/lib/liorandb-admin/errors';
 import { encrypt, decrypt } from '@/lib/crypto';
 import type { DatabaseStatus, IDatabaseUser } from '@/lib/db';
-import mongoose from 'mongoose';
+import { Types } from '@/lib/db/object-id';
 
 interface MockDoc {
-  _id: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
   name: string;
   host: string;
   port: number;
@@ -28,7 +28,7 @@ interface MockDoc {
 
 // Define the mock object
 const mockManagedDatabaseDoc: MockDoc = {
-  _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d1'),
+  _id: new Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d1'),
   name: 'prod-analytics-db',
   host: 'db-mumbai-01.liorandb.net',
   port: 27017,

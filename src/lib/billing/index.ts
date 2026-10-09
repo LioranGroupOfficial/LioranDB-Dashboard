@@ -9,11 +9,10 @@
  * - All dates calculated relative to Asia/Kolkata (IST).
  */
 
-import { connectToDatabase, ManagedDatabase, Invoice, User } from '../db';
+import { connectToDatabase, ManagedDatabase, Invoice, User, Types } from '../db';
 import type { IManagedDatabase } from '../db/models/ManagedDatabase';
 import type { IInvoice, IInvoiceLineItem } from '../db/models/Invoice';
 import { BACKUP_MONTHLY_PAISE, formatPaiseToRupees, getPlan } from '../plans';
-import mongoose from 'mongoose';
 
 const IST_TIMEZONE = 'Asia/Kolkata';
 
@@ -95,7 +94,7 @@ export interface InstanceUsageCalculation {
  */
 export function calculateInstanceUsage(
   instance: {
-    _id: string | mongoose.Types.ObjectId;
+    _id: string | Types.ObjectId;
     name: string;
     planId: string;
     planName?: string;
@@ -241,7 +240,7 @@ export interface CustomerMonthEstimate {
  * Only calculates UNBILLED usage (starting after the latest non-void invoice).
  */
 export async function getCustomerMonthEstimate(
-  customerId: string | mongoose.Types.ObjectId,
+  customerId: string | Types.ObjectId,
   referenceDate: Date = new Date()
 ): Promise<CustomerMonthEstimate> {
   await connectToDatabase();
@@ -430,7 +429,7 @@ export async function getAllCustomersLiveUsage(referenceDate: Date = new Date())
  * Automatically starts from the end of the previous non-void invoice to prevent double-billing.
  */
 export async function generateMonthlyInvoice(
-  customerId: string | mongoose.Types.ObjectId,
+  customerId: string | Types.ObjectId,
   period: BillingPeriod
 ): Promise<IInvoice | null> {
   await connectToDatabase();
@@ -493,7 +492,7 @@ export async function generateMonthlyInvoice(
       const itemTotal = Math.max(0, itemSubtotal - discount);
 
       lineItems.push({
-        instanceId: inst._id as unknown as mongoose.Types.ObjectId,
+        instanceId: inst._id as unknown as Types.ObjectId,
         instanceName: inst.name,
         planId: inst.planId,
         planName: calc.planName,

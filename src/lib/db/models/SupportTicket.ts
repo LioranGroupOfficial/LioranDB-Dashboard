@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type TicketStatus =
   | 'OPEN'
@@ -16,14 +16,15 @@ export type TicketCategory =
   | 'OTHER';
 
 export interface ISupportTicket extends Document {
-  userId: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
   ticketNumber: string;
   category: TicketCategory;
   subject: string;
   description: string;
   priority: TicketPriority;
   status: TicketStatus;
-  assignedTo?: mongoose.Types.ObjectId;
+  assignedTo?: Types.ObjectId;
   url?: string;
   environment?: string;
   resolvedAt?: Date;
@@ -67,7 +68,7 @@ SupportTicketSchema.index({ status: 1, createdAt: -1 });
 SupportTicketSchema.index({ assignedTo: 1, status: 1 });
 
 const SupportTicket: Model<ISupportTicket> =
-  mongoose.models.SupportTicket ||
-  mongoose.model<ISupportTicket>('SupportTicket', SupportTicketSchema);
+  models.SupportTicket ||
+  model<ISupportTicket>('SupportTicket', SupportTicketSchema);
 
 export default SupportTicket;

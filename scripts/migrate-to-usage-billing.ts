@@ -10,9 +10,9 @@ import * as path from 'path';
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-import mongoose from 'mongoose';
 import {
   connectToDatabase,
+  disconnectFromDatabase,
   User,
   ManagedDatabase,
   BillingInterval,
@@ -122,7 +122,7 @@ async function migrate() {
   }
 
   console.log('✅ Migration to usage-based billing completed successfully.');
-  await mongoose.disconnect();
+  await disconnectFromDatabase();
   process.exit(0);
 }
 

@@ -1,10 +1,11 @@
-import mongoose from 'mongoose';
 import crypto from 'crypto';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+import { connectToDatabase, disconnectFromDatabase, PolicyDocument } from '../src/lib/db';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -101,25 +102,8 @@ New deployments provisioned mid-month are calculated based on the standard month
 ];
 
 async function seedDev() {
-  console.log(`Connecting to MongoDB at ${MONGODB_URI}...`);
-  await mongoose.connect(MONGODB_URI!);
-
-  const PolicyDocumentSchema = new mongoose.Schema(
-    {
-      slug: { type: String, required: true, index: true },
-      title: { type: String, required: true },
-      version: { type: String, required: true },
-      effectiveAt: { type: Date, required: true },
-      contentHash: { type: String, required: true },
-      content: { type: String, required: true },
-      active: { type: Boolean, default: true, index: true },
-    },
-    { timestamps: true }
-  );
-
-  const PolicyDocument =
-    mongoose.models.PolicyDocument ||
-    mongoose.model('PolicyDocument', PolicyDocumentSchema);
+  console.log(`Connecting to LioranDB via ${MONGODB_URI}...`);
+  await connectToDatabase();
 
   console.log(`Seeding legal policy documents...`);
   for (const pol of POLICIES) {
@@ -135,7 +119,7 @@ async function seedDev() {
     console.log(`✓ Seeded policy: ${pol.slug} (v${pol.version})`);
   }
 
-  await mongoose.disconnect();
+  await disconnectFromDatabase();
   console.log('✅ Dev seed complete.');
 }
 
@@ -143,4 +127,3 @@ seedDev().catch((err) => {
   console.error('Seed dev error:', err);
   process.exit(1);
 });
-

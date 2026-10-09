@@ -1,7 +1,8 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export interface IEmailVerification extends Document {
-  userId: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
   otpHash: string;
   expiresAt: Date;
   attemptCount: number;
@@ -20,16 +21,15 @@ const EmailVerificationSchema = new Schema<IEmailVerification>(
     otpHash: { type: String, required: true },
     expiresAt: { type: Date, required: true },
     attemptCount: { type: Number, default: 0 },
-    lastSentAt: { type: Date, default: Date.now },
+    lastSentAt: { type: Date, default: () => new Date() },
   },
   { timestamps: false }
 );
 
-// TTL index: MongoDB auto-removes expired records
 EmailVerificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const EmailVerification: Model<IEmailVerification> =
-  mongoose.models.EmailVerification ||
-  mongoose.model<IEmailVerification>('EmailVerification', EmailVerificationSchema);
+  models.EmailVerification ||
+  model<IEmailVerification>('EmailVerification', EmailVerificationSchema);
 
 export default EmailVerification;

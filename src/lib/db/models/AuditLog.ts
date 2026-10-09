@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 import type { UserRole } from './User';
 
 export type AuditAction =
@@ -65,7 +65,8 @@ export type AuditAction =
   | 'ADMIN_ACTION';
 
 export interface IAuditLog extends Document {
-  actorId?: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  actorId?: Types.ObjectId;
   actorRole?: UserRole | 'system';
   action: AuditAction;
   entityType?: string;
@@ -94,10 +95,6 @@ AuditLogSchema.index({ actorId: 1, createdAt: -1 });
 AuditLogSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 AuditLogSchema.index({ createdAt: -1 });
 
-if (mongoose.models.AuditLog) {
-  delete (mongoose.models as Record<string, unknown>).AuditLog;
-}
-
-const AuditLog: Model<IAuditLog> = mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
+const AuditLog: Model<IAuditLog> = models.AuditLog || model<IAuditLog>('AuditLog', AuditLogSchema);
 
 export default AuditLog;

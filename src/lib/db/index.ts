@@ -1,5 +1,7 @@
-// Central export for all DB models and connection
-export { default as connectToDatabase } from './connection';
+// Central export for all DB models, types, and connection utilities
+export { default as connectToDatabase, getDb, getLioranDBClient, disconnectFromDatabase, resolveLioranDBUri } from './connection';
+export { ObjectId, Types, Schema, model, models } from './adapter';
+
 export { default as User } from './models/User';
 export { default as EmailVerification } from './models/EmailVerification';
 export { default as PasswordReset } from './models/PasswordReset';
@@ -19,7 +21,7 @@ export { default as Wallet } from './models/Wallet';
 export { default as WalletTransaction } from './models/WalletTransaction';
 export { default as HostingNode } from './models/HostingNode';
 
-export type { IUser, UserRole, OnboardingStage, IUserProfile } from './models/User';
+export type { IUser, UserRole, OnboardingStage, IUserProfile, IAccountVerification } from './models/User';
 export type { IEmailVerification } from './models/EmailVerification';
 export type { IPasswordReset } from './models/PasswordReset';
 export type { IPolicyDocument } from './models/PolicyDocument';

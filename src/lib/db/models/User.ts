@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type UserRole = 'customer' | 'admin' | 'support';
 
@@ -26,7 +26,7 @@ export interface IUserProfile {
 }
 
 export interface IUser extends Document {
-  _id: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
   email: string;
   passwordHash: string;
   role: UserRole;
@@ -118,10 +118,6 @@ const UserSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
-if (mongoose.models.User) {
-  delete (mongoose.models as Record<string, unknown>).User;
-}
-
-const User: Model<IUser> = mongoose.model<IUser>('User', UserSchema);
+const User: Model<IUser> = models.User || model<IUser>('User', UserSchema);
 
 export default User;

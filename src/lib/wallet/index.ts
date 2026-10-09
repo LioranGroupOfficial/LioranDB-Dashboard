@@ -1,5 +1,5 @@
-import mongoose, { ClientSession } from 'mongoose';
-import { connectToDatabase, Wallet, WalletTransaction } from '../db';
+import { connectToDatabase, Wallet, WalletTransaction, Types } from '../db';
+type ClientSession = any;
 import type { IWallet } from '../db/models/Wallet';
 import type {
   IWalletTransaction,
@@ -32,11 +32,11 @@ export class InsufficientBalanceError extends Error {
  * Ensures a wallet document exists for the user.
  */
 export async function getOrCreateWallet(
-  userId: string | mongoose.Types.ObjectId,
+  userId: string | Types.ObjectId,
   session?: ClientSession
 ): Promise<IWallet> {
   await connectToDatabase();
-  const uid = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+  const uid = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
 
   let wallet = await Wallet.findOne({ userId: uid }).session(session || null);
   if (!wallet) {
@@ -53,11 +53,11 @@ export async function getOrCreateWallet(
     );
     wallet = created[0];
   }
-  return wallet;
+  return wallet!;
 }
 
 export interface CreditWalletParams {
-  userId: string | mongoose.Types.ObjectId;
+  userId: string | Types.ObjectId;
   amountPaise: number;
   category: WalletTransactionCategory;
   description: string;
@@ -94,7 +94,7 @@ export async function creditWallet(params: CreditWalletParams): Promise<{
     throw new Error('Credit amount must be a positive integer in paise.');
   }
 
-  const uid = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+  const uid = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
 
   // Idempotency check: If an idempotencyKey is supplied, verify if it was already processed
   if (idempotencyKey) {
@@ -160,12 +160,12 @@ export async function creditWallet(params: CreditWalletParams): Promise<{
 }
 
 export interface DebitWalletParams {
-  userId: string | mongoose.Types.ObjectId;
+  userId: string | Types.ObjectId;
   amountPaise: number;
   category: WalletTransactionCategory;
   description: string;
-  instanceId?: string | mongoose.Types.ObjectId;
-  subscriptionId?: string | mongoose.Types.ObjectId;
+  instanceId?: string | Types.ObjectId;
+  subscriptionId?: string | Types.ObjectId;
   idempotencyKey?: string;
   metadata?: Record<string, unknown>;
   session?: ClientSession;
@@ -199,7 +199,7 @@ export async function debitWallet(params: DebitWalletParams): Promise<{
     throw new Error('Debit amount must be a positive integer in paise.');
   }
 
-  const uid = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+  const uid = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
 
   // Idempotency check
   if (idempotencyKey) {
@@ -250,11 +250,11 @@ export async function debitWallet(params: DebitWalletParams): Promise<{
 
   const instObjectId =
     typeof instanceId === 'string'
-      ? new mongoose.Types.ObjectId(instanceId)
+      ? new Types.ObjectId(instanceId)
       : instanceId;
   const subObjectId =
     typeof subscriptionId === 'string'
-      ? new mongoose.Types.ObjectId(subscriptionId)
+      ? new Types.ObjectId(subscriptionId)
       : subscriptionId;
 
   const [transaction] = await WalletTransaction.create(
@@ -284,10 +284,10 @@ export async function debitWallet(params: DebitWalletParams): Promise<{
 }
 
 export interface RefundWalletParams {
-  userId: string | mongoose.Types.ObjectId;
+  userId: string | Types.ObjectId;
   amountPaise: number;
   description: string;
-  instanceId?: string | mongoose.Types.ObjectId;
+  instanceId?: string | Types.ObjectId;
   idempotencyKey?: string;
   metadata?: Record<string, unknown>;
   session?: ClientSession;
@@ -310,7 +310,7 @@ export async function refundWallet(params: RefundWalletParams): Promise<{
     throw new Error('Refund amount must be a positive integer in paise.');
   }
 
-  const uid = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+  const uid = typeof userId === 'string' ? new Types.ObjectId(userId) : userId;
 
   if (idempotencyKey) {
     const existingTx = await WalletTransaction.findOne({ idempotencyKey }).session(
@@ -348,7 +348,7 @@ export async function refundWallet(params: RefundWalletParams): Promise<{
 
   const instObjectId =
     typeof instanceId === 'string'
-      ? new mongoose.Types.ObjectId(instanceId)
+      ? new Types.ObjectId(instanceId)
       : instanceId;
 
   const [transaction] = await WalletTransaction.create(
@@ -378,7 +378,7 @@ export async function refundWallet(params: RefundWalletParams): Promise<{
 
 export interface AdminAdjustParams {
   adminUserId: string;
-  targetUserId: string | mongoose.Types.ObjectId;
+  targetUserId: string | Types.ObjectId;
   amountPaise: number;
   isCredit: boolean;
   reason: string;
@@ -405,7 +405,7 @@ export async function adminAdjustWallet(params: AdminAdjustParams): Promise<{
 
   const uid =
     typeof targetUserId === 'string'
-      ? new mongoose.Types.ObjectId(targetUserId)
+      ? new Types.ObjectId(targetUserId)
       : targetUserId;
 
   const currentWallet = await getOrCreateWallet(uid);

@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type NotificationType =
   | 'EMAIL_VERIFIED'
@@ -20,7 +20,8 @@ export type NotificationType =
   | 'GENERAL';
 
 export interface INotification extends Document {
-  userId: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
   type: NotificationType;
   title: string;
   body: string;
@@ -44,7 +45,7 @@ const NotificationSchema = new Schema<INotification>(
 NotificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
 
 const Notification: Model<INotification> =
-  mongoose.models.Notification ||
-  mongoose.model<INotification>('Notification', NotificationSchema);
+  models.Notification ||
+  model<INotification>('Notification', NotificationSchema);
 
 export default Notification;

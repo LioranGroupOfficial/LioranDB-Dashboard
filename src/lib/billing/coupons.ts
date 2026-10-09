@@ -1,12 +1,11 @@
-import { connectToDatabase, Coupon } from '../db';
+import { connectToDatabase, Coupon, Types } from '../db';
 import type { ICoupon, CouponScope } from '../db/models/Coupon';
-import mongoose from 'mongoose';
 
 export interface CouponValidationInput {
   code: string;
-  customerId?: string | mongoose.Types.ObjectId;
+  customerId?: string | Types.ObjectId;
   planId?: string;
-  instanceId?: string | mongoose.Types.ObjectId;
+  instanceId?: string | Types.ObjectId;
 }
 
 export interface CouponValidationResult {
@@ -23,22 +22,22 @@ export interface CouponValidationResult {
  */
 export function validateCouponForInstance(
   coupon: {
-    _id?: string | mongoose.Types.ObjectId;
+    _id?: string | Types.ObjectId;
     code: string;
     discountPercentage: number;
     enabled: boolean;
     scope: CouponScope | string;
     planIds?: string[];
-    customerId?: string | mongoose.Types.ObjectId;
-    instanceId?: string | mongoose.Types.ObjectId;
+    customerId?: string | Types.ObjectId;
+    instanceId?: string | Types.ObjectId;
     expiresAt?: Date | string | null;
     maxRedemptions?: number | null;
     redemptionCount: number;
   },
   input: {
     planId?: string;
-    customerId?: string | mongoose.Types.ObjectId;
-    instanceId?: string | mongoose.Types.ObjectId;
+    customerId?: string | Types.ObjectId;
+    instanceId?: string | Types.ObjectId;
   }
 ): { valid: boolean; discountPercentage: number; reason?: string } {
   if (!coupon.enabled) {

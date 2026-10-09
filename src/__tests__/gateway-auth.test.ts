@@ -8,7 +8,7 @@ import {
 import { normalizeControlPlaneUrl, resolveControlPlaneEndpoint, resolveControlPlaneToken } from '@/lib/liorandb-admin/url';
 import { encrypt, decrypt } from '@/lib/crypto';
 import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
-import mongoose from 'mongoose';
+import { Types } from '@/lib/db';
 
 describe('Dual-Layer Gateway & Control-Plane Authentication System', () => {
   const originalEnv = process.env;
@@ -130,7 +130,7 @@ describe('Dual-Layer Gateway & Control-Plane Authentication System', () => {
     const cx02Secret = 'cx02_secret_control_token_2222';
 
     const nodeCX01 = {
-      _id: new mongoose.Types.ObjectId(),
+      _id: new Types.ObjectId(),
       name: 'CX01 Hosting Node',
       slug: 'cx01',
       dbUrl: 'cx01.db.liorandb.com',
@@ -139,7 +139,7 @@ describe('Dual-Layer Gateway & Control-Plane Authentication System', () => {
     };
 
     const nodeCX02 = {
-      _id: new mongoose.Types.ObjectId(),
+      _id: new Types.ObjectId(),
       name: 'CX02 Hosting Node',
       slug: 'cx02',
       dbUrl: 'cx02.db.liorandb.com',
@@ -300,7 +300,7 @@ describe('Dual-Layer Gateway & Control-Plane Authentication System', () => {
 
     const nodeSecret = 'cx07_node_secret_token_8888';
     const populatedNode = {
-      _id: new mongoose.Types.ObjectId(),
+      _id: new Types.ObjectId(),
       name: 'CX07 Node',
       slug: 'cx07',
       dbUrl: 'cx07.db.liorandb.com',
@@ -309,7 +309,7 @@ describe('Dual-Layer Gateway & Control-Plane Authentication System', () => {
     };
 
     const instanceDoc = {
-      _id: new mongoose.Types.ObjectId(),
+      _id: new Types.ObjectId(),
       name: 'my-production-db',
       host: 'cx07.db.liorandb.com',
       port: 27018,
@@ -329,7 +329,7 @@ describe('Dual-Layer Gateway & Control-Plane Authentication System', () => {
 
   test('9. Auto-resolving endpoint from CX host pattern prevents public endpoint leakage', () => {
     const instanceWithoutEndpoint = {
-      _id: new mongoose.Types.ObjectId(),
+      _id: new Types.ObjectId(),
       name: 'cx10-db',
       host: 'cx10.db.liorandb.com',
       port: 27018,

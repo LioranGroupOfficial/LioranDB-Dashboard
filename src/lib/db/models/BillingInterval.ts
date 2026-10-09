@@ -1,9 +1,9 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export interface IBillingInterval extends Document {
-  _id: mongoose.Types.ObjectId;
-  instanceId: mongoose.Types.ObjectId;
-  customerId: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  instanceId: Types.ObjectId;
+  customerId: Types.ObjectId;
   startedAt: Date;
   endedAt?: Date;
   hourlyRatePaise: number;
@@ -48,7 +48,7 @@ BillingIntervalSchema.index({ instanceId: 1, startedAt: 1 });
 BillingIntervalSchema.index({ customerId: 1, startedAt: 1 });
 
 const BillingInterval: Model<IBillingInterval> =
-  mongoose.models.BillingInterval ||
-  mongoose.model<IBillingInterval>('BillingInterval', BillingIntervalSchema);
+  models.BillingInterval ||
+  model<IBillingInterval>('BillingInterval', BillingIntervalSchema);
 
 export default BillingInterval;

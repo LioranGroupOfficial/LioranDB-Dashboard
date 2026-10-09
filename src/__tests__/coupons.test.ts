@@ -1,9 +1,9 @@
 import { validateCouponForInstance, validateCoupon } from '@/lib/billing/coupons';
 import type { ICoupon } from '@/lib/db';
-import mongoose from 'mongoose';
+import { Types } from '@/lib/db/object-id';
 
 const mockCouponDoc = {
-  _id: new mongoose.Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d1'),
+  _id: new Types.ObjectId('65f1a2b3c4d5e6f7a8b9c0d1'),
   code: 'SAVE20',
   discountPercentage: 20,
   enabled: true,

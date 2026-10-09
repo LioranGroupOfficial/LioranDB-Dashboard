@@ -1,8 +1,8 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export interface IWallet extends Document {
-  _id: mongoose.Types.ObjectId;
-  userId: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
   balancePaise: number; // Integer paise, e.g. 10000 = ₹100
   lifetimeCreditsAddedPaise: number;
   lifetimeCreditsUsedPaise: number;
@@ -43,8 +43,6 @@ const WalletSchema = new Schema<IWallet>(
 
 WalletSchema.index({ userId: 1 });
 
-const Wallet: Model<IWallet> =
-  mongoose.models.Wallet || mongoose.model<IWallet>('Wallet', WalletSchema);
+const Wallet: Model<IWallet> = models.Wallet || model<IWallet>('Wallet', WalletSchema);
 
 export default Wallet;
-

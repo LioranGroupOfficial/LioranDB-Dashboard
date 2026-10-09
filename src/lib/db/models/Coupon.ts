@@ -1,21 +1,21 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type CouponScope = 'all' | 'plan' | 'customer' | 'instance' | 'ALL' | 'PLAN' | 'CUSTOMER' | 'INSTANCE';
 
 export interface ICoupon extends Document {
-  _id: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
   code: string;
   discountPercentage: number;
   description?: string;
   enabled: boolean;
   scope: CouponScope;
   planIds?: string[];
-  customerId?: mongoose.Types.ObjectId;
-  instanceId?: mongoose.Types.ObjectId;
+  customerId?: Types.ObjectId;
+  instanceId?: Types.ObjectId;
   expiresAt?: Date;
   maxRedemptions?: number;
   redemptionCount: number;
-  createdBy?: mongoose.Types.ObjectId;
+  createdBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,7 +60,6 @@ const CouponSchema = new Schema<ICoupon>(
 
 CouponSchema.index({ enabled: 1, expiresAt: 1 });
 
-const Coupon: Model<ICoupon> =
-  mongoose.models.Coupon || mongoose.model<ICoupon>('Coupon', CouponSchema);
+const Coupon: Model<ICoupon> = models.Coupon || model<ICoupon>('Coupon', CouponSchema);
 
 export default Coupon;

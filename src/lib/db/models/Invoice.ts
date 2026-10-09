@@ -1,9 +1,9 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type InvoiceStatus = 'DRAFT' | 'OPEN' | 'PAID' | 'OVERDUE' | 'VOID';
 
 export interface IInvoiceLineItem {
-  instanceId?: mongoose.Types.ObjectId;
+  instanceId?: Types.ObjectId;
   instanceName: string;
   planId: string;
   planName: string;
@@ -17,9 +17,9 @@ export interface IInvoiceLineItem {
 }
 
 export interface IInvoice extends Document {
-  _id: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
   invoiceNumber: string;
-  customerId: mongoose.Types.ObjectId;
+  customerId: Types.ObjectId;
   customerName: string;
   customerEmail: string;
   billingPeriod: {
@@ -112,10 +112,6 @@ const InvoiceSchema = new Schema<IInvoice>(
 InvoiceSchema.index({ customerId: 1, status: 1 });
 InvoiceSchema.index({ status: 1, dueDate: 1 });
 
-if (mongoose.models.Invoice) {
-  delete (mongoose.models as Record<string, unknown>).Invoice;
-}
-
-const Invoice: Model<IInvoice> = mongoose.model<IInvoice>('Invoice', InvoiceSchema);
+const Invoice: Model<IInvoice> = models.Invoice || model<IInvoice>('Invoice', InvoiceSchema);
 
 export default Invoice;

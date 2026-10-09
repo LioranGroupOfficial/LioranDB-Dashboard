@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Schema } from 'mongoose';
+import { Document, Model, Schema, model, models, Types } from '../adapter';
 
 export type DatabaseStatus =
   | 'PENDING'
@@ -25,9 +25,9 @@ export interface IDatabaseUser {
 }
 
 export interface IManagedDatabase extends Document {
-  _id: mongoose.Types.ObjectId;
-  customerId: mongoose.Types.ObjectId;
-  userId?: mongoose.Types.ObjectId;
+  _id: Types.ObjectId;
+  customerId: Types.ObjectId;
+  userId?: Types.ObjectId;
   name: string;
   slug?: string;
   type?: DatabaseType;
@@ -69,7 +69,7 @@ export interface IManagedDatabase extends Document {
   terminationReason?: string;
   adminNotes?: string;
   providerDeploymentId?: string;
-  hostingNodeId?: mongoose.Types.ObjectId;
+  hostingNodeId?: Types.ObjectId;
   grpcUrl?: string;
   grpcPort?: number;
   createdAt: Date;
@@ -159,7 +159,7 @@ ManagedDatabaseSchema.index({ customerId: 1, status: 1 });
 ManagedDatabaseSchema.index({ userId: 1, status: 1 });
 
 const ManagedDatabase: Model<IManagedDatabase> =
-  mongoose.models.ManagedDatabase ||
-  mongoose.model<IManagedDatabase>('ManagedDatabase', ManagedDatabaseSchema);
+  models.ManagedDatabase ||
+  model<IManagedDatabase>('ManagedDatabase', ManagedDatabaseSchema);
 
 export default ManagedDatabase;
