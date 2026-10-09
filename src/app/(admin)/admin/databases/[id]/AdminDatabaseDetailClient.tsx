@@ -1284,8 +1284,8 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               )}
             </div>
 
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-[11px] text-amber-600 dark:text-amber-400 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <div className="bg-[var(--surface-soft)] border border-[var(--border-strong)] rounded-[7px] p-3 text-[11px] text-[var(--text-strong)] flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-[var(--text-strong)] shrink-0 mt-0.5" />
               <span>
                 <strong>Warning:</strong> This password is shown only once. Save it securely in your password manager.
                 If it is lost, reset the password.
@@ -1380,7 +1380,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
             <p className="text-xs text-[var(--text-secondary)]">
               Reset password for <strong className="font-mono text-[var(--text-strong)]">&quot;{confirmResetUser}&quot;</strong>?
             </p>
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-600 dark:text-amber-400">
+            <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-3 text-xs text-[var(--text-secondary)]">
               The current password will immediately stop working. A new strong password will be generated and shown
               once.
             </div>
@@ -1416,7 +1416,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
             <p className="text-xs text-[var(--text-secondary)]">
               Rotate the primary root credential for <strong className="font-mono text-[var(--text-strong)]">&quot;{data.rootUsername || 'admin'}&quot;</strong>?
             </p>
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-600 dark:text-amber-400">
+            <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-3 text-xs text-[var(--text-secondary)]">
               The previous root password will be immediately invalidated. The new password will be generated and shown
               once.
             </div>
@@ -1449,7 +1449,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <form
             onSubmit={handleResetInstance}
-            className="bg-[var(--surface)] border border-rose-500/30 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl"
+            className="bg-[var(--surface)] border border-[var(--border-strong)] rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl"
           >
             <div>
               <span className="badge badge-default text-[10px] font-mono font-bold uppercase tracking-wider">
@@ -1510,7 +1510,7 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <form
             onSubmit={handleTerminateInstance}
-            className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl"
+            className="bg-[var(--surface)] border border-[var(--border-strong)] rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl"
           >
             <div>
               <span className="badge badge-default text-[10px] font-mono font-bold uppercase tracking-wider">
@@ -1522,8 +1522,8 @@ export default function AdminDatabaseDetailClient({ initialData }: Props) {
               </p>
             </div>
 
-            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-3.5 text-xs text-rose-600 dark:text-rose-400 space-y-1">
-              <p className="font-semibold">Type instance name to confirm termination</p>
+            <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl p-3.5 text-xs text-[var(--text-secondary)] space-y-1">
+              <p className="font-semibold text-[var(--text-strong)]">Type instance name to confirm termination</p>
               <p className="text-[11px]">
                 Type <strong className="font-mono text-[var(--text-strong)]">{data.name}</strong> to confirm:
               </p>
