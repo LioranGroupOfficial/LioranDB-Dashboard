@@ -71,7 +71,7 @@ export async function POST(
     }
 
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(id);
+    const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
     }
@@ -103,7 +103,7 @@ export async function POST(
       );
     }
 
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
     const effectiveRole = requestedRole || 'read_write';
     const result = await client.createUser({
       username: trimmedUsername,

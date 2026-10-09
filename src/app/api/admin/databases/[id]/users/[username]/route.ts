@@ -20,13 +20,13 @@ export async function DELETE(
     }
 
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(id);
+    const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Database instance not found' }, { status: 404 });
     }
 
     const decodedUsername = decodeURIComponent(username);
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
     await client.deleteUser(decodedUsername);
 
     await createAuditLog({
@@ -79,13 +79,13 @@ export async function PATCH(
     }
 
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(id);
+    const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Database instance not found' }, { status: 404 });
     }
 
     const decodedUsername = decodeURIComponent(username);
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
 
     if (status === 'DISABLED') {
       await client.disableUser(decodedUsername);

@@ -277,4 +277,98 @@ describe('Dual-Layer Gateway & Control-Plane Authentication System', () => {
     expect(created.username).toBe('app_user');
     expect(created.generatedPassword).toBe('generated_pwd_777');
   });
+
+  test('8. forInstance with populated hostingNodeId resolves protected management endpoint and node token', async () => {
+    let capturedUrl = '';
+    let capturedHeaders: Record<string, string> = {};
+
+    global.fetch = createMockFetch((url, headers) => {
+      capturedUrl = url;
+      capturedHeaders = headers;
+      return {
+        status: 200,
+        data: {
+          success: true,
+          data: {
+            user_id: 'usr_custom_1',
+            username: 'dev_user',
+            password: 'new_fresh_pwd_123',
+          },
+        },
+      };
+    });
+
+    const nodeSecret = 'cx07_node_secret_token_8888';
+    const populatedNode = {
+      _id: new mongoose.Types.ObjectId(),
+      name: 'CX07 Node',
+      slug: 'cx07',
+      dbUrl: 'cx07.db.liorandb.com',
+      controlPlaneEndpoint: 'https://cx07.manage.db.liorandb.com',
+      encryptedControlPlaneToken: encrypt(nodeSecret),
+    };
+
+    const instanceDoc = {
+      _id: new mongoose.Types.ObjectId(),
+      name: 'my-production-db',
+      host: 'cx07.db.liorandb.com',
+      port: 27018,
+      databaseName: 'production',
+      hostingNodeId: populatedNode,
+      encryptedControlPlaneCredential: encrypt('customer_db_password_not_node_token'),
+    };
+
+    const client = LioranDBAdminClient.forInstance(instanceDoc as any);
+    const resetResult = await client.resetUserPassword('usr_custom_1', 'custom_pass_999');
+
+    expect(capturedUrl).toContain('https://cx07.manage.db.liorandb.com/v1/admin/users/usr_custom_1/reset-password');
+    expect(capturedHeaders['X-Lioran-Gateway-Token']).toBe('shared_caddy_gateway_token_prod_9999');
+    expect(capturedHeaders['Authorization']).toBe(`Bearer ${nodeSecret}`);
+    expect(resetResult.newGeneratedPassword).toBe('new_fresh_pwd_123');
+  });
+
+  test('9. Auto-resolving endpoint from CX host pattern prevents public endpoint leakage', () => {
+    const instanceWithoutEndpoint = {
+      _id: new mongoose.Types.ObjectId(),
+      name: 'cx10-db',
+      host: 'cx10.db.liorandb.com',
+      port: 27018,
+    };
+
+    const endpoint = resolveControlPlaneEndpoint(instanceWithoutEndpoint);
+    expect(endpoint).toBe('https://cx10.manage.db.liorandb.com');
+    expect(endpoint).not.toContain('cx10.db.liorandb.com');
+  });
+
+  test('10. Rotate root credential dispatches to /v1/admin/root/rotate with dual authentication', async () => {
+    let capturedUrl = '';
+    let capturedHeaders: Record<string, string> = {};
+
+    global.fetch = createMockFetch((url, headers) => {
+      capturedUrl = url;
+      capturedHeaders = headers;
+      return {
+        status: 200,
+        data: {
+          success: true,
+          data: {
+            user_id: 'usr_root',
+            username: 'admin',
+            password: 'rotated_root_secure_pwd_555',
+          },
+        },
+      };
+    });
+
+    const client = new LioranDBAdminClient({
+      endpoint: 'https://cx01.manage.db.liorandb.com',
+      controlPlaneToken: 'node_token_123',
+    });
+
+    const rotated = await client.rotateRootCredential();
+    expect(capturedUrl).toBe('https://cx01.manage.db.liorandb.com/v1/admin/root/rotate');
+    expect(capturedHeaders['X-Lioran-Gateway-Token']).toBe('shared_caddy_gateway_token_prod_9999');
+    expect(capturedHeaders['Authorization']).toBe('Bearer node_token_123');
+    expect(rotated.newGeneratedPassword).toBe('rotated_root_secure_pwd_555');
+  });
 });

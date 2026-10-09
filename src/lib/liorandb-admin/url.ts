@@ -207,7 +207,7 @@ export function resolveControlPlaneEndpoint(
       return normalizeControlPlaneUrl(envUrl);
     }
 
-    // If explicit controlPlaneEndpoint is stored on node
+    // If explicit controlPlaneEndpoint is stored on node / instance
     if (rawEndpoint) {
       // Auto-correct stale port 8080 on localhost
       if (isLocalhost(rawEndpoint) && rawEndpoint.includes(':8080')) {
@@ -217,6 +217,13 @@ export function resolveControlPlaneEndpoint(
         return normalizeControlPlaneUrl('http://127.0.0.1:27018');
       }
       return normalizeControlPlaneUrl(rawEndpoint);
+    }
+
+    // If host matches CX node pattern (e.g. cx01.db.liorandb.com or cx01.manage.db.liorandb.com),
+    // always map to protected management endpoint https://cxNN.manage.db.liorandb.com
+    const cxMatch = host.match(/^(cx\d+)\.(?:manage\.)?(?:db\.)?liorandb\.com$/i);
+    if (cxMatch) {
+      return normalizeControlPlaneUrl(`https://${cxMatch[1].toLowerCase()}.manage.db.liorandb.com`);
     }
 
     // Fallback using host + httpPort + protocol
@@ -244,15 +251,33 @@ export function resolveControlPlaneEndpoint(
  *
  * Precedence:
  * 1. Explicit token (if provided)
- * 2. Decrypted per-node / per-instance token
- * 3. Environment LIORANDB_CONTROL_PLANE_TOKEN / LIORANDB_CONTROL_PLANE_SECRET
+ * 2. Decrypted per-node encrypted control plane token
+ * 3. Decrypted per-instance encrypted control plane credential (fallback)
+ * 4. Environment LIORANDB_CONTROL_PLANE_TOKEN / LIORANDB_CONTROL_PLANE_SECRET
  */
 export function resolveControlPlaneToken(
-  nodeOrInstance?: NodeEndpointInput | null,
+  nodeOrInstance?: (NodeEndpointInput & { hostingNodeId?: any }) | null,
   explicitToken?: string
 ): string | undefined {
   if (explicitToken && explicitToken.trim()) {
     return explicitToken.trim();
+  }
+
+  // Check if populated hostingNodeId is attached
+  if (
+    nodeOrInstance &&
+    (nodeOrInstance as any).hostingNodeId &&
+    typeof (nodeOrInstance as any).hostingNodeId === 'object' &&
+    (nodeOrInstance as any).hostingNodeId.encryptedControlPlaneToken
+  ) {
+    try {
+      const decrypted = decrypt((nodeOrInstance as any).hostingNodeId.encryptedControlPlaneToken);
+      if (decrypted && decrypted.trim()) {
+        return decrypted.trim();
+      }
+    } catch (err) {
+      console.warn('[ControlPlane] Failed to decrypt populated node control-plane token:', (err as Error).message);
+    }
   }
 
   // Check per-node encrypted token

@@ -20,12 +20,12 @@ export async function POST(
     }
 
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(id);
+    const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Database instance not found' }, { status: 404 });
     }
 
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
     const result = await client.rotateRootCredential();
 
     await createAuditLog({

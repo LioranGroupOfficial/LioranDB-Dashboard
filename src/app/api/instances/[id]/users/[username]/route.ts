@@ -16,7 +16,7 @@ export async function DELETE(
     const { id, username } = await params;
     await connectToDatabase();
 
-    const instance = await ManagedDatabase.findById(id);
+    const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
     }
@@ -31,7 +31,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot delete the master database administrator user.' }, { status: 400 });
     }
 
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
     await client.deleteUser(username);
 
     // Remove user from databaseUsers array to free up slot
@@ -65,7 +65,7 @@ export async function POST(
     const { id, username } = await params;
     await connectToDatabase();
 
-    const instance = await ManagedDatabase.findById(id);
+    const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
     }
@@ -77,7 +77,7 @@ export async function POST(
     }
 
     const isMasterUser = instance.username && instance.username.toLowerCase() === username.toLowerCase();
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
 
     let newPassword = '';
     if (isMasterUser) {

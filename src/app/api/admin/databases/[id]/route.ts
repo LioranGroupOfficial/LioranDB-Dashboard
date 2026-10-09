@@ -40,6 +40,7 @@ export async function GET(
 
     const instance = await ManagedDatabase.findById(id)
       .populate('customerId', 'email profile')
+      .populate('hostingNodeId')
       .lean();
 
     if (!instance) {
@@ -47,7 +48,7 @@ export async function GET(
     }
 
     // Get live/cached server status via control plane client
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance as any);
     const serverStatus = await client.getServerStatus();
 
     // Calculate current billing estimate

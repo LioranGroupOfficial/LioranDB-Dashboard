@@ -15,7 +15,7 @@ export async function POST(
     const { id } = await params;
 
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(id);
+    const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
     }
@@ -24,7 +24,7 @@ export async function POST(
       return NextResponse.json({ error: 'Cannot reset a terminated instance' }, { status: 400 });
     }
 
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
     const rotateRes = await client.rotateRootCredential();
     const newPassword = rotateRes.newGeneratedPassword;
 

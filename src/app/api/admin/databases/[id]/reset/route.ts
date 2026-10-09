@@ -29,14 +29,14 @@ export async function POST(
     const idempotencyKey = req.headers.get('x-idempotency-key') || body.idempotencyKey;
 
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(id);
+    const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Database instance not found' }, { status: 404 });
     }
 
     if (!confirmation || confirmation !== instance.name) {
       return NextResponse.json(
-        { error: `Confirmation text must exactly match the instance name '${instance.name}'` },
+        { error: `Confirmation text must match instance name '${instance.name}'` },
         { status: 400 }
       );
     }
@@ -54,7 +54,7 @@ export async function POST(
       },
     });
 
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
     const serverStatus = await client.getServerStatus();
     const targetInstanceId = serverStatus.instanceId || `node-1`;
 

@@ -59,6 +59,8 @@ export default function DatabaseUsersManager({
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [deletingUser, setDeletingUser] = useState(false);
 
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const togglePasswordVisibility = (username: string) => {
     setVisiblePasswords((prev) => ({
       ...prev,
@@ -99,6 +101,7 @@ export default function DatabaseUsersManager({
 
     setLoading(true);
     setError('');
+    setActionError(null);
 
     try {
       const res = await fetch(`/api/instances/${instanceId}/users`, {
@@ -144,6 +147,8 @@ export default function DatabaseUsersManager({
     }
 
     setLoading(true);
+    setActionError(null);
+
     try {
       const res = await fetch(`/api/instances/${instanceId}/users/${encodeURIComponent(username)}`, {
         method: 'POST',
@@ -166,7 +171,7 @@ export default function DatabaseUsersManager({
       });
       router.refresh();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Reset failed');
+      setActionError(err instanceof Error ? err.message : 'Password reset failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -176,6 +181,8 @@ export default function DatabaseUsersManager({
     if (!userToDelete) return;
 
     setDeletingUser(true);
+    setActionError(null);
+
     try {
       const res = await fetch(`/api/instances/${instanceId}/users/${encodeURIComponent(userToDelete)}`, {
         method: 'DELETE',
@@ -190,7 +197,7 @@ export default function DatabaseUsersManager({
       setUserToDelete(null);
       router.refresh();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Deletion failed');
+      setActionError(err instanceof Error ? err.message : 'Deletion failed. Please try again.');
     } finally {
       setDeletingUser(false);
     }
@@ -201,6 +208,22 @@ export default function DatabaseUsersManager({
 
   return (
     <div className="card space-y-4">
+      {actionError && (
+        <div className="p-3.5 rounded-[7px] bg-[var(--surface-soft)] border-2 border-[var(--border)] text-xs text-[var(--text-strong)] flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-[var(--text-strong)] shrink-0" />
+            <span>{actionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="text-[var(--text-muted)] hover:text-[var(--text-strong)] font-mono text-xs cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -283,7 +306,7 @@ export default function DatabaseUsersManager({
                             className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors cursor-pointer"
                             title="Copy password"
                           >
-                            {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                            {isCopied ? <Check className="w-3.5 h-3.5 text-[var(--text-strong)]" /> : <Copy className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </div>

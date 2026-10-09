@@ -18,7 +18,7 @@ export async function POST(
     const confirmation = body.confirmation?.trim();
 
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(id);
+    const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Database instance not found' }, { status: 404 });
     }
@@ -40,7 +40,7 @@ export async function POST(
 
     // 2. Safely reset engine to wipe customer collections/documents/users
     try {
-      const client = LioranDBAdminClient.forInstance(instance);
+      const client = await LioranDBAdminClient.forInstanceAsync(instance);
       await client.resetInstance({ confirmation: instance.name });
     } catch (resetErr) {
       console.warn('[API Admin Database Terminate] Engine wipe warning:', (resetErr as Error).message);

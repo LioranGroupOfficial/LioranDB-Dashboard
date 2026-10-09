@@ -45,6 +45,8 @@ export class AccountVerificationRequiredError extends AppError {
   }
 }
 
+import { LioranDBAdminError } from '@/lib/liorandb-admin/errors';
+
 export function createApiError(error: unknown): Response {
   if (error instanceof AccountVerificationRequiredError) {
     return Response.json(
@@ -53,6 +55,12 @@ export function createApiError(error: unknown): Response {
         message: error.message,
         redirectTo: error.redirectTo,
       },
+      { status: error.statusCode }
+    );
+  }
+  if (error instanceof LioranDBAdminError) {
+    return Response.json(
+      { error: error.safeMessage, code: error.code, requestId: error.requestId },
       { status: error.statusCode }
     );
   }

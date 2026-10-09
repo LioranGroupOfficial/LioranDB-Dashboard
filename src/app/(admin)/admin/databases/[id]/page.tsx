@@ -37,13 +37,14 @@ export default async function AdminDatabaseDetailPage({
 
   const instance = await ManagedDatabase.findById(id)
     .populate('customerId', 'email profile')
+    .populate('hostingNodeId')
     .lean();
 
   if (!instance) {
     notFound();
   }
 
-  const client = LioranDBAdminClient.forInstance(instance);
+  const client = await LioranDBAdminClient.forInstanceAsync(instance as any);
   const serverStatus = await client.getServerStatus();
 
   const currentPeriod = getCurrentMonthPeriod();

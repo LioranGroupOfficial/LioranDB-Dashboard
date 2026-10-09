@@ -171,10 +171,10 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
   async rotateCredentials(instanceId: string): Promise<CredentialResult> {
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(instanceId);
+    const instance = await ManagedDatabase.findById(instanceId).populate('hostingNodeId');
     if (!instance) return { success: false, error: 'Instance not found' };
 
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
     try {
       const result = await client.rotateRootCredential();
 
@@ -253,10 +253,10 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
   async resetDeployment(instanceId: string, confirmation: string): Promise<{ success: boolean; error?: string }> {
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(instanceId);
+    const instance = await ManagedDatabase.findById(instanceId).populate('hostingNodeId');
     if (!instance) return { success: false, error: 'Instance not found' };
 
-    const client = LioranDBAdminClient.forInstance(instance);
+    const client = await LioranDBAdminClient.forInstanceAsync(instance);
     try {
       const serverStatus = await client.getServerStatus();
       const targetInstanceId = serverStatus.instanceId || `node-${instance._id}`;
@@ -328,11 +328,11 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
   async getDeploymentStatus(instanceId: string): Promise<DeploymentStatusResult> {
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(instanceId);
+    const instance = await ManagedDatabase.findById(instanceId).populate('hostingNodeId');
     if (!instance) return { status: 'UNKNOWN', error: 'Instance not found' };
 
     try {
-      const client = LioranDBAdminClient.forInstance(instance);
+      const client = await LioranDBAdminClient.forInstanceAsync(instance);
       const status = await client.getServerStatus();
       return {
         status: status.status === 'HEALTHY' ? 'ACTIVE' : status.status === 'MAINTENANCE' ? 'SUSPENDED' : 'FAILED',
