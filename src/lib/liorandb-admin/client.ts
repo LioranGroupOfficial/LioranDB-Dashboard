@@ -30,12 +30,14 @@ import {
 import {
   LioranDBAdminError,
   LioranDBAuthenticationError,
+  LioranDBForbiddenError,
   LioranDBNotFoundError,
   LioranDBTimeoutError,
   LioranDBConflictError,
   LioranDBResetError,
   LioranDBUnreachableError,
 } from './errors';
+import { normalizeControlPlaneUrl, resolveControlPlaneEndpoint, resolveControlPlaneToken } from './url';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 import type { IHostingNode } from '@/lib/db/models/HostingNode';
 
@@ -44,6 +46,7 @@ export interface LioranDBClientOptions {
   instanceName?: string;
   endpoint: string;
   controlPlaneToken?: string;
+  gatewayToken?: string;
   timeoutMs?: number;
 }
 
@@ -61,13 +64,15 @@ export class LioranDBAdminClient {
   public readonly instanceName?: string;
   public readonly endpoint: string;
   private controlPlaneToken?: string;
+  private gatewayToken?: string;
   private timeoutMs: number;
 
   constructor(options: LioranDBClientOptions) {
     this.instanceId = options.instanceId;
     this.instanceName = options.instanceName;
-    this.endpoint = options.endpoint.replace(/\/+$/, '');
+    this.endpoint = normalizeControlPlaneUrl(options.endpoint);
     this.controlPlaneToken = options.controlPlaneToken;
+    this.gatewayToken = options.gatewayToken || process.env.LIORANDB_MANAGEMENT_GATEWAY_TOKEN?.trim() || undefined;
     this.timeoutMs = options.timeoutMs || 10000;
   }
 
@@ -75,30 +80,26 @@ export class LioranDBAdminClient {
    * Factory method: instantiate client from a ManagedDatabase document.
    */
   public static forInstance(
-    instance: Partial<IManagedDatabase> & { _id: unknown; name?: string; host?: string; port?: number; controlPlaneEndpoint?: string; encryptedControlPlaneCredential?: string }
-  ): LioranDBAdminClient {
-    let token: string | undefined = process.env.LIORANDB_CONTROL_PLANE_TOKEN || process.env.LIORANDB_CONTROL_PLANE_SECRET;
-
-    if (!token && instance.encryptedControlPlaneCredential) {
-      try {
-        token = decrypt(instance.encryptedControlPlaneCredential);
-      } catch (err) {
-        console.warn(`[LioranDBAdminClient] Failed to decrypt control plane credential for instance ${instance._id}:`, (err as Error).message);
-      }
+    instance: Partial<IManagedDatabase> & {
+      _id: unknown;
+      name?: string;
+      host?: string;
+      port?: number;
+      controlPlaneEndpoint?: string;
+      encryptedControlPlaneCredential?: string;
     }
-
-    const host = instance.host || '127.0.0.1';
-    const port = instance.port || 27018;
-    const endpoint =
-      instance.controlPlaneEndpoint ||
-      process.env.LIORANDB_CONTROL_PLANE_URL ||
-      `http://${host}:${port}`;
+  ): LioranDBAdminClient {
+    // 1. Resolve per-instance decrypted control plane credential (highest precedence)
+    const token = resolveControlPlaneToken(instance);
+    const endpoint = resolveControlPlaneEndpoint(instance);
+    const gatewayToken = process.env.LIORANDB_MANAGEMENT_GATEWAY_TOKEN?.trim();
 
     return new LioranDBAdminClient({
       instanceId: String(instance._id),
       instanceName: instance.name,
       endpoint,
       controlPlaneToken: token,
+      gatewayToken,
       timeoutMs: 10000,
     });
   }
@@ -107,36 +108,33 @@ export class LioranDBAdminClient {
    * Factory method: instantiate client from a HostingNode document.
    */
   public static forNode(
-    node: Partial<IHostingNode> & { _id: unknown; name?: string; dbUrl?: string; httpPort?: number; controlPlaneEndpoint?: string; encryptedControlPlaneToken?: string }
-  ): LioranDBAdminClient {
-    let token: string | undefined = process.env.LIORANDB_CONTROL_PLANE_TOKEN || process.env.LIORANDB_CONTROL_PLANE_SECRET;
-
-    if (!token && node.encryptedControlPlaneToken) {
-      try {
-        token = decrypt(node.encryptedControlPlaneToken);
-      } catch (err) {
-        console.warn(`[LioranDBAdminClient] Failed to decrypt control plane token for node ${node._id}:`, (err as Error).message);
-      }
+    node: Partial<IHostingNode> & {
+      _id: unknown;
+      name?: string;
+      dbUrl?: string;
+      httpPort?: number;
+      controlPlaneEndpoint?: string;
+      encryptedControlPlaneToken?: string;
+      serverIdentity?: string;
     }
-
-    const host = node.dbUrl || '127.0.0.1';
-    const port = node.httpPort || 27018;
-    const endpoint =
-      node.controlPlaneEndpoint ||
-      process.env.LIORANDB_CONTROL_PLANE_URL ||
-      `http://${host}:${port}`;
+  ): LioranDBAdminClient {
+    // 1. Resolve per-node decrypted control plane token (highest precedence)
+    const token = resolveControlPlaneToken(node);
+    const endpoint = resolveControlPlaneEndpoint(node);
+    const gatewayToken = process.env.LIORANDB_MANAGEMENT_GATEWAY_TOKEN?.trim();
 
     return new LioranDBAdminClient({
       instanceId: node.serverIdentity || String(node._id),
       instanceName: node.name,
       endpoint,
       controlPlaneToken: token,
+      gatewayToken,
       timeoutMs: 10000,
     });
   }
 
   /**
-   * Internal HTTP dispatcher handling timeouts, request IDs, retries, and ApiEnvelope parsing.
+   * Internal HTTP dispatcher handling dual-layer authentication, timeouts, request IDs, retries, and ApiEnvelope parsing.
    */
   private async dispatch<T>(options: LioranDBAdminRequestOptions): Promise<T> {
     const requestId = `req_${Date.now()}_${generateSecureToken(4)}`;
@@ -159,6 +157,13 @@ export class LioranDBAdminClient {
           'X-Request-Id': requestId,
         };
 
+        // Layer 1: Caddy Management Gateway Authentication Header
+        const effectiveGatewayToken = this.gatewayToken || process.env.LIORANDB_MANAGEMENT_GATEWAY_TOKEN?.trim();
+        if (effectiveGatewayToken) {
+          headers['X-Lioran-Gateway-Token'] = effectiveGatewayToken;
+        }
+
+        // Layer 2: LioranDB Control-Plane Bearer Token
         if (this.controlPlaneToken) {
           headers['Authorization'] = `Bearer ${this.controlPlaneToken}`;
         }
@@ -187,9 +192,15 @@ export class LioranDBAdminClient {
           // Non-JSON response
         }
 
-        if (response.status === 401 || response.status === 403) {
-          const errMsg = envelope?.error?.message || 'Control plane authorization failed or insufficient role';
+        // Distinct handling for HTTP 401 (Bearer token auth failure) vs HTTP 403 (Gateway auth or forbidden role)
+        if (response.status === 401) {
+          const errMsg = envelope?.error?.message || 'Control plane bearer token authentication failed (HTTP 401). Verify the node control plane token.';
           throw new LioranDBAuthenticationError(errMsg, { requestId });
+        }
+
+        if (response.status === 403) {
+          const errMsg = envelope?.error?.message || 'Management gateway authentication or authorization failed (HTTP 403). Check X-Lioran-Gateway-Token and permissions.';
+          throw new LioranDBForbiddenError(errMsg, { requestId });
         }
 
         if (response.status === 404) {

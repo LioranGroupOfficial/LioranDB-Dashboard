@@ -46,17 +46,60 @@ export function isLocalhost(rawHostOrUrl: string): boolean {
 }
 
 /**
+ * Validates a hostname or IP against SSRF blacklists (metadata services, private ranges in production).
+ */
+export function validateHostnameSSRF(hostname: string, allowPrivate = false): void {
+  const h = hostname.toLowerCase().trim();
+
+  // Cloud metadata services - always blocked
+  if (
+    h === '169.254.169.254' ||
+    h === '169.254.170.2' ||
+    h === 'metadata.google.internal' ||
+    h === 'metadata.goog' ||
+    h === '100.100.100.200' ||
+    h.startsWith('169.254.')
+  ) {
+    throw new LioranDBAdminError(`Access to cloud metadata destination '${h}' is prohibited.`, {
+      code: 'SSRF_BLOCKED',
+      statusCode: 400,
+    });
+  }
+
+  // In production, block internal private IP ranges unless explicitly allowed
+  const isProd = process.env.NODE_ENV === 'production';
+  const allowPrivateEnv = process.env.ALLOW_PRIVATE_CONTROL_PLANE === 'true' || process.env.LIORANDB_ALLOW_LOCALHOST === 'true';
+
+  if (isProd && !allowPrivate && !allowPrivateEnv) {
+    if (
+      h === 'localhost' ||
+      h === 'localhost.localdomain' ||
+      h === '::1' ||
+      h === '0.0.0.0' ||
+      h.startsWith('127.') ||
+      h.startsWith('10.') ||
+      h.startsWith('192.168.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(h)
+    ) {
+      throw new LioranDBAdminError(`Access to private or loopback destination '${h}' is not permitted in production.`, {
+        code: 'SSRF_PRIVATE_BLOCKED',
+        statusCode: 400,
+      });
+    }
+  }
+}
+
+/**
  * Normalizes a control-plane URL into a canonical origin/base URL.
  *
  * Strips duplicate API prefixes like /v1, /v1/admin, trailing slashes,
- * and ensures valid HTTP/HTTPS protocol.
+ * and ensures valid HTTP/HTTPS protocol with SSRF validation.
  *
  * Example:
- *   "http://127.0.0.1:27018/v1/admin/status" -> "http://127.0.0.1:27018"
- *   "https://db.example.com:8443/v1/"        -> "https://db.example.com:8443"
- *   "localhost:27018"                       -> "http://localhost:27018"
+ *   "https://cx01.manage.db.liorandb.com/v1/admin/status" -> "https://cx01.manage.db.liorandb.com"
+ *   "http://127.0.0.1:27018/v1/admin/status"              -> "http://127.0.0.1:27018"
  */
-export function normalizeControlPlaneUrl(rawUrl: string): string {
+export function normalizeControlPlaneUrl(rawUrl: string, options?: { allowPrivate?: boolean }): string {
   if (!rawUrl || typeof rawUrl !== 'string') {
     throw new LioranDBAdminError('Invalid control-plane URL: URL must be a non-empty string.', {
       code: 'INVALID_CONTROL_PLANE_URL',
@@ -66,9 +109,9 @@ export function normalizeControlPlaneUrl(rawUrl: string): string {
 
   let trimmed = rawUrl.trim();
 
-  // If no scheme provided, default to http:// (or https if port 443/8443)
+  // If no scheme provided, default to http:// for localhost/27018, https:// for remote domains
   if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(trimmed)) {
-    if (trimmed.includes(':443') || trimmed.includes(':8443')) {
+    if (trimmed.includes(':443') || trimmed.includes(':8443') || !isLocalhost(trimmed)) {
       trimmed = `https://${trimmed}`;
     } else {
       trimmed = `http://${trimmed}`;
@@ -94,7 +137,19 @@ export function normalizeControlPlaneUrl(rawUrl: string): string {
   }
 
   const hostname = parsed.hostname.toLowerCase();
-  const protocol = parsed.protocol; // includes ':' e.g. "http:"
+  const protocol = parsed.protocol; // includes ':' e.g. "http:" or "https:"
+
+  // Enforce SSRF validation
+  validateHostnameSSRF(hostname, options?.allowPrivate);
+
+  // In production, enforce HTTPS for public management endpoints
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && protocol === 'http:' && !isLocalhost(hostname) && process.env.ALLOW_INSECURE_HTTP !== 'true') {
+    throw new LioranDBAdminError(
+      `Insecure HTTP is not allowed for public management endpoint '${hostname}'. HTTPS is required.`,
+      { code: 'HTTPS_REQUIRED', statusCode: 400 }
+    );
+  }
 
   // Determine port
   let port = parsed.port;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAPI } from '@/lib/auth/guards';
 import { connectToDatabase, HostingNode, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin/client';
+import { LioranDBAuthenticationError, LioranDBForbiddenError } from '@/lib/liorandb-admin/errors';
 
 export async function POST(
   _req: NextRequest,
@@ -59,13 +60,18 @@ export async function POST(
     } catch (testErr: unknown) {
       const latencyMs = Date.now() - startTime;
       const errMsg = testErr instanceof Error ? testErr.message : 'Connection failed';
-      const isAuthError =
-        errMsg.toLowerCase().includes('auth') ||
-        errMsg.toLowerCase().includes('401') ||
-        errMsg.toLowerCase().includes('403') ||
-        errMsg.toLowerCase().includes('unauthorized');
+      let failureReason: 'BEARER_AUTH_FAILED' | 'GATEWAY_AUTH_FAILED' | 'UNREACHABLE' = 'UNREACHABLE';
 
-      node.healthStatus = isAuthError ? 'AUTHENTICATION_FAILED' : 'UNREACHABLE';
+      if (testErr instanceof LioranDBAuthenticationError || (testErr as any)?.statusCode === 401 || errMsg.includes('401')) {
+        node.healthStatus = 'AUTHENTICATION_FAILED';
+        failureReason = 'BEARER_AUTH_FAILED';
+      } else if (testErr instanceof LioranDBForbiddenError || (testErr as any)?.statusCode === 403 || errMsg.includes('403')) {
+        node.healthStatus = 'AUTHENTICATION_FAILED';
+        failureReason = 'GATEWAY_AUTH_FAILED';
+      } else {
+        node.healthStatus = 'UNREACHABLE';
+        failureReason = 'UNREACHABLE';
+      }
       node.lastHealthCheckAt = new Date();
       await node.save();
 
@@ -78,6 +84,7 @@ export async function POST(
           latencyMs,
           endpoint: client.endpoint,
           error: errMsg,
+          errorType: failureReason,
         },
         { status: 200 }
       );

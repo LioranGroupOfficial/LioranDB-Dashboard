@@ -1,3 +1,11 @@
+function redactSensitiveStrings(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/Bearer\s+[a-zA-Z0-9_\-.]+/gi, 'Bearer [REDACTED]')
+    .replace(/(?:x-lioran-gateway-token|gateway-token|gateway_token)[\s:=]+[a-zA-Z0-9_\-.]+/gi, 'X-Lioran-Gateway-Token: [REDACTED]')
+    .replace(/(?:password|token|secret|key|authorization)[\s:=]+[a-zA-Z0-9_\-.]+/gi, '$1=[REDACTED]');
+}
+
 export class LioranDBAdminError extends Error {
   public readonly statusCode: number;
   public readonly code: string;
@@ -13,13 +21,13 @@ export class LioranDBAdminError extends Error {
       cause?: unknown;
     } = {}
   ) {
-    super(message);
+    super(redactSensitiveStrings(message));
     this.name = 'LioranDBAdminError';
     this.statusCode = options.statusCode || 500;
     this.code = options.code || 'CONTROL_PLANE_ERROR';
     this.requestId = options.requestId;
-    // Ensure safeMessage contains no authorization tokens or sensitive values
-    this.safeMessage = message.replace(/Bearer\s+[a-zA-Z0-9_\-.]+/gi, 'Bearer [REDACTED]');
+    // Ensure safeMessage contains no authorization tokens or gateway secrets
+    this.safeMessage = redactSensitiveStrings(message);
     if (options.cause) {
       this.cause = options.cause;
     }
@@ -27,9 +35,23 @@ export class LioranDBAdminError extends Error {
 }
 
 export class LioranDBAuthenticationError extends LioranDBAdminError {
-  constructor(message = 'Control plane authentication failed', options?: { requestId?: string; cause?: unknown }) {
+  constructor(message = 'Control plane bearer token authentication failed (HTTP 401)', options?: { requestId?: string; cause?: unknown }) {
     super(message, { statusCode: 401, code: 'UNAUTHORIZED_CONTROL_PLANE', ...options });
     this.name = 'LioranDBAuthenticationError';
+  }
+}
+
+export class LioranDBForbiddenError extends LioranDBAdminError {
+  constructor(message = 'Management gateway authentication or authorization failed (HTTP 403)', options?: { requestId?: string; cause?: unknown }) {
+    super(message, { statusCode: 403, code: 'FORBIDDEN_GATEWAY_OR_ROLE', ...options });
+    this.name = 'LioranDBForbiddenError';
+  }
+}
+
+export class LioranDBConfigurationError extends LioranDBAdminError {
+  constructor(message = 'Server configuration error: Management gateway token missing', options?: { requestId?: string; cause?: unknown }) {
+    super(message, { statusCode: 500, code: 'GATEWAY_CONFIGURATION_ERROR', ...options });
+    this.name = 'LioranDBConfigurationError';
   }
 }
 
@@ -84,8 +106,8 @@ export function sanitizeErrorForLog(err: unknown): Record<string, unknown> {
   if (err instanceof Error) {
     return {
       name: err.name,
-      message: err.message.replace(/Bearer\s+[a-zA-Z0-9_\-.]+/gi, 'Bearer [REDACTED]'),
+      message: redactSensitiveStrings(err.message),
     };
   }
-  return { error: String(err) };
+  return { error: redactSensitiveStrings(String(err)) };
 }

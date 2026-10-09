@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminAPI } from '@/lib/auth/guards';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin/client';
+import { LioranDBAuthenticationError, LioranDBForbiddenError } from '@/lib/liorandb-admin/errors';
 import { resolveControlPlaneEndpoint } from '@/lib/liorandb-admin/url';
 
 export async function POST(req: NextRequest) {
@@ -52,12 +53,21 @@ export async function POST(req: NextRequest) {
     } catch (testErr: unknown) {
       const latencyMs = Date.now() - startTime;
       const errMsg = testErr instanceof Error ? testErr.message : 'Connection test failed';
+      let errorType = 'UNREACHABLE';
+
+      if (testErr instanceof LioranDBAuthenticationError || (testErr as any)?.statusCode === 401) {
+        errorType = 'BEARER_AUTH_FAILED';
+      } else if (testErr instanceof LioranDBForbiddenError || (testErr as any)?.statusCode === 403) {
+        errorType = 'GATEWAY_OR_FORBIDDEN';
+      }
+
       return NextResponse.json({
         success: false,
         healthy: false,
         latencyMs,
         endpoint: client.endpoint,
         error: errMsg,
+        errorType,
       });
     }
   } catch (error: unknown) {
