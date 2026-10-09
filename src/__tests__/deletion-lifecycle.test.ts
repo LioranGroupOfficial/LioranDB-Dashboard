@@ -311,4 +311,135 @@ describe('Managed Database Instance Deletion, Purge, Credential Reset & Memory R
     expect(postRecord.userCount).toBe(0);
     expect(postRecord.memoryBytesUsed).toBe(52428800); // 50 MB baseline reclaimed
   });
+
+  test('Step 13: 10,000 Document Insertion, Instance Deletion, Node Reset & Zero Tenant Data/Credential Leakage Verification', async () => {
+    const client = new LioranDBAdminClient({
+      endpoint: 'https://cx01.manage.db.liorandb.com',
+      token: 'raw_bearer_token_cx01',
+      instanceId: '6ac8d8fbaf94038834059682',
+      instanceName: 'prod-analytics-cx01',
+    });
+
+    // Mock sequence of responses:
+    // 1. Pre-cleanup status: 10,000 documents, 3 collections, 2 users, 252 MB used
+    // 2. POST /v1/admin/instance/reset
+    // 3. POST /v1/admin/instance/restart
+    // 4. POST /v1/admin/root/rotate
+    // 5. Post-cleanup status: 0 documents, 0 collections, 0 databases, 48 MB baseline
+    // 6. Post-cleanup users: 0 customer users (only internal system admin)
+    mockFetch
+      // 1. Pre-cleanup status
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            instance_id: 'cx01',
+            status: 'HEALTHY',
+            version: '2.4.1',
+            database_count: 1,
+            collection_count: 3,
+            document_count: 10000,
+            storage_bytes: 264241152, // 252 MB
+            memory_bytes_used: 264241152,
+            user_count: 2,
+          }),
+      })
+      // 2. POST /v1/admin/instance/reset
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            instance_id: 'cx01',
+            status: 'RESET',
+            root_username: 'admin',
+            new_generated_root_password: 'bootstrap_random_pass_after_10k',
+            collections_removed: 3,
+            documents_removed: 10000,
+            users_removed: 1,
+          }),
+      })
+      // 3. POST /v1/admin/instance/restart
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            status: 'RESTARTED',
+            message: 'Engine restarted and memory reclaimed.',
+          }),
+      })
+      // 4. POST /v1/admin/root/rotate
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            status: 'ROTATED',
+            root_username: 'admin',
+            new_generated_password: 'fresh_rotated_root_pass_cx01',
+          }),
+      })
+      // 5. Post-cleanup verifyCleanState status
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            instance_id: 'cx01',
+            status: 'HEALTHY',
+            state: 'Ready',
+            version: '2.4.1',
+            database_count: 0,
+            collection_count: 0,
+            document_count: 0,
+            storage_bytes: 0,
+            memory_bytes: 50331648, // 48 MB baseline
+          }),
+      })
+      // 6. Post-cleanup listUsers (excluding system users)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            users: [{ username: 'admin', role: 'admin' }], // internal system user only
+          }),
+      })
+      // 7. Extra listUsers call for structured logging
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            users: [{ username: 'admin', role: 'admin' }],
+          }),
+      });
+
+    const purgeResult = await client.purgeAndResetTenant({
+      instanceId: '6ac8d8fbaf94038834059682',
+      expectedInstanceName: 'prod-analytics-cx01',
+      nodeId: 'node_cx01_id',
+    });
+
+    // Assert complete tenant data removal
+    expect(purgeResult.success).toBe(true);
+    expect(purgeResult.verifiedClean).toBe(true);
+    expect(purgeResult.documentsRemoved).toBe(10000);
+    expect(purgeResult.collectionsRemoved).toBe(3);
+    expect(purgeResult.preResetMemoryBytes).toBe(264241152);
+    expect(purgeResult.postResetMemoryBytes).toBe(50331648);
+    expect(purgeResult.reclaimedMemoryBytes).toBe(264241152 - 50331648);
+    expect(purgeResult.rotatedRootPassword).toBe('fresh_rotated_root_pass_cx01');
+
+    // Verify reset request payload
+    const resetCall = mockFetch.mock.calls[1];
+    expect(resetCall[0]).toBe('https://cx01.manage.db.liorandb.com/v1/admin/instance/reset');
+    const resetBody = JSON.parse(resetCall[1].body);
+    expect(resetBody.confirm).toBe('RESET_INSTANCE');
+    expect(resetBody.truncate_data).toBe(true);
+    expect(resetBody.delete_collections).toBe(true);
+    expect(resetBody.delete_users).toBe(true);
+  });
 });

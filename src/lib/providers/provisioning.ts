@@ -304,26 +304,42 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
   async terminateDeployment(instanceId: string): Promise<{ success: boolean; error?: string }> {
     await connectToDatabase();
-    let instance = await ManagedDatabase.findById(instanceId);
-    if (!instance) {
-      instance = await ManagedDatabase.findOne({ providerDeploymentId: instanceId });
-    }
-    if (!instance) return { success: false, error: 'Instance not found' };
-
-    if (instance.status === 'TERMINATED') {
-      return { success: true };
-    }
-
     const now = new Date();
 
-    // 1. Atomically mark instance DELETING and immediately revoke customer credentials
-    instance.status = 'DELETING';
-    instance.databaseUsers = [];
-    instance.billingStoppedAt = now;
-    if (instance.backupEnabled) {
-      instance.backupStoppedAt = now;
+    // 1. Atomically lock and claim the instance for termination (prevents concurrent duplicate cleanups)
+    let instance = await ManagedDatabase.findOneAndUpdate(
+      {
+        _id: instanceId,
+        status: { $nin: ['DELETING', 'TERMINATED'] },
+      },
+      {
+        $set: {
+          status: 'DELETING',
+          databaseUsers: [],
+          billingStoppedAt: now,
+          ...( { backupStoppedAt: now } ),
+        },
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!instance) {
+      const existing = (await ManagedDatabase.findById(instanceId)) || (await ManagedDatabase.findOne({ providerDeploymentId: instanceId }));
+      if (!existing) return { success: false, error: 'Instance not found' };
+      if (existing.status === 'TERMINATED') return { success: true };
+      if (existing.status === 'DELETING') {
+        return { success: false, error: 'Instance termination is already in progress' };
+      }
+      instance = existing;
     }
-    await instance.save();
+
+    const { logCleanupStage } = await import('../liorandb-admin/client');
+
+    logCleanupStage({
+      stage: 'ACCESS_REVOCATION',
+      instanceId: instance._id.toString(),
+      nodeId: instance.hostingNodeId?.toString(),
+    });
 
     // 2. Stop active billing intervals
     await BillingInterval.updateMany(
@@ -339,15 +355,23 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         node.status = 'RESETTING';
         await node.save();
 
+        logCleanupStage({
+          stage: 'LOCK_NODE',
+          instanceId: instance._id.toString(),
+          nodeId: node._id.toString(),
+          endpoint: node.controlPlaneEndpoint || node.dbUrl,
+        });
+
         try {
           const client = LioranDBAdminClient.forNode(node);
           const purgeResult = await client.purgeAndResetTenant({
             instanceId: instance._id.toString(),
             expectedInstanceName: instance.name,
+            nodeId: node._id.toString(),
           });
 
           if (!purgeResult.verifiedClean) {
-            throw new Error(`Clean state verification failed post-reset. Residual data detected.`);
+            throw new Error(`Clean state verification failed post-reset. Residual data detected: ${purgeResult.error || 'Check failed'}`);
           }
 
           // Successful cleanup: return node to AVAILABLE
@@ -363,6 +387,14 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           instance.terminatedAt = now;
           await instance.save();
 
+          logCleanupStage({
+            stage: 'NODE_RELEASE',
+            instanceId: instance._id.toString(),
+            nodeId: node._id.toString(),
+            endpoint: client.endpoint,
+            isClean: true,
+          });
+
           return { success: true };
         } catch (err: unknown) {
           const errMsg = err instanceof Error ? err.message : 'Unknown termination error';
@@ -377,6 +409,14 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           instance.status = 'FAILED';
           instance.adminNotes = `Cleanup failed during deletion: ${errMsg}. Node quarantined.`;
           await instance.save();
+
+          logCleanupStage({
+            stage: 'NODE_QUARANTINE',
+            instanceId: instance._id.toString(),
+            nodeId: node._id.toString(),
+            isClean: false,
+            failureReason: errMsg,
+          });
 
           return {
             success: false,

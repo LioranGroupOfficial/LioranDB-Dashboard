@@ -188,6 +188,7 @@ export interface CleanStateResult {
   reasons: string[];
   reason?: string;
   status?: LioranDBServerStatus;
+  residualCustomerUserCount?: number;
 }
 
 export interface PurgeAndResetTenantResult {

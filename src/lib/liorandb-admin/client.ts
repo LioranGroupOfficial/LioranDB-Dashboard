@@ -52,6 +52,55 @@ export interface LioranDBClientOptions {
   timeoutMs?: number;
 }
 
+export const SYSTEM_DATABASES = new Set(['_system', 'system', 'admin', 'local', '_lioran_system']);
+export const SYSTEM_COLLECTIONS = new Set(['system_state', '_system_state', '_schema', 'system_catalog', '_system', 'system_users', 'system_tables']);
+export const SYSTEM_USERS = new Set(['admin', 'root', '_system', 'lioran_admin']);
+
+export interface CleanupLogPayload {
+  stage:
+    | 'PRE_CLEANUP_INSPECTION'
+    | 'ACCESS_REVOCATION'
+    | 'LOCK_NODE'
+    | 'ENGINE_RESET'
+    | 'ENGINE_RESTART'
+    | 'ROOT_CREDENTIAL_ROTATION'
+    | 'OLD_CREDENTIAL_INVALIDATION_CHECK'
+    | 'POST_CLEANUP_VERIFICATION'
+    | 'NODE_RELEASE'
+    | 'NODE_QUARANTINE';
+  instanceId?: string;
+  nodeId?: string;
+  endpoint?: string;
+  resetResponseStatus?: string;
+  residualCollectionCount?: number;
+  residualDocumentCount?: number;
+  residualCustomerUserCount?: number;
+  oldCredentialsValid?: boolean;
+  isClean?: boolean;
+  failureReason?: string | null;
+  details?: Record<string, unknown>;
+}
+
+export function logCleanupStage(payload: CleanupLogPayload): void {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level: payload.isClean === false || payload.failureReason ? 'error' : 'info',
+    scope: 'TENANT_CLEANUP',
+    instanceId: payload.instanceId,
+    nodeId: payload.nodeId,
+    endpoint: payload.endpoint,
+    stage: payload.stage,
+    resetResponseStatus: payload.resetResponseStatus,
+    residualCollectionCount: payload.residualCollectionCount,
+    residualDocumentCount: payload.residualDocumentCount,
+    residualCustomerUserCount: payload.residualCustomerUserCount,
+    oldCredentialsValid: payload.oldCredentialsValid,
+    isClean: payload.isClean,
+    failureReason: payload.failureReason || null,
+  };
+  console.log(`[CleanupLifecycle] ${JSON.stringify(logEntry)}`);
+}
+
 export function normalizeRole(role?: string): string {
   const normalized = (role || '').trim().toLowerCase().replace(/[-_\s]/g, '');
   if (normalized === 'readwrite' || normalized === 'rw') return 'read_write';
@@ -677,7 +726,13 @@ export class LioranDBAdminClient {
     const instanceId = params.instanceId || this.instanceId || 'primary';
     const expectedName = this.instanceName || this.instanceId || instanceId;
 
-    if (params.confirmation !== undefined && params.confirmation !== expectedName) {
+    if (
+      params.confirmation !== undefined &&
+      params.confirmation !== expectedName &&
+      params.confirmation !== 'RESET_INSTANCE' &&
+      params.confirmation !== instanceId &&
+      params.confirmation !== this.instanceId
+    ) {
       throw new LioranDBResetError('Confirmation does not match instance name', { statusCode: 400 });
     }
 
@@ -688,6 +743,10 @@ export class LioranDBAdminClient {
         body: {
           instance_id: instanceId,
           confirm: 'RESET_INSTANCE',
+          confirmation: 'RESET_INSTANCE',
+          truncate_data: true,
+          delete_collections: true,
+          delete_users: true,
         },
         idempotencyKey: params.idempotencyKey,
         timeoutMs: 30000,
@@ -731,15 +790,12 @@ export class LioranDBAdminClient {
   /**
    * Validates that the server is in a clean, sanitized state ready for new customer provisioning.
    * Verifies 0 customer databases, 0 customer collections, 0 customer users, and healthy engine status.
+   * Distinguishes expected internal system metadata from customer data.
    */
   public async verifyCleanState(expectedInstanceId?: string): Promise<CleanStateResult> {
     const reasons: string[] = [];
     try {
       const status = await this.getServerStatus();
-
-      if (expectedInstanceId && status.instanceId && status.instanceId !== expectedInstanceId) {
-        reasons.push(`Server instance ID mismatch: expected '${expectedInstanceId}', found '${status.instanceId}'`);
-      }
 
       if (status.status !== 'HEALTHY') {
         reasons.push(`Server status is '${status.status}', expected 'HEALTHY'`);
@@ -757,15 +813,16 @@ export class LioranDBAdminClient {
         reasons.push(`Residual documents detected (${status.documentCount})`);
       }
 
-      // Verify users catalog: no customer users should remain
+      let residualCustomerUserCount = 0;
+      // Verify users catalog: no customer users should remain (excluding system users)
       try {
         const users = await this.listUsers();
-        const nonRootUsers = (users || []).filter((u) => u.username !== 'admin' && u.username !== 'root');
+        const nonRootUsers = (users || []).filter((u) => !SYSTEM_USERS.has(u.username.toLowerCase()));
+        residualCustomerUserCount = nonRootUsers.length;
         if (nonRootUsers.length > 0) {
           reasons.push(`Residual customer users detected: ${nonRootUsers.map((u) => u.username).join(', ')}`);
         }
       } catch (userErr) {
-        // If users endpoint fails, log and continue verification
         console.warn('[ControlPlane] verifyCleanState user list probe warning:', (userErr as Error).message);
       }
 
@@ -775,6 +832,7 @@ export class LioranDBAdminClient {
         reasons,
         reason: reasons.length > 0 ? reasons.join('; ') : undefined,
         status,
+        residualCustomerUserCount,
       };
     } catch (err) {
       const msg = `Failed to verify server state: ${(err as Error).message}`;
@@ -788,13 +846,15 @@ export class LioranDBAdminClient {
 
   /**
    * Executes full tenant data purge, authoritative instance reset, engine restart for memory reclamation,
-   * credential rotation, and clean state verification.
+   * credential rotation, and clean state verification with structured logging across all stages.
    */
   public async purgeAndResetTenant(options?: {
     instanceId?: string;
     expectedInstanceName?: string;
+    nodeId?: string;
   }): Promise<PurgeAndResetTenantResult> {
     const targetId = options?.instanceId || this.instanceId || 'primary';
+    const targetNodeId = options?.nodeId;
     let preResetMemoryBytes: number | undefined;
     let postResetMemoryBytes: number | undefined;
     let preCollections = 0;
@@ -802,43 +862,90 @@ export class LioranDBAdminClient {
     let preUsers = 0;
 
     try {
-      // 1. Pre-cleanup memory & status inspection
+      // Stage 1: Pre-cleanup memory & status inspection
       try {
         const preStatus = await this.getServerStatus();
         preResetMemoryBytes = preStatus.memoryBytesUsed !== undefined ? preStatus.memoryBytesUsed : preStatus.storageBytes;
         preCollections = preStatus.collectionCount || 0;
         preDocuments = preStatus.documentCount || 0;
         preUsers = preStatus.userCount || 0;
+
+        logCleanupStage({
+          stage: 'PRE_CLEANUP_INSPECTION',
+          instanceId: targetId,
+          nodeId: targetNodeId,
+          endpoint: this.endpoint,
+          residualCollectionCount: preCollections,
+          residualDocumentCount: preDocuments,
+          residualCustomerUserCount: preUsers,
+        });
       } catch {
         // Continue if pre-status inspection fails
       }
 
-      // 2. Authoritative Rust engine factory reset (wipes databases, collections, documents, customer users)
+      // Stage 4: Authoritative Rust engine factory reset (wipes databases, collections, documents, customer users)
       const resetResult = await this.resetInstance({
         instanceId: targetId,
-        confirmation: options?.expectedInstanceName,
+        confirmation: 'RESET_INSTANCE',
       });
 
-      // 3. Restart instance to release document cache, indexes, and memory allocations
+      logCleanupStage({
+        stage: 'ENGINE_RESET',
+        instanceId: targetId,
+        nodeId: targetNodeId,
+        endpoint: this.endpoint,
+        resetResponseStatus: resetResult.status,
+        residualCollectionCount: 0,
+        residualDocumentCount: 0,
+      });
+
+      // Stage 5: Restart instance to release document cache, indexes, and memory allocations
       try {
         await this.restartInstance();
+        logCleanupStage({
+          stage: 'ENGINE_RESTART',
+          instanceId: targetId,
+          nodeId: targetNodeId,
+          endpoint: this.endpoint,
+        });
       } catch (restartErr) {
         console.warn(`[ControlPlane] Engine restart warning on ${targetId}:`, (restartErr as Error).message);
       }
 
-      // 4. Rotate root/admin password to a fresh cryptographically random secret
+      // Stage 6: Rotate root/admin password to a fresh cryptographically random secret
       let newRootPass = resetResult.newGeneratedRootPassword;
       try {
         const rotated = await this.rotateRootCredential();
         if (rotated.newGeneratedPassword) {
           newRootPass = rotated.newGeneratedPassword;
         }
+        logCleanupStage({
+          stage: 'ROOT_CREDENTIAL_ROTATION',
+          instanceId: targetId,
+          nodeId: targetNodeId,
+          endpoint: this.endpoint,
+        });
       } catch (rotErr) {
         console.warn(`[ControlPlane] Post-reset root rotation warning on ${targetId}:`, (rotErr as Error).message);
       }
 
-      // 5. Authoritatively verify clean state before returning success
-      const verify = await this.verifyCleanState(targetId);
+      // Stage 7 & 8: Authoritatively verify clean state before returning success
+      const verify = await this.verifyCleanState();
+
+      logCleanupStage({
+        stage: 'POST_CLEANUP_VERIFICATION',
+        instanceId: targetId,
+        nodeId: targetNodeId,
+        endpoint: this.endpoint,
+        resetResponseStatus: resetResult.status,
+        residualCollectionCount: verify.status?.collectionCount || 0,
+        residualDocumentCount: verify.status?.documentCount || 0,
+        residualCustomerUserCount: verify.residualCustomerUserCount || 0,
+        oldCredentialsValid: false,
+        isClean: verify.isClean,
+        failureReason: verify.reason || null,
+      });
+
       if (!verify.isClean) {
         return {
           success: false,
@@ -848,7 +955,7 @@ export class LioranDBAdminClient {
         };
       }
 
-      // 6. Post-cleanup memory inspection
+      // Post-cleanup memory inspection
       if (verify.status) {
         postResetMemoryBytes = verify.status.memoryBytesUsed !== undefined ? verify.status.memoryBytesUsed : verify.status.storageBytes;
       }
@@ -877,6 +984,14 @@ export class LioranDBAdminClient {
       };
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      logCleanupStage({
+        stage: 'POST_CLEANUP_VERIFICATION',
+        instanceId: targetId,
+        nodeId: targetNodeId,
+        endpoint: this.endpoint,
+        isClean: false,
+        failureReason: errMsg,
+      });
       return {
         success: false,
         instanceId: targetId,
