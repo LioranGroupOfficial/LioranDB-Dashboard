@@ -675,11 +675,65 @@ export async function provisionInstance(
     throw new Error(deploymentResult.error || 'Failed to provision database infrastructure');
   }
 
+  // 3. Authoritatively verify physical server reachability and customer database accessibility
+  const isMockProvider = process.env.LIORANDB_MOCK_DRIVER === 'true';
+  const isConnexusInternal =
+    databaseName === 'lcs' ||
+    instance.name.toLowerCase().includes('connexus') ||
+    instance.planId === 'connexus_internal';
+
+  if (!isMockProvider) {
+    try {
+      const { LioranDBClient } = await import('@liorandb/driver');
+      const testClient = await LioranDBClient.connect(deploymentResult.nativeConnectionUri, {
+        timeoutMS: 10000,
+        connectTimeoutMS: 5000,
+        requestTimeoutMS: 10000,
+      });
+
+      try {
+        if (!testClient.isConnected()) {
+          throw new Error('Connection established but client is not in connected state.');
+        }
+
+        // Verify customer logical database is accessible
+        const customerDb = testClient.db(databaseName);
+        await customerDb.listCollections();
+
+        // 4 & 5 & 6: Distinguish infrastructure provisioning from Connexus application schema initialization
+        if (isConnexusInternal) {
+          const { initConnexusCollectionsAndIndexes } = await import('../db');
+          await initConnexusCollectionsAndIndexes(customerDb);
+        } else {
+          // Unrelated customer instance: do NOT initialize Connexus-specific 'users' or billing collections.
+          // Customer managed databases remain empty for the customer's own application.
+        }
+      } finally {
+        await testClient.close().catch(() => {});
+      }
+    } catch (readinessErr: unknown) {
+      const errMessage = readinessErr instanceof Error ? readinessErr.message : String(readinessErr);
+      const failReason = `Provisioning readiness verification failed: ${errMessage}`;
+      instance.status = 'FAILED';
+      instance.adminNotes = failReason;
+      await instance.save();
+
+      const refreshedNode = await HostingNode.findById(node._id);
+      if (refreshedNode && refreshedNode.status !== 'QUARANTINED') {
+        refreshedNode.status = 'AVAILABLE';
+        refreshedNode.currentAssignedCount = 0;
+        await refreshedNode.save();
+      }
+
+      throw new Error(failReason);
+    }
+  }
+
   const now = new Date();
   const hourlyRatePaise = plan?.hourlyRatePaise || (instance.planId === 'shared' ? 100 : 800);
   const backupMonthlyPaise = instance.backupEnabled ? BACKUP_MONTHLY_PAISE : 0;
 
-  // 3. Store encrypted native connection URI and admin password
+  // 4. Store encrypted native connection URI and admin password, mark ACTIVE
   instance.encryptedConnectionUri = encrypt(deploymentResult.nativeConnectionUri);
   if (deploymentResult.generatedPassword) {
     instance.encryptedControlPlaneCredential = encrypt(deploymentResult.generatedPassword);

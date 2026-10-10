@@ -1,25 +1,82 @@
 // Central export for all DB models, types, and connection utilities
-export { default as connectToDatabase, getDb, getLioranDBClient, disconnectFromDatabase, resolveLioranDBUri } from './connection';
-export { ObjectId, Types, Schema, model, models } from './adapter';
+import { default as connectToDatabase, getDb, getLioranDBClient, disconnectFromDatabase, resolveLioranDBUri } from './connection';
+import { ObjectId, Types, Schema, model, models } from './adapter';
+import type { Db } from '@liorandb/driver';
 
-export { default as User } from './models/User';
-export { default as EmailVerification } from './models/EmailVerification';
-export { default as PasswordReset } from './models/PasswordReset';
-export { default as PolicyDocument } from './models/PolicyDocument';
-export { default as PolicyAcceptance } from './models/PolicyAcceptance';
-export { default as ManagedDatabase } from './models/ManagedDatabase';
-export { default as Subscription } from './models/Subscription';
-export { default as Payment } from './models/Payment';
-export { default as Invoice } from './models/Invoice';
-export { default as Coupon } from './models/Coupon';
-export { default as BillingInterval } from './models/BillingInterval';
-export { default as SupportTicket } from './models/SupportTicket';
-export { default as TicketMessage } from './models/TicketMessage';
-export { default as AuditLog } from './models/AuditLog';
-export { default as Notification } from './models/Notification';
-export { default as Wallet } from './models/Wallet';
-export { default as WalletTransaction } from './models/WalletTransaction';
-export { default as HostingNode } from './models/HostingNode';
+import User from './models/User';
+import EmailVerification from './models/EmailVerification';
+import PasswordReset from './models/PasswordReset';
+import PolicyDocument from './models/PolicyDocument';
+import PolicyAcceptance from './models/PolicyAcceptance';
+import ManagedDatabase from './models/ManagedDatabase';
+import Subscription from './models/Subscription';
+import Payment from './models/Payment';
+import Invoice from './models/Invoice';
+import Coupon from './models/Coupon';
+import BillingInterval from './models/BillingInterval';
+import SupportTicket from './models/SupportTicket';
+import TicketMessage from './models/TicketMessage';
+import AuditLog from './models/AuditLog';
+import Notification from './models/Notification';
+import Wallet from './models/Wallet';
+import WalletTransaction from './models/WalletTransaction';
+import HostingNode from './models/HostingNode';
+
+export { connectToDatabase, getDb, getLioranDBClient, disconnectFromDatabase, resolveLioranDBUri };
+export { ObjectId, Types, Schema, model, models };
+
+export {
+  User,
+  EmailVerification,
+  PasswordReset,
+  PolicyDocument,
+  PolicyAcceptance,
+  ManagedDatabase,
+  Subscription,
+  Payment,
+  Invoice,
+  Coupon,
+  BillingInterval,
+  SupportTicket,
+  TicketMessage,
+  AuditLog,
+  Notification,
+  Wallet,
+  WalletTransaction,
+  HostingNode,
+};
+
+/**
+ * Idempotently initializes all required collections and declared indexes for the Connexus application.
+ * Only applied to Connexus's own application database (lcs); never to empty customer databases.
+ */
+export async function initConnexusCollectionsAndIndexes(targetDb?: Db): Promise<void> {
+  const db = targetDb || (await getDb());
+  const connexusModels = [
+    User,
+    EmailVerification,
+    PasswordReset,
+    HostingNode,
+    ManagedDatabase,
+    BillingInterval,
+    Invoice,
+    Payment,
+    Subscription,
+    Wallet,
+    WalletTransaction,
+    SupportTicket,
+    TicketMessage,
+    AuditLog,
+    Notification,
+    PolicyDocument,
+    PolicyAcceptance,
+    Coupon,
+  ];
+
+  for (const m of connexusModels) {
+    await m.ensureCollectionReady(db);
+  }
+}
 
 export type { IUser, UserRole, OnboardingStage, IUserProfile, IAccountVerification } from './models/User';
 export type { IEmailVerification } from './models/EmailVerification';

@@ -12,7 +12,7 @@ import {
 } from '../email';
 import { createAuditLog } from '../audit';
 import { createNotification } from '../notifications';
-import { ValidationError, ConflictError, AppError } from '../errors';
+import { ConflictError, AppError } from '../errors';
 import type { SessionData } from '../auth/session';
 
 const OTP_EXPIRY_MINUTES = 10;
@@ -40,42 +40,56 @@ export async function signupUser(
 
   const passwordHash = await hashPassword(password);
 
-  const user = await User.create({
-    email: normalizedEmail,
-    passwordHash,
-    role: 'customer',
-    emailVerified: false,
-    accountVerification: {
-      feePaid: false,
-      amountPaid: 0,
-      currency: 'INR',
-      paidAt: null,
-      razorpayOrderId: null,
-      razorpayPaymentId: null,
-      verificationMethod: null,
-      status: 'UNPAID',
-    },
-    accountRegistrationPaid: false,
-    profile: {},
-  });
+  try {
+    const user = await User.create({
+      email: normalizedEmail,
+      passwordHash,
+      role: 'customer',
+      emailVerified: false,
+      accountVerification: {
+        feePaid: false,
+        amountPaid: 0,
+        currency: 'INR',
+        paidAt: null,
+        razorpayOrderId: null,
+        razorpayPaymentId: null,
+        verificationMethod: null,
+        status: 'UNPAID',
+      },
+      accountRegistrationPaid: false,
+      profile: {},
+    });
 
-  // Generate and send OTP
-  const devOtp = await _sendVerificationOTP(user._id.toString(), normalizedEmail);
+    // Generate and send OTP
+    const devOtp = await _sendVerificationOTP(user._id.toString(), normalizedEmail);
 
-  await createAuditLog({
-    actorId: user._id.toString(),
-    actorRole: 'customer',
-    action: 'ACCOUNT_CREATED',
-    entityType: 'User',
-    entityId: user._id.toString(),
-    ip,
-    userAgent,
-  });
+    await createAuditLog({
+      actorId: user._id.toString(),
+      actorRole: 'customer',
+      action: 'ACCOUNT_CREATED',
+      entityType: 'User',
+      entityId: user._id.toString(),
+      ip,
+      userAgent,
+    });
 
-  return {
-    userId: user._id.toString(),
-    otp: process.env.NODE_ENV === 'development' ? devOtp : undefined,
-  };
+    return {
+      userId: user._id.toString(),
+      otp: process.env.NODE_ENV === 'development' ? devOtp : undefined,
+    };
+  } catch (err: unknown) {
+    const errObj = err as { name?: string; code?: string; message?: string } | null;
+    const msg = String(errObj?.message || '').toLowerCase();
+    if (
+      errObj?.name === 'DuplicateKeyError' ||
+      errObj?.code === 'LDB_DUPLICATE_KEY' ||
+      msg.includes('duplicate') ||
+      msg.includes('already exists')
+    ) {
+      throw new ConflictError('An account with this email already exists.');
+    }
+    throw err;
+  }
 }
 
 // ─── LOGIN ───────────────────────────────────────────────────────────────────

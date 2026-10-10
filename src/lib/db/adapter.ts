@@ -1,4 +1,12 @@
-import { LioranDBClient, Collection as LioranCollection, Db as LioranDb, Filter as LioranFilter, Sort as LioranSort } from '@liorandb/driver';
+import {
+  LioranDBClient,
+  Collection as LioranCollection,
+  Db as LioranDb,
+  CollectionIndexDefinition,
+  ConfigurationError,
+  ConnectionError,
+  DRIVER_ERROR_CODES,
+} from '@liorandb/driver';
 import { ObjectId, Types } from './object-id';
 
 export { ObjectId, Types };
@@ -14,9 +22,27 @@ export interface SchemaOptions {
 
 export type SchemaDefinition = Record<string, any>;
 
+export interface DeclaredIndexField {
+  field: string;
+  direction: 'Asc' | 'Desc';
+}
+
+export interface DeclaredIndex {
+  fields: DeclaredIndexField[];
+  options: {
+    name?: string;
+    unique?: boolean;
+    sparse?: boolean;
+    partialFilter?: Record<string, any>;
+    [key: string]: any;
+  };
+}
+
 export class Schema<T = any> {
   public readonly definition: SchemaDefinition;
   public readonly options: SchemaOptions;
+  public readonly declaredIndexes: DeclaredIndex[] = [];
+
   public static readonly Types = {
     ObjectId,
     String: String,
@@ -31,16 +57,68 @@ export class Schema<T = any> {
   public readonly statics: Record<string, Function> = {};
   public readonly methods: Record<string, Function> = {};
   public readonly virtuals: Record<string, any> = {};
-  public readonly indexes: Array<{ fields: Record<string, number | string>; options?: any }> = [];
 
   constructor(definition?: SchemaDefinition, options?: SchemaOptions) {
     this.definition = definition || {};
     this.options = options || {};
+
+    // Automatically inspect field-level index and unique declarations
+    this._inspectFieldIndexes();
+  }
+
+  private _inspectFieldIndexes(): void {
+    for (const [field, fieldDef] of Object.entries(this.definition)) {
+      if (!fieldDef || typeof fieldDef !== 'object') continue;
+
+      const isUnique = Boolean(fieldDef.unique);
+      const isIndexed = Boolean(fieldDef.index);
+
+      if (isUnique || isIndexed) {
+        const indexName = `${field}_1`;
+        this.declaredIndexes.push({
+          fields: [{ field, direction: 'Asc' }],
+          options: {
+            name: indexName,
+            unique: isUnique,
+            sparse: Boolean(fieldDef.sparse),
+          },
+        });
+      }
+    }
   }
 
   public index(fields: Record<string, number | string>, options?: any): this {
-    this.indexes.push({ fields, options });
+    const declaredFields: DeclaredIndexField[] = [];
+    const nameParts: string[] = [];
+
+    for (const [field, direction] of Object.entries(fields)) {
+      const isDesc = direction === -1 || direction === 'desc' || direction === 'Desc';
+      const dir: 'Asc' | 'Desc' = isDesc ? 'Desc' : 'Asc';
+      declaredFields.push({ field, direction: dir });
+      nameParts.push(`${field}_${direction}`);
+    }
+
+    const defaultName = nameParts.join('_');
+    const opts = {
+      name: options?.name || defaultName,
+      unique: Boolean(options?.unique),
+      sparse: Boolean(options?.sparse),
+      partialFilter: options?.partialFilter,
+      ...options,
+    };
+
+    this.declaredIndexes.push({ fields: declaredFields, options: opts });
     return this;
+  }
+
+  public get indexes(): Array<{ fields: Record<string, number | string>; options?: any }> {
+    return this.declaredIndexes.map((idx) => {
+      const fieldsObj: Record<string, number> = {};
+      for (const f of idx.fields) {
+        fieldsObj[f.field] = f.direction === 'Desc' ? -1 : 1;
+      }
+      return { fields: fieldsObj, options: idx.options };
+    });
   }
 
   public pre(event: string, fn: Function): this {
@@ -77,6 +155,7 @@ export class Schema<T = any> {
 
 export interface Document {
   _id: any;
+  _isNew?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
   [key: string]: any;
@@ -108,14 +187,30 @@ export interface QueryOptions {
   [key: string]: any;
 }
 
-// In-memory collection fallback for local offline testing / CI
+/**
+ * Isolated in-memory storage for explicit test mode only.
+ * Isolated by database and collection: Map<dbName:collectionName, Map<id, doc>>
+ */
 const memoryStore = new Map<string, Map<string, any>>();
 
-export function getMemoryCollection(name: string): Map<string, any> {
-  if (!memoryStore.has(name)) {
-    memoryStore.set(name, new Map());
+export function isMemoryModeEnabled(): boolean {
+  // Strictly disallowed in production
+  if (process.env.NODE_ENV === 'production') return false;
+  // Opt-in for unit tests
+  return (
+    process.env.NODE_ENV === 'test' &&
+    (process.env.LIORANDB_MEMORY_STORE === 'true' ||
+      process.env.LIORANDB_MOCK_DRIVER === 'true' ||
+      !process.env.MONGODB_URI)
+  );
+}
+
+export function getMemoryCollection(dbName: string, name: string): Map<string, any> {
+  const key = `${dbName || 'lcs'}:${name}`;
+  if (!memoryStore.has(key)) {
+    memoryStore.set(key, new Map());
   }
-  return memoryStore.get(name)!;
+  return memoryStore.get(key)!;
 }
 
 export function clearMemoryStore(): void {
@@ -128,7 +223,7 @@ export function clearMemoryStore(): void {
 export function normalizeFilter(filter: any): any {
   if (!filter || typeof filter !== 'object') return filter;
   if (filter instanceof ObjectId) return filter.toString();
-  if (filter instanceof Date) return filter;
+  if (filter instanceof Date) return filter.toISOString();
   if (filter instanceof RegExp) return { $regex: filter.source, $options: filter.flags };
   if (Array.isArray(filter)) return filter.map(normalizeFilter);
 
@@ -147,7 +242,9 @@ export function normalizeFilter(filter: any): any {
       }
     } else if (val instanceof ObjectId) {
       out[key] = val.toString();
-    } else if (val && typeof val === 'object' && !(val instanceof Date)) {
+    } else if (val instanceof Date) {
+      out[key] = val.toISOString();
+    } else if (val && typeof val === 'object') {
       out[key] = normalizeFilter(val);
     } else {
       out[key] = val;
@@ -157,7 +254,42 @@ export function normalizeFilter(filter: any): any {
 }
 
 /**
+ * Serializes document or payload into JSON-compatible plain objects for the LioranDB Rust driver.
+ * Converts ObjectIds to strings and Dates to ISO-8601 strings.
+ */
+export function serializeForLioran(value: any): any {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (value instanceof ObjectId) {
+    return value.toString();
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (value instanceof RegExp) {
+    return { $regex: value.source, $options: value.flags };
+  }
+  if (Array.isArray(value)) {
+    return value.map(serializeForLioran);
+  }
+  if (typeof value === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (v === undefined) continue;
+      out[k] = serializeForLioran(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/**
  * Normalizes document fields before storing or returning.
+ * Restores ObjectId instances for _id and Date objects for ISO date strings.
  */
 export function normalizeDocument(doc: any): any {
   if (!doc || typeof doc !== 'object') return doc;
@@ -168,8 +300,7 @@ export function normalizeDocument(doc: any): any {
   for (const [key, val] of Object.entries(doc)) {
     if (key === '_id') {
       out._id = val instanceof ObjectId ? val : new ObjectId(val as any);
-    } else if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(val)) {
-      // Parse ISO date strings back to Date objects
+    } else if (typeof val === 'string' && ISO_DATE_REGEX.test(val)) {
       const parsed = new Date(val);
       out[key] = isNaN(parsed.getTime()) ? val : parsed;
     } else if (val && typeof val === 'object' && !(val instanceof ObjectId) && !(val instanceof Date)) {
@@ -182,7 +313,7 @@ export function normalizeDocument(doc: any): any {
 }
 
 /**
- * In-memory document matching engine supporting MongoDB operators
+ * In-memory document matching engine supporting MongoDB operators (used for tests only).
  */
 export function matchesFilter(doc: any, filter: any): boolean {
   if (!filter || Object.keys(filter).length === 0) return true;
@@ -199,11 +330,15 @@ export function matchesFilter(doc: any, filter: any): boolean {
       continue;
     }
 
-    // Resolving dotted field path (e.g., 'profile.fullName')
     const actual = getNestedValue(doc, key);
 
-    if (expected && typeof expected === 'object' && !(expected instanceof Date) && !(expected instanceof ObjectId) && !(expected instanceof RegExp)) {
-      // Comparison / operator object
+    if (
+      expected &&
+      typeof expected === 'object' &&
+      !(expected instanceof Date) &&
+      !(expected instanceof ObjectId) &&
+      !(expected instanceof RegExp)
+    ) {
       for (const [op, opVal] of Object.entries(expected)) {
         if (op === '$eq') {
           if (!areValuesEqual(actual, opVal)) return false;
@@ -335,16 +470,19 @@ export function applyUpdate(doc: any, update: any): void {
   }
 
   if (!hasOperators) {
-    // Direct replacement / assignment
     for (const [key, val] of Object.entries(update)) {
-      setNestedValue(doc, key, val);
+      if (key !== '_id') {
+        setNestedValue(doc, key, val);
+      }
     }
     return;
   }
 
   if (update.$set) {
     for (const [key, val] of Object.entries(update.$set)) {
-      setNestedValue(doc, key, val);
+      if (key !== '_id') {
+        setNestedValue(doc, key, val);
+      }
     }
   }
 
@@ -385,7 +523,9 @@ export function applyUpdate(doc: any, update: any): void {
 
   if (update.$unset) {
     for (const key of Object.keys(update.$unset)) {
-      deleteNestedValue(doc, key);
+      if (key !== '_id') {
+        deleteNestedValue(doc, key);
+      }
     }
   }
 }
@@ -482,9 +622,27 @@ export class Query<T = any, TLean = any> implements PromiseLike<T> {
 
 export type HydratedDocument<T> = T & Document;
 
+// Global tracking of initialized collections and indexes: `${dbName}:${collectionName}`
+const initializedCollections = new Set<string>();
+const initializingPromises = new Map<string, Promise<void>>();
+
+function isAlreadyExistsError(err: any): boolean {
+  if (!err) return false;
+  const msg = String(err.message || '').toLowerCase();
+  return (
+    err.code === DRIVER_ERROR_CODES.CONFLICT ||
+    err.code === 'LDB_CONFLICT' ||
+    err.name === 'ConflictError' ||
+    err.status === 409 ||
+    msg.includes('already exists') ||
+    msg.includes('conflict')
+  );
+}
+
 export class Model<T = any> {
   public readonly modelName: string;
   public readonly collectionName: string;
+  public readonly databaseName: string;
   public readonly schema: Schema<T>;
 
   constructor(name: string, schema: Schema<T>, collectionName?: string) {
@@ -492,6 +650,7 @@ export class Model<T = any> {
     this.schema = schema;
     this.collectionName =
       collectionName || schema.options.collection || `${name.toLowerCase()}s`;
+    this.databaseName = 'lcs';
 
     // Bind custom statics
     for (const [staticName, fn] of Object.entries(schema.statics)) {
@@ -500,15 +659,16 @@ export class Model<T = any> {
   }
 
   /**
-   * Instantiates a new document
+   * Instantiates a new hydrated document.
    */
-  public hydrate(data: any): HydratedDocument<T> {
+  public hydrate(data: any, isNew = false): HydratedDocument<T> {
     const docData = normalizeDocument(this._applyDefaults(data));
     const model = this;
 
     const doc: any = {
       ...docData,
       _id: docData._id instanceof ObjectId ? docData._id : new ObjectId(docData._id),
+      _isNew: isNew,
       save: async function (this: any): Promise<any> {
         return model._saveDocument(this);
       },
@@ -517,6 +677,7 @@ export class Model<T = any> {
         delete clone.save;
         delete clone.toObject;
         delete clone.toJSON;
+        delete clone._isNew;
         return clone;
       },
       toJSON: function (this: any): any {
@@ -559,6 +720,130 @@ export class Model<T = any> {
     return out;
   }
 
+  /**
+   * Idempotently ensures the remote collection exists and synchronizes all declared schema indexes.
+   * Only called on write paths or explicit initialization; never on unrelated read-only queries.
+   */
+  public async ensureCollectionReady(db: LioranDb): Promise<LioranCollection> {
+    const cacheKey = `${db.databaseName}:${this.collectionName}`;
+    if (initializedCollections.has(cacheKey)) {
+      return db.collection(this.collectionName);
+    }
+
+    if (initializingPromises.has(cacheKey)) {
+      await initializingPromises.get(cacheKey);
+      return db.collection(this.collectionName);
+    }
+
+    const initPromise = (async () => {
+      // 1. Idempotently create collection if it does not already exist
+      try {
+        const existingCollections = await db.listCollections();
+        if (!existingCollections.includes(this.collectionName)) {
+          await db.createCollection(this.collectionName);
+        }
+      } catch (err: any) {
+        if (!isAlreadyExistsError(err)) {
+          console.warn(`[DB] Notice ensuring collection '${this.collectionName}':`, err?.message || err);
+        }
+      }
+
+      const collection = db.collection(this.collectionName);
+
+      // 2. Synchronize declared schema indexes (including field-level unique and compound indexes)
+      await this.syncIndexes(collection);
+
+      initializedCollections.add(cacheKey);
+    })();
+
+    initializingPromises.set(cacheKey, initPromise);
+    try {
+      await initPromise;
+    } finally {
+      initializingPromises.delete(cacheKey);
+    }
+
+    return db.collection(this.collectionName);
+  }
+
+  /**
+   * Synchronizes declared schema indexes with the server-side indexes on LioranDB.
+   * Detects incompatible index definitions and fails explicitly rather than silently replacing them.
+   */
+  public async syncIndexes(collection: LioranCollection): Promise<void> {
+    let existingIndexes: readonly CollectionIndexDefinition[] = [];
+    try {
+      existingIndexes = await collection.listIndexes();
+    } catch {
+      existingIndexes = [];
+    }
+
+    for (const declared of this.schema.declaredIndexes) {
+      const matching = existingIndexes.find((existing) => {
+        if (declared.options.name && existing.name === declared.options.name) return true;
+        if (existing.fields.length !== declared.fields.length) return false;
+        return existing.fields.every((ef, idx) => {
+          const df = declared.fields[idx];
+          return ef.field === df.field && ef.direction.toLowerCase() === df.direction.toLowerCase();
+        });
+      });
+
+      if (matching) {
+        // Detect incompatible existing index definitions
+        const existingUnique = Boolean(matching.unique);
+        const declaredUnique = Boolean(declared.options.unique);
+        if (existingUnique !== declaredUnique) {
+          throw new ConfigurationError(
+            `Index definition conflict on '${this.collectionName}.${matching.name}': server index has unique=${existingUnique}, but schema declares unique=${declaredUnique}. Incompatible index cannot be applied automatically.`
+          );
+        }
+        continue;
+      }
+
+      try {
+        if (
+          declared.fields.length === 1 &&
+          declared.fields[0].direction === 'Asc' &&
+          !declared.options.sparse &&
+          !declared.options.partialFilter
+        ) {
+          await collection.createIndex(declared.fields[0].field, {
+            name: declared.options.name,
+            unique: declared.options.unique,
+          });
+        } else {
+          await collection.createIndex({
+            fields: declared.fields.map((f) => ({
+              field: f.field,
+              direction: f.direction,
+            })),
+            name: declared.options.name,
+            unique: declared.options.unique,
+            sparse: declared.options.sparse,
+            partialFilter: declared.options.partialFilter,
+          });
+        }
+      } catch (err: any) {
+        if (!isAlreadyExistsError(err)) {
+          console.warn(
+            `[DB] Warning synchronizing index '${declared.options.name || declared.fields[0]?.field}' on '${this.collectionName}':`,
+            err?.message || err
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Public helper to trigger index and collection readiness on demand.
+   */
+  public async initIndexes(): Promise<void> {
+    if (isMemoryModeEnabled()) return;
+    const { getDb } = await import('./connection');
+    const db = await getDb();
+    await this.ensureCollectionReady(db);
+  }
+
   public find(filter?: any, projection?: any): Query<Array<HydratedDocument<T>>, Array<T>> {
     return new Query<Array<HydratedDocument<T>>, Array<T>>(this, filter, projection, false, false);
   }
@@ -576,21 +861,21 @@ export class Model<T = any> {
     return new Query<number, number>(this, filter, undefined, false, true);
   }
 
-  public async create(docs: any | any[], options?: any): Promise<any> {
+  public async create(docs: any | any[], _options?: any): Promise<any> {
     if (Array.isArray(docs)) {
-      const hydrated = docs.map((d) => this.hydrate(d));
+      const hydrated = docs.map((d) => this.hydrate(d, true));
       for (const doc of hydrated) {
         await this._saveDocument(doc);
       }
       return hydrated;
     }
-    const hydrated = this.hydrate(docs);
+    const hydrated = this.hydrate(docs, true);
     await this._saveDocument(hydrated);
     return hydrated;
   }
 
-  public async insertMany(docs: any[], _options?: any): Promise<Array<HydratedDocument<T>>> {
-    const hydrated = docs.map((d) => this.hydrate(d));
+  public async insertMany(docs: any[]): Promise<Array<HydratedDocument<T>>> {
+    const hydrated = docs.map((d) => this.hydrate(d, true));
     for (const doc of hydrated) {
       await this._saveDocument(doc);
     }
@@ -599,132 +884,136 @@ export class Model<T = any> {
 
   public async updateOne(filter: any, update: any, options?: QueryOptions): Promise<UpdateResult> {
     const normFilter = normalizeFilter(filter);
-    const collection = await this._getLioranCollection();
 
-    if (collection) {
-      try {
-        const res = await collection.updateOne(normFilter, update, { upsert: options?.upsert });
-        return {
-          matchedCount: res.matchedCount,
-          modifiedCount: res.modifiedCount,
-          upsertedId: res.upsertedId,
-          acknowledged: true,
-        };
-      } catch (err) {
-        // Fallback to in-memory store
+    if (isMemoryModeEnabled()) {
+      const store = getMemoryCollection(this.databaseName, this.collectionName);
+      let matched = 0;
+      let modified = 0;
+      let upsertedId: any = null;
+
+      for (const [id, doc] of store.entries()) {
+        if (matchesFilter(doc, normFilter)) {
+          matched++;
+          applyUpdate(doc, update);
+          if (this.schema.options.timestamps) doc.updatedAt = new Date();
+          store.set(id, doc);
+          modified++;
+          break;
+        }
       }
-    }
 
-    // In-memory update
-    const store = getMemoryCollection(this.collectionName);
-    let matched = 0;
-    let modified = 0;
-    let upsertedId: any = null;
-
-    for (const [id, doc] of store.entries()) {
-      if (matchesFilter(doc, normFilter)) {
-        matched++;
-        applyUpdate(doc, update);
-        if (this.schema.options.timestamps) doc.updatedAt = new Date();
-        store.set(id, doc);
-        modified++;
-        break;
+      if (matched === 0 && options?.upsert) {
+        const newDoc = this.hydrate({ ...normFilter }, false);
+        applyUpdate(newDoc, update);
+        store.set(String(newDoc._id), newDoc);
+        upsertedId = newDoc._id;
+        modified = 1;
       }
+
+      return { matchedCount: matched, modifiedCount: modified, upsertedId, acknowledged: true };
     }
 
-    if (matched === 0 && options?.upsert) {
-      const newDoc = this.hydrate({ ...normFilter });
-      applyUpdate(newDoc, update);
-      store.set(String(newDoc._id), newDoc);
-      upsertedId = newDoc._id;
-      modified = 1;
-    }
+    // Production LioranDB execution: persist before returning success, propagate errors
+    const { getDb } = await import('./connection');
+    const db = await getDb();
+    const collection = await this.ensureCollectionReady(db);
 
-    return { matchedCount: matched, modifiedCount: modified, upsertedId, acknowledged: true };
+    const serializedFilter = serializeForLioran(normFilter);
+    const serializedUpdate = serializeForLioran(update);
+
+    const res = await collection.updateOne(serializedFilter, serializedUpdate, { upsert: options?.upsert });
+    return {
+      matchedCount: res.matchedCount,
+      modifiedCount: res.modifiedCount,
+      upsertedId: res.upsertedId,
+      acknowledged: true,
+    };
   }
 
   public async updateMany(filter: any, update: any, options?: QueryOptions): Promise<UpdateResult> {
     const normFilter = normalizeFilter(filter);
-    const collection = await this._getLioranCollection();
 
-    if (collection) {
-      try {
-        const res = await collection.updateMany(normFilter, update, { upsert: options?.upsert });
-        return {
-          matchedCount: res.matchedCount,
-          modifiedCount: res.modifiedCount,
-          upsertedId: res.upsertedId,
-          acknowledged: true,
-        };
-      } catch (err) {
-        // Fallback to in-memory store
+    if (isMemoryModeEnabled()) {
+      const store = getMemoryCollection(this.databaseName, this.collectionName);
+      let matched = 0;
+      let modified = 0;
+
+      for (const [id, doc] of store.entries()) {
+        if (matchesFilter(doc, normFilter)) {
+          matched++;
+          applyUpdate(doc, update);
+          if (this.schema.options.timestamps) doc.updatedAt = new Date();
+          store.set(id, doc);
+          modified++;
+        }
       }
+
+      return { matchedCount: matched, modifiedCount: modified, upsertedId: null, acknowledged: true };
     }
 
-    const store = getMemoryCollection(this.collectionName);
-    let matched = 0;
-    let modified = 0;
+    const { getDb } = await import('./connection');
+    const db = await getDb();
+    const collection = await this.ensureCollectionReady(db);
 
-    for (const [id, doc] of store.entries()) {
-      if (matchesFilter(doc, normFilter)) {
-        matched++;
-        applyUpdate(doc, update);
-        if (this.schema.options.timestamps) doc.updatedAt = new Date();
-        store.set(id, doc);
-        modified++;
-      }
-    }
+    const serializedFilter = serializeForLioran(normFilter);
+    const serializedUpdate = serializeForLioran(update);
 
-    return { matchedCount: matched, modifiedCount: modified, upsertedId: null, acknowledged: true };
+    const res = await collection.updateMany(serializedFilter, serializedUpdate, { upsert: options?.upsert });
+    return {
+      matchedCount: res.matchedCount,
+      modifiedCount: res.modifiedCount,
+      upsertedId: res.upsertedId,
+      acknowledged: true,
+    };
   }
 
   public async deleteOne(filter: any): Promise<DeleteResult> {
     const normFilter = normalizeFilter(filter);
-    const collection = await this._getLioranCollection();
 
-    if (collection) {
-      try {
-        const res = await collection.deleteOne(normFilter);
-        return { deletedCount: res.deletedCount, acknowledged: true };
-      } catch (err) {
-        // Fallback
+    if (isMemoryModeEnabled()) {
+      const store = getMemoryCollection(this.databaseName, this.collectionName);
+      let deleted = 0;
+      for (const [id, doc] of store.entries()) {
+        if (matchesFilter(doc, normFilter)) {
+          store.delete(id);
+          deleted = 1;
+          break;
+        }
       }
+      return { deletedCount: deleted, acknowledged: true };
     }
 
-    const store = getMemoryCollection(this.collectionName);
-    let deleted = 0;
-    for (const [id, doc] of store.entries()) {
-      if (matchesFilter(doc, normFilter)) {
-        store.delete(id);
-        deleted = 1;
-        break;
-      }
-    }
-    return { deletedCount: deleted, acknowledged: true };
+    const { getDb } = await import('./connection');
+    const db = await getDb();
+    const collection = db.collection(this.collectionName);
+    const serializedFilter = serializeForLioran(normFilter);
+
+    const res = await collection.deleteOne(serializedFilter);
+    return { deletedCount: res.deletedCount, acknowledged: true };
   }
 
   public async deleteMany(filter: any): Promise<DeleteResult> {
     const normFilter = normalizeFilter(filter);
-    const collection = await this._getLioranCollection();
 
-    if (collection) {
-      try {
-        const res = await collection.deleteMany(normFilter);
-        return { deletedCount: res.deletedCount, acknowledged: true };
-      } catch (err) {
-        // Fallback
+    if (isMemoryModeEnabled()) {
+      const store = getMemoryCollection(this.databaseName, this.collectionName);
+      let deleted = 0;
+      for (const [id, doc] of Array.from(store.entries())) {
+        if (matchesFilter(doc, normFilter)) {
+          store.delete(id);
+          deleted++;
+        }
       }
+      return { deletedCount: deleted, acknowledged: true };
     }
 
-    const store = getMemoryCollection(this.collectionName);
-    let deleted = 0;
-    for (const [id, doc] of Array.from(store.entries())) {
-      if (matchesFilter(doc, normFilter)) {
-        store.delete(id);
-        deleted++;
-      }
-    }
-    return { deletedCount: deleted, acknowledged: true };
+    const { getDb } = await import('./connection');
+    const db = await getDb();
+    const collection = db.collection(this.collectionName);
+    const serializedFilter = serializeForLioran(normFilter);
+
+    const res = await collection.deleteMany(serializedFilter);
+    return { deletedCount: res.deletedCount, acknowledged: true };
   }
 
   public async findOneAndUpdate(filter: any, update: any, options?: QueryOptions): Promise<HydratedDocument<T> | null> {
@@ -733,7 +1022,7 @@ export class Model<T = any> {
 
     let doc = await this.findOne(normFilter).exec();
     if (!doc && options?.upsert) {
-      const newDoc = this.hydrate({ ...normFilter });
+      const newDoc = this.hydrate({ ...normFilter }, true);
       applyUpdate(newDoc, update);
       await this._saveDocument(newDoc);
       return newDoc;
@@ -741,7 +1030,7 @@ export class Model<T = any> {
 
     if (!doc) return null;
 
-    const beforeState = this.hydrate(JSON.parse(JSON.stringify(doc)));
+    const beforeState = this.hydrate(JSON.parse(JSON.stringify(doc)), false);
     applyUpdate(doc, update);
     if (this.schema.options.timestamps) {
       doc.updatedAt = new Date();
@@ -770,108 +1059,140 @@ export class Model<T = any> {
   }
 
   public async aggregate<TResult = any>(pipeline: any[]): Promise<TResult[]> {
-    const collection = await this._getLioranCollection();
-    if (collection) {
-      try {
-        const cursor = collection.aggregate<TResult>(pipeline);
-        const results = await cursor.toArray();
-        return Array.from(results);
-      } catch (err) {
-        // Fallback
-      }
-    }
+    if (isMemoryModeEnabled()) {
+      let docs = Array.from(getMemoryCollection(this.databaseName, this.collectionName).values()).map(normalizeDocument);
 
-    // In-memory aggregation engine for basic pipelines ($match, $group, $sort, $limit, $skip)
-    let docs = Array.from(getMemoryCollection(this.collectionName).values()).map(normalizeDocument);
+      for (const stage of pipeline) {
+        if (stage.$match) {
+          docs = docs.filter((d) => matchesFilter(d, stage.$match));
+        } else if (stage.$group) {
+          const groupSpec = stage.$group;
+          const groups = new Map<string, any>();
 
-    for (const stage of pipeline) {
-      if (stage.$match) {
-        docs = docs.filter((d) => matchesFilter(d, stage.$match));
-      } else if (stage.$group) {
-        const groupSpec = stage.$group;
-        const groups = new Map<string, any>();
+          for (const doc of docs) {
+            let groupId: any;
+            if (typeof groupSpec._id === 'string' && groupSpec._id.startsWith('$')) {
+              groupId = getNestedValue(doc, groupSpec._id.substring(1));
+            } else if (groupSpec._id && typeof groupSpec._id === 'object') {
+              const composite: Record<string, any> = {};
+              for (const [k, v] of Object.entries(groupSpec._id)) {
+                if (typeof v === 'string' && v.startsWith('$')) {
+                  composite[k] = getNestedValue(doc, v.substring(1));
+                } else {
+                  composite[k] = v;
+                }
+              }
+              groupId = composite;
+            } else {
+              groupId = groupSpec._id;
+            }
 
-        for (const doc of docs) {
-          let groupId: any;
-          if (typeof groupSpec._id === 'string' && groupSpec._id.startsWith('$')) {
-            groupId = getNestedValue(doc, groupSpec._id.substring(1));
-          } else if (groupSpec._id && typeof groupSpec._id === 'object') {
-            const composite: Record<string, any> = {};
-            for (const [k, v] of Object.entries(groupSpec._id)) {
-              if (typeof v === 'string' && v.startsWith('$')) {
-                composite[k] = getNestedValue(doc, v.substring(1));
-              } else {
-                composite[k] = v;
+            const groupKey = JSON.stringify(groupId);
+            if (!groups.has(groupKey)) {
+              groups.set(groupKey, { _id: groupId, count: 0, items: [] });
+            }
+            const groupObj = groups.get(groupKey);
+            groupObj.count++;
+            groupObj.items.push(doc);
+
+            for (const [accField, accExpr] of Object.entries(groupSpec)) {
+              if (accField === '_id') continue;
+              if (accExpr && typeof accExpr === 'object' && '$sum' in (accExpr as any)) {
+                const sumVal = (accExpr as any).$sum;
+                const increment =
+                  typeof sumVal === 'number'
+                    ? sumVal
+                    : typeof sumVal === 'string' && sumVal.startsWith('$')
+                    ? Number(getNestedValue(doc, sumVal.substring(1)) || 0)
+                    : 1;
+                groupObj[accField] = (groupObj[accField] || 0) + increment;
               }
             }
-            groupId = composite;
-          } else {
-            groupId = groupSpec._id;
           }
-
-          const groupKey = JSON.stringify(groupId);
-          if (!groups.has(groupKey)) {
-            groups.set(groupKey, { _id: groupId, count: 0, items: [] });
-          }
-          const groupObj = groups.get(groupKey);
-          groupObj.count++;
-          groupObj.items.push(doc);
-
-          for (const [accField, accExpr] of Object.entries(groupSpec)) {
-            if (accField === '_id') continue;
-            if (accExpr && typeof accExpr === 'object' && '$sum' in (accExpr as any)) {
-              const sumVal = (accExpr as any).$sum;
-              const increment =
-                typeof sumVal === 'number'
-                  ? sumVal
-                  : typeof sumVal === 'string' && sumVal.startsWith('$')
-                  ? Number(getNestedValue(doc, sumVal.substring(1)) || 0)
-                  : 1;
-              groupObj[accField] = (groupObj[accField] || 0) + increment;
+          docs = Array.from(groups.values());
+        } else if (stage.$sort) {
+          docs.sort((a, b) => {
+            for (const [sortField, dir] of Object.entries(stage.$sort)) {
+              const factor = dir === -1 || dir === 'desc' ? -1 : 1;
+              const comp = compareValues(getNestedValue(a, sortField), getNestedValue(b, sortField));
+              if (comp !== 0) return comp * factor;
             }
-          }
+            return 0;
+          });
+        } else if (stage.$skip) {
+          docs = docs.slice(stage.$skip);
+        } else if (stage.$limit) {
+          docs = docs.slice(0, stage.$limit);
         }
-        docs = Array.from(groups.values());
-      } else if (stage.$sort) {
-        docs.sort((a, b) => {
-          for (const [sortField, dir] of Object.entries(stage.$sort)) {
-            const factor = dir === -1 || dir === 'desc' ? -1 : 1;
-            const comp = compareValues(getNestedValue(a, sortField), getNestedValue(b, sortField));
-            if (comp !== 0) return comp * factor;
-          }
-          return 0;
-        });
-      } else if (stage.$skip) {
-        docs = docs.slice(stage.$skip);
-      } else if (stage.$limit) {
-        docs = docs.slice(0, stage.$limit);
       }
+
+      return docs as TResult[];
     }
 
-    return docs as TResult[];
+    const { getDb } = await import('./connection');
+    const db = await getDb();
+    const collection = db.collection(this.collectionName);
+    const serializedPipeline = serializeForLioran(pipeline);
+
+    const cursor = collection.aggregate<TResult>(serializedPipeline);
+    const results = await cursor.toArray();
+    return Array.from(results);
   }
 
+  /**
+   * Persists a document to the remote LioranDB database.
+   * Awaits remote persistence, enforces immutable _id semantics, and propagates errors.
+   */
   public async _saveDocument(doc: any): Promise<HydratedDocument<T>> {
+    const isNew = doc._isNew !== false;
     const raw = doc.toObject ? doc.toObject() : { ...doc };
     delete raw.save;
     delete raw.toObject;
     delete raw.toJSON;
+    delete raw._isNew;
 
-    const idStr = String(raw._id);
-    const store = getMemoryCollection(this.collectionName);
-    store.set(idStr, raw);
-
-    const collection = await this._getLioranCollection();
-    if (collection) {
-      try {
-        const payload = normalizeFilter(raw);
-        await collection.updateOne({ _id: idStr }, { $set: payload }, { upsert: true });
-      } catch (err) {
-        // In-memory copy already saved
-      }
+    const now = new Date();
+    if (this.schema.options.timestamps) {
+      if (isNew && !raw.createdAt) raw.createdAt = now;
+      raw.updatedAt = now;
+      doc.updatedAt = now;
+      if (isNew && !doc.createdAt) doc.createdAt = now;
     }
 
-    return this.hydrate(raw);
+    const idStr = raw._id instanceof ObjectId ? raw._id.toString() : String(raw._id);
+    raw._id = idStr;
+
+    if (isMemoryModeEnabled()) {
+      const store = getMemoryCollection(this.databaseName, this.collectionName);
+      store.set(idStr, JSON.parse(JSON.stringify(raw)));
+      doc._isNew = false;
+      return this.hydrate(raw, false);
+    }
+
+    // Production write: Persist to remote LioranDB before reporting success
+    const { getDb } = await import('./connection');
+    const db = await getDb();
+    const collection = await this.ensureCollectionReady(db);
+
+    const serialized = serializeForLioran(raw);
+
+    if (isNew) {
+      // Direct insert for new documents respects uniqueness constraints
+      await collection.insertOne(serialized);
+      doc._isNew = false;
+    } else {
+      // Exclude _id from $set payload to prevent immutable _id modification violations
+      const fieldsToUpdate = { ...serialized };
+      delete fieldsToUpdate._id;
+      const res = await collection.updateOne({ _id: idStr }, { $set: fieldsToUpdate });
+      if (res.matchedCount === 0) {
+        // Document does not exist remotely, insert it
+        await collection.insertOne(serialized);
+      }
+      doc._isNew = false;
+    }
+
+    return this.hydrate(raw, false);
   }
 
   public async _executeQuery(params: {
@@ -886,46 +1207,10 @@ export class Model<T = any> {
     populate: Array<{ path: string; select?: string }>;
   }): Promise<any> {
     const normFilter = normalizeFilter(params.filter);
-    const collection = await this._getLioranCollection();
 
-    let docs: any[] = [];
-    let fromRemote = false;
-
-    if (collection) {
-      try {
-        if (params.count) {
-          const count = await collection.countDocuments(normFilter);
-          return count;
-        }
-
-        if (params.single) {
-          const found = await collection.findOne(normFilter, {
-            sort: params.sort,
-            projection: params.projection,
-          });
-          if (found) {
-            docs = [found];
-            fromRemote = true;
-          }
-        } else {
-          const cursor = collection.find(normFilter, {
-            sort: params.sort,
-            skip: params.skip,
-            limit: params.limit,
-            projection: params.projection,
-          });
-          docs = (await cursor.toArray()) as any[];
-          fromRemote = true;
-        }
-      } catch (err) {
-        // Fallback to in-memory store
-      }
-    }
-
-    if (!fromRemote) {
-      // Query in-memory store
-      const store = getMemoryCollection(this.collectionName);
-      docs = Array.from(store.values()).filter((d) => matchesFilter(d, normFilter));
+    if (isMemoryModeEnabled()) {
+      const store = getMemoryCollection(this.databaseName, this.collectionName);
+      let docs = Array.from(store.values()).filter((d) => matchesFilter(d, normFilter));
 
       if (params.sort) {
         docs.sort((a, b) => {
@@ -953,6 +1238,46 @@ export class Model<T = any> {
       if (params.single) {
         docs = docs.slice(0, 1);
       }
+
+      if (params.single) {
+        if (docs.length === 0) return null;
+        const normalized = normalizeDocument(docs[0]);
+        return params.isLean ? normalized : this.hydrate(normalized, false);
+      }
+
+      const normalizedList = docs.map(normalizeDocument);
+      return params.isLean ? normalizedList : normalizedList.map((d) => this.hydrate(d, false));
+    }
+
+    // Remote LioranDB query execution
+    const { getDb } = await import('./connection');
+    const db = await getDb();
+    const collection = db.collection(this.collectionName);
+
+    const serializedFilter = serializeForLioran(normFilter);
+
+    if (params.count) {
+      return await collection.countDocuments(serializedFilter);
+    }
+
+    let docs: any[] = [];
+
+    if (params.single) {
+      const found = await collection.findOne(serializedFilter, {
+        sort: params.sort,
+        projection: params.projection,
+      });
+      if (found) {
+        docs = [found];
+      }
+    } else {
+      const cursor = collection.find(serializedFilter, {
+        sort: params.sort,
+        skip: params.skip,
+        limit: params.limit,
+        projection: params.projection,
+      });
+      docs = (await cursor.toArray()) as any[];
     }
 
     // Populate references if requested
@@ -960,7 +1285,8 @@ export class Model<T = any> {
       for (const pop of params.populate) {
         const refField = pop.path;
         const schemaDef = this.schema.definition[refField];
-        const refModelName = schemaDef?.ref || (schemaDef && typeof schemaDef === 'object' && schemaDef.type && schemaDef.type.ref);
+        const refModelName =
+          schemaDef?.ref || (schemaDef && typeof schemaDef === 'object' && schemaDef.type && schemaDef.type.ref);
 
         if (refModelName && modelsRegistry[refModelName]) {
           const targetModel = modelsRegistry[refModelName];
@@ -990,24 +1316,17 @@ export class Model<T = any> {
     if (params.single) {
       if (docs.length === 0) return null;
       const normalized = normalizeDocument(docs[0]);
-      return params.isLean ? normalized : this.hydrate(normalized);
+      return params.isLean ? normalized : this.hydrate(normalized, false);
     }
 
     const normalizedList = docs.map(normalizeDocument);
-    return params.isLean ? normalizedList : normalizedList.map((d) => this.hydrate(d));
+    return params.isLean ? normalizedList : normalizedList.map((d) => this.hydrate(d, false));
   }
 
-  private async _getLioranCollection(): Promise<LioranCollection | null> {
-    try {
-      const { getDb } = await import('./connection');
-      const db = await getDb();
-      if (db) {
-        return db.collection(this.collectionName);
-      }
-    } catch {
-      // In-memory fallback
-    }
-    return null;
+  private async _getLioranCollection(): Promise<LioranCollection> {
+    const { getDb } = await import('./connection');
+    const db = await getDb();
+    return db.collection(this.collectionName);
   }
 }
 
@@ -1029,10 +1348,12 @@ export function model<T = any>(name: string, schema?: Schema<T>, collection?: st
 
 export const models = modelsRegistry;
 
-export default {
+const dbAdapter = {
   Schema,
   model,
   models,
   Types,
   ObjectId,
 };
+
+export default dbAdapter;

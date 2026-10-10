@@ -46,6 +46,7 @@ export class AccountVerificationRequiredError extends AppError {
 }
 
 import { LioranDBAdminError } from '@/lib/liorandb-admin/errors';
+import { LioranDriverError, DRIVER_ERROR_CODES } from '@liorandb/driver';
 
 export function createApiError(error: unknown): Response {
   if (error instanceof AccountVerificationRequiredError) {
@@ -70,6 +71,62 @@ export function createApiError(error: unknown): Response {
       { status: error.statusCode }
     );
   }
+
+  // Handle LioranDB driver runtime errors with safe status codes and messages
+  if (error instanceof LioranDriverError || (error && typeof error === 'object' && 'category' in error)) {
+    const driverErr = error as LioranDriverError;
+    const category = driverErr.category;
+    const code = driverErr.code;
+
+    if (category === 'conflict' || code === DRIVER_ERROR_CODES.DUPLICATE_KEY || code === DRIVER_ERROR_CODES.CONFLICT) {
+      return Response.json(
+        { error: 'Conflict', message: 'A record with this unique identifier already exists.', code: 'DUPLICATE_KEY' },
+        { status: 409 }
+      );
+    }
+
+    if (category === 'authentication' || code === DRIVER_ERROR_CODES.AUTH_INVALID_CREDENTIALS || code === DRIVER_ERROR_CODES.AUTH_REQUIRED) {
+      return Response.json(
+        { error: 'AuthenticationFailed', message: 'Database authentication failed.', code: 'AUTH_FAILED' },
+        { status: 401 }
+      );
+    }
+
+    if (category === 'authorization' || code === DRIVER_ERROR_CODES.PERMISSION_DENIED) {
+      return Response.json(
+        { error: 'Forbidden', message: 'Permission denied on database operation.', code: 'FORBIDDEN' },
+        { status: 403 }
+      );
+    }
+
+    if (category === 'network' || category === 'server-unavailable' || code === DRIVER_ERROR_CODES.CONNECTION_REFUSED) {
+      return Response.json(
+        { error: 'DatabaseUnavailable', message: 'Database service is currently unavailable. Please try again.', code: 'DATABASE_UNAVAILABLE' },
+        { status: 503 }
+      );
+    }
+
+    if (category === 'timeout' || code === DRIVER_ERROR_CODES.REQUEST_TIMEOUT) {
+      return Response.json(
+        { error: 'DatabaseTimeout', message: 'Database operation timed out. Please try again.', code: 'TIMEOUT' },
+        { status: 504 }
+      );
+    }
+
+    if (category === 'validation' || code === DRIVER_ERROR_CODES.VALIDATION_FAILED) {
+      return Response.json(
+        { error: 'ValidationError', message: driverErr.message, code: 'VALIDATION_FAILED' },
+        { status: 400 }
+      );
+    }
+
+    console.error('[LioranDB Driver Error]', driverErr.toDiagnosticString?.() || driverErr.message);
+    return Response.json(
+      { error: 'DatabaseError', message: 'A persistent database error occurred.', code: driverErr.code },
+      { status: 500 }
+    );
+  }
+
   const message =
     process.env.NODE_ENV === 'development' && error instanceof Error
       ? error.message
@@ -81,6 +138,14 @@ export function createApiError(error: unknown): Response {
 export function createActionError(error: unknown): { error: string } {
   if (error instanceof AppError) {
     return { error: error.message };
+  }
+  if (error instanceof LioranDriverError) {
+    if (error.category === 'conflict' || error.code === DRIVER_ERROR_CODES.DUPLICATE_KEY) {
+      return { error: 'An account or record with this unique identifier already exists.' };
+    }
+    if (error.category === 'network' || error.category === 'server-unavailable') {
+      return { error: 'Database service is currently unavailable. Please try again.' };
+    }
   }
   console.error('[Action Error]', error);
   return { error: 'An unexpected error occurred. Please try again.' };
