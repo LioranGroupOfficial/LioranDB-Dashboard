@@ -771,6 +771,58 @@ export function isUnsupportedOperatorError(err: any): boolean {
   );
 }
 
+export function isTransientError(err: any): boolean {
+  if (!err) return false;
+  const status = Number(err.status || err.httpStatus || 0);
+  const code = String(err.code || '');
+  const serverCode = String(err.serverCode || '');
+  const category = String(err.category || '');
+  const msg = String(err.message || '').toLowerCase();
+
+  return (
+    status === 429 ||
+    status === 503 ||
+    status === 504 ||
+    Boolean(err.retryable) ||
+    code === 'LDB_RATE_LIMITED' ||
+    code === 'LDB_SERVER_UNAVAILABLE' ||
+    code === 'LDB_REQUEST_TIMEOUT' ||
+    serverCode === 'RATE_LIMIT_EXCEEDED' ||
+    serverCode === 'RESOURCE_EXHAUSTED' ||
+    category === 'server-overloaded' ||
+    category === 'server-unavailable' ||
+    msg.includes('rate limit') ||
+    msg.includes('overloaded') ||
+    msg.includes('temporarily overloaded') ||
+    msg.includes('too many requests')
+  );
+}
+
+/**
+ * Retries an asynchronous database operation when encountering transient
+ * server overload or rate limit errors (HTTP 429 / 503) using exponential backoff with jitter.
+ */
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3,
+  baseDelayMs = 150
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await operation();
+    } catch (err: any) {
+      attempt++;
+      if (attempt > maxRetries || !isTransientError(err)) {
+        throw err;
+      }
+      const jitter = Math.floor(Math.random() * 100);
+      const delayMs = baseDelayMs * Math.pow(2, attempt - 1) + jitter;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 export class Model<T = any> {
   public readonly modelName: string;
   public readonly collectionName: string;
@@ -870,9 +922,9 @@ export class Model<T = any> {
     const initPromise = (async () => {
       // 1. Idempotently create collection if it does not already exist
       try {
-        const existingCollections = await db.listCollections();
+        const existingCollections = await withRetry(() => db.listCollections());
         if (!existingCollections.includes(this.collectionName)) {
-          await db.createCollection(this.collectionName);
+          await withRetry(() => db.createCollection(this.collectionName));
         }
       } catch (err: any) {
         if (!isAlreadyExistsError(err)) {
@@ -905,7 +957,7 @@ export class Model<T = any> {
   public async syncIndexes(collection: LioranCollection): Promise<void> {
     let existingIndexes: readonly CollectionIndexDefinition[] = [];
     try {
-      existingIndexes = await collection.listIndexes();
+      existingIndexes = await withRetry(() => collection.listIndexes());
     } catch {
       existingIndexes = [];
     }
@@ -939,21 +991,25 @@ export class Model<T = any> {
           !declared.options.sparse &&
           !declared.options.partialFilter
         ) {
-          await collection.createIndex(declared.fields[0].field, {
-            name: declared.options.name,
-            unique: declared.options.unique,
-          });
+          await withRetry(() =>
+            collection.createIndex(declared.fields[0].field, {
+              name: declared.options.name,
+              unique: declared.options.unique,
+            })
+          );
         } else {
-          await collection.createIndex({
-            fields: declared.fields.map((f) => ({
-              field: f.field,
-              direction: f.direction,
-            })),
-            name: declared.options.name,
-            unique: declared.options.unique,
-            sparse: declared.options.sparse,
-            partialFilter: declared.options.partialFilter,
-          });
+          await withRetry(() =>
+            collection.createIndex({
+              fields: declared.fields.map((f) => ({
+                field: f.field,
+                direction: f.direction,
+              })),
+              name: declared.options.name,
+              unique: declared.options.unique,
+              sparse: declared.options.sparse,
+              partialFilter: declared.options.partialFilter,
+            })
+          );
         }
       } catch (err: any) {
         if (!isAlreadyExistsError(err)) {
@@ -1053,7 +1109,9 @@ export class Model<T = any> {
     const serializedFilter = serializeForLioran(normFilter);
     const serializedUpdate = serializeForLioran(update);
 
-    const res = await collection.updateOne(serializedFilter, serializedUpdate, { upsert: options?.upsert });
+    const res = await withRetry(() =>
+      collection.updateOne(serializedFilter, serializedUpdate, { upsert: options?.upsert })
+    );
     return {
       matchedCount: res.matchedCount,
       modifiedCount: res.modifiedCount,
@@ -1090,7 +1148,9 @@ export class Model<T = any> {
     const serializedFilter = serializeForLioran(normFilter);
     const serializedUpdate = serializeForLioran(update);
 
-    const res = await collection.updateMany(serializedFilter, serializedUpdate, { upsert: options?.upsert });
+    const res = await withRetry(() =>
+      collection.updateMany(serializedFilter, serializedUpdate, { upsert: options?.upsert })
+    );
     return {
       matchedCount: res.matchedCount,
       modifiedCount: res.modifiedCount,
@@ -1121,7 +1181,7 @@ export class Model<T = any> {
     const serializedFilter = serializeForLioran(normFilter);
 
     try {
-      const res = await collection.deleteOne(serializedFilter);
+      const res = await withRetry(() => collection.deleteOne(serializedFilter));
       return { deletedCount: res.deletedCount, acknowledged: true };
     } catch (err: any) {
       if (isCollectionNotFoundError(err)) {
@@ -1153,7 +1213,7 @@ export class Model<T = any> {
     const serializedFilter = serializeForLioran(normFilter);
 
     try {
-      const res = await collection.deleteMany(serializedFilter);
+      const res = await withRetry(() => collection.deleteMany(serializedFilter));
       return { deletedCount: res.deletedCount, acknowledged: true };
     } catch (err: any) {
       if (isCollectionNotFoundError(err)) {
@@ -1284,7 +1344,7 @@ export class Model<T = any> {
 
     try {
       const cursor = collection.aggregate<TResult>(serializedPipeline);
-      const results = await cursor.toArray();
+      const results = await withRetry(() => cursor.toArray());
       return Array.from(results);
     } catch (err: any) {
       if (isCollectionNotFoundError(err)) {
@@ -1335,16 +1395,16 @@ export class Model<T = any> {
 
     if (isNew) {
       // Direct insert for new documents respects uniqueness constraints
-      await collection.insertOne(serialized);
+      await withRetry(() => collection.insertOne(serialized));
       doc._isNew = false;
     } else {
       // Exclude _id from $set payload to prevent immutable _id modification violations
       const fieldsToUpdate = { ...serialized };
       delete fieldsToUpdate._id;
-      const res = await collection.updateOne({ _id: idStr }, { $set: fieldsToUpdate });
+      const res = await withRetry(() => collection.updateOne({ _id: idStr }, { $set: fieldsToUpdate }));
       if (res.matchedCount === 0) {
         // Document does not exist remotely, insert it
-        await collection.insertOne(serialized);
+        await withRetry(() => collection.insertOne(serialized));
       }
       doc._isNew = false;
     }
@@ -1422,7 +1482,7 @@ export class Model<T = any> {
 
     if (params.count) {
       try {
-        return await collection.countDocuments(serializedFilter);
+        return await withRetry(() => collection.countDocuments(serializedFilter));
       } catch (err: any) {
         if (isCollectionNotFoundError(err)) {
           await this.ensureCollectionReady(db).catch(() => {});
@@ -1432,7 +1492,7 @@ export class Model<T = any> {
           let allDocs: any[] = [];
           try {
             const cursor = collection.find({});
-            allDocs = (await cursor.toArray()) as any[];
+            allDocs = (await withRetry(() => cursor.toArray())) as any[];
           } catch {
             allDocs = [];
           }
@@ -1446,10 +1506,12 @@ export class Model<T = any> {
 
     try {
       if (params.single) {
-        const found = await collection.findOne(serializedFilter, {
-          sort: params.sort,
-          projection: parsedProj.driverProjection,
-        });
+        const found = await withRetry(() =>
+          collection.findOne(serializedFilter, {
+            sort: params.sort,
+            projection: parsedProj.driverProjection,
+          })
+        );
         if (found) {
           docs = [found];
         }
@@ -1460,7 +1522,7 @@ export class Model<T = any> {
           limit: params.limit,
           projection: parsedProj.driverProjection,
         });
-        docs = (await cursor.toArray()) as any[];
+        docs = (await withRetry(() => cursor.toArray())) as any[];
       }
     } catch (err: any) {
       if (isCollectionNotFoundError(err)) {
@@ -1470,11 +1532,11 @@ export class Model<T = any> {
         let allRemote: any[] = [];
         try {
           const cursor = collection.find({}, { sort: params.sort });
-          allRemote = (await cursor.toArray()) as any[];
+          allRemote = (await withRetry(() => cursor.toArray())) as any[];
         } catch {
           try {
             const cursor = collection.find({});
-            allRemote = (await cursor.toArray()) as any[];
+            allRemote = (await withRetry(() => cursor.toArray())) as any[];
           } catch {
             allRemote = [];
           }

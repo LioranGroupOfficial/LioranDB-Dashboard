@@ -92,6 +92,7 @@ export const DRIVER_ERROR_CODES = {
   DUPLICATE_KEY: 'LDB_DUPLICATE_KEY',
   CONFLICT: 'LDB_CONFLICT',
   COLLECTION_NOT_FOUND: 'LDB_COLLECTION_NOT_FOUND',
+  RATE_LIMITED: 'LDB_RATE_LIMITED',
   VALIDATION_FAILED: 'LDB_VALIDATION_FAILED',
   CLIENT_CLOSED: 'LDB_CLIENT_CLOSED',
 } as const;
@@ -99,11 +100,13 @@ export const DRIVER_ERROR_CODES = {
 export class LioranDriverError extends Error {
   public code: string;
   public category: string;
+  public retryable?: boolean;
   constructor(message: string, options: any = {}) {
     super(message);
     this.name = 'LioranDriverError';
     this.code = options.code || 'LDB_UNKNOWN';
     this.category = options.category || 'unknown';
+    this.retryable = options.retryable;
   }
   toDiagnosticString(): string {
     return `${this.name}: ${this.message} (code: ${this.code})`;
@@ -114,6 +117,13 @@ export class NotFoundError extends LioranDriverError {
   constructor(message = 'Resource not found', options: any = {}) {
     super(message, { code: DRIVER_ERROR_CODES.COLLECTION_NOT_FOUND, category: 'not-found', ...options });
     this.name = 'NotFoundError';
+  }
+}
+
+export class ServerOverloadedError extends LioranDriverError {
+  constructor(message = 'Server overloaded', options: any = {}) {
+    super(message, { code: DRIVER_ERROR_CODES.RATE_LIMITED, category: 'server-overloaded', retryable: true, ...options });
+    this.name = 'ServerOverloadedError';
   }
 }
 

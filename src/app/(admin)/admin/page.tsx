@@ -19,17 +19,14 @@ export default async function AdminDashboardPage() {
   await requireRole('admin');
   await connectToDatabase();
 
-  const [
-    totalUsers,
-    activeDbs,
-    openInvoices,
-    openTickets,
-    couponsCount,
-    recentAudit,
-  ] = await Promise.all([
+  // Batch queries into smaller groups to smooth concurrency on the hosted LioranDB gateway
+  const [totalUsers, activeDbs, openInvoices] = await Promise.all([
     User.countDocuments({ role: 'customer' }),
     ManagedDatabase.countDocuments({ status: { $in: ['ACTIVE', 'RUNNING'] } }),
     Invoice.countDocuments({ status: { $in: ['OPEN', 'OVERDUE'] } }),
+  ]);
+
+  const [openTickets, couponsCount, recentAudit] = await Promise.all([
     SupportTicket.countDocuments({ status: { $in: ['OPEN', 'IN_PROGRESS', 'WAITING_FOR_CUSTOMER'] } }),
     Coupon.countDocuments({ enabled: true }),
     AuditLog.find().sort({ createdAt: -1 }).limit(8).lean(),
