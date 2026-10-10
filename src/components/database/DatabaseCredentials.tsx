@@ -35,9 +35,13 @@ export default function DatabaseCredentials({ db }: Props) {
     }
   }
 
-  const realConnectionUri =
+  const realConnectionUri = (
     db.connectionUri ||
-    `liorandb://${encodeURIComponent(db.username)}:<password>@${db.host}:${db.port}/${encodeURIComponent(db.databaseName)}`;
+    `liorandb+https://${encodeURIComponent(db.username)}:<password>@${db.host}:${db.port}`
+  ).replace(/^(liorandb(?:\+https)?:\/\/[^/?]+).*$/, "$1");
+  // const realConnectionUri =
+  //   db.connectionUri ||
+  //   `liorandb://${encodeURIComponent(db.username)}:<password>@${db.host}:${db.port}/${encodeURIComponent(db.databaseName)}`;
 
   // Mask the password portion by default
   const maskedConnectionUri = realConnectionUri.replace(
