@@ -99,14 +99,12 @@ export async function POST(
         {
           $set: {
             status: 'AVAILABLE',
-            cleanStatus: 'CLEAN',
             healthStatus: 'HEALTHY',
             currentAssignedCount: 0,
             lastResetAt: now,
-            lastCleanCheckAt: now,
             lastHealthCheckAt: now,
             ...(purgeResult.rotatedRootPassword ? { lastCredentialRotationAt: now } : {}),
-            adminNotes: `Admin-authorized tenant purge completed on ${now.toISOString()}. Node verified clean and released for allocation.`,
+            adminNotes: `Admin-authorized tenant purge completed on ${now.toISOString()}. Engine reset verified and node released for allocation.`,
           },
           $unset: {
             quarantineReason: 1,
@@ -135,29 +133,26 @@ export async function POST(
           action: 'PURGE_AND_RELEASE',
           nodeName: lockedNode.name,
           status: 'AVAILABLE',
-          cleanStatus: 'CLEAN',
         },
       });
 
       return NextResponse.json({
         success: true,
-        message: `Hosting node "${lockedNode.name}" was successfully purged, sanitized, verified clean, and released for customer allocation.`,
+        message: `Hosting node "${lockedNode.name}" was successfully purged, sanitized, and released for customer allocation.`,
         purgeResult,
       });
     } else {
-      // Purge or clean verification failed: leave node safely QUARANTINED
+      // Purge failed: leave node safely QUARANTINED
       await HostingNode.findOneAndUpdate(
         { _id: lockedNode._id, status: 'RESETTING' },
         {
           $set: {
             status: 'QUARANTINED',
-            cleanStatus: 'DIRTY',
             healthStatus: 'DEGRADED',
             currentAssignedCount: 0,
-            quarantineReason: purgeResult.error || 'Clean state verification failed post-reset',
-            cleanupFailureReason: purgeResult.error || 'Clean state verification failed post-reset',
-            lastCleanCheckAt: now,
-            adminNotes: `QUARANTINED: Admin-authorized purge failed: ${purgeResult.error || 'Clean check failed'}`,
+            quarantineReason: purgeResult.error || 'Server reset failed',
+            cleanupFailureReason: purgeResult.error || 'Server reset failed',
+            adminNotes: `QUARANTINED: Admin-authorized purge failed: ${purgeResult.error || 'Reset failed'}`,
           },
           $unset: {
             currentAllocationId: 1,

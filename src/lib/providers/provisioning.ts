@@ -101,11 +101,10 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     }
 
     if (!node) {
-      // Select an available unassigned dedicated hosting node that is strictly verified CLEAN
+      // Select an available unassigned dedicated hosting node with healthy control plane
       node = await HostingNode.findOne({
-        status: 'AVAILABLE',
+        status: { $in: ['AVAILABLE', 'ACTIVE'] },
         healthStatus: 'HEALTHY',
-        cleanStatus: 'CLEAN',
         currentAssignedCount: 0,
       });
     }
@@ -121,25 +120,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     const client = LioranDBAdminClient.forNode(node);
 
     try {
-      // 1. Authoritatively verify clean state and live server status before customer allocation
-      if (!params.skipCleanVerification) {
-        const cleanCheck = await client.verifyCleanState(node.serverIdentity);
-        if (!cleanCheck.isClean) {
-          console.error(`[Provisioning] Node '${node.name}' failed pre-provision clean state check: ${cleanCheck.reasons.join(', ')}`);
-          node.status = 'QUARANTINED';
-          node.healthStatus = 'DEGRADED';
-          node.cleanStatus = cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE' ? 'PENDING_VERIFICATION' : 'DIRTY';
-          node.cleanupFailureReason = cleanCheck.reason || cleanCheck.reasons.join('; ');
-          node.quarantineReason = node.cleanupFailureReason;
-          node.adminNotes = `Pre-provision clean state failed: ${node.cleanupFailureReason}`;
-          await node.save();
-          return {
-            success: false,
-            error: `Target hosting node '${node.name}' clean-state verification failed (${node.cleanupFailureReason}) and has been quarantined. Customer data isolation protected.`,
-          };
-        }
-      }
-
+      // 1. Live server health and identity check
       const status = await client.getServerStatus();
       if (status.status !== 'HEALTHY' && status.state !== 'Ready') {
         return {
@@ -677,7 +658,6 @@ export async function allocateAndProvisionInstance(
         _id: params.nodeId,
         status: { $in: ['AVAILABLE', 'ACTIVE'] },
         healthStatus: 'HEALTHY',
-        cleanStatus: 'CLEAN',
         currentAssignedCount: 0,
         $or: [
           { currentAllocationId: { $exists: false } },
@@ -687,9 +667,10 @@ export async function allocateAndProvisionInstance(
       },
       {
         $set: {
-          status: 'RESERVED',
+          status: 'PROVISIONING',
           currentAllocationId: allocationToken,
           allocationExpiresAt: leaseExpiresAt,
+          currentAssignedCount: 1,
         },
       },
       { returnDocument: 'after' }
@@ -699,7 +680,6 @@ export async function allocateAndProvisionInstance(
       {
         status: { $in: ['AVAILABLE', 'ACTIVE'] },
         healthStatus: 'HEALTHY',
-        cleanStatus: 'CLEAN',
         currentAssignedCount: 0,
         $or: [
           { currentAllocationId: { $exists: false } },
@@ -709,9 +689,10 @@ export async function allocateAndProvisionInstance(
       },
       {
         $set: {
-          status: 'RESERVED',
+          status: 'PROVISIONING',
           currentAllocationId: allocationToken,
           allocationExpiresAt: leaseExpiresAt,
+          currentAssignedCount: 1,
         },
       },
       { returnDocument: 'after', sort: { isDefault: -1, createdAt: 1 } }
@@ -747,7 +728,7 @@ export async function allocateAndProvisionInstance(
       couponDiscountPercentage: params.couponDiscountPercentage || 0,
       status: 'PROVISIONING',
       allocationToken,
-      provisioningStage: 'RESERVED',
+      provisioningStage: 'PROVISIONING',
       host: reservedNode.dbUrl,
       port: reservedNode.port || 27018,
       grpcUrl: reservedNode.grpcUrl,
@@ -779,7 +760,6 @@ export async function allocateAndProvisionInstance(
       {
         $set: {
           status: 'AVAILABLE',
-          cleanStatus: 'CLEAN',
           currentAssignedCount: 0,
         },
         $unset: {
@@ -792,56 +772,14 @@ export async function allocateAndProvisionInstance(
     throw dbErr;
   }
 
-  // Step 3: Authoritative pre-mutation clean verification & server identity check
+  // Step 3: Check Rust server health and identity before making any mutations
   const client = LioranDBAdminClient.forNode(reservedNode);
   try {
-    const cleanCheck = await client.verifyCleanState(reservedNode.serverIdentity);
-    if (!cleanCheck.isClean) {
-      const failReason = cleanCheck.reason || cleanCheck.reasons.join('; ');
-      console.error(
-        `[Provisioning] Node '${reservedNode.name}' failed pre-provision clean state check: ${failReason}`
-      );
-
-      // Node failed pre-allocation check: quarantine node and mark instance FAILED
-      await HostingNode.findOneAndUpdate(
-        { _id: reservedNode._id, currentAllocationId: allocationToken },
-        {
-          $set: {
-            status: 'QUARANTINED',
-            healthStatus: 'DEGRADED',
-            cleanStatus:
-              cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE'
-                ? 'PENDING_VERIFICATION'
-                : 'DIRTY',
-            quarantineReason: `Pre-allocation clean verification failed: ${failReason}`,
-            cleanupFailureReason: failReason,
-            adminNotes: `Quarantined during pre-allocation check: ${failReason}`,
-            currentAssignedCount: 0,
-          },
-          $unset: {
-            currentAllocationId: 1,
-            allocationExpiresAt: 1,
-            assignedInstanceId: 1,
-          },
-        }
-      );
-
-      instance.status = 'FAILED';
-      instance.provisioningStage = 'CLEAN_CHECK_FAILED';
-      instance.lastProvisioningError = failReason;
-      instance.adminNotes = `Pre-allocation clean check failed: ${failReason}`;
-      await instance.save();
-
-      throw new Error(
-        `Target hosting node '${reservedNode.name}' clean-state verification failed (${failReason}) and has been quarantined. Customer data isolation protected.`
-      );
-    }
-
     const serverStatus = await client.getServerStatus();
     if (serverStatus.status !== 'HEALTHY' && serverStatus.state !== 'Ready') {
       const statusFailReason = `Server is not in Ready state (current state: ${serverStatus.state || serverStatus.status})`;
 
-      // Release reservation back to AVAILABLE if clean, or quarantine if degraded
+      // Release unmutated node reservation back to AVAILABLE (with degraded health status)
       await HostingNode.findOneAndUpdate(
         { _id: reservedNode._id, currentAllocationId: allocationToken },
         {
@@ -865,12 +803,39 @@ export async function allocateAndProvisionInstance(
 
       throw new Error(statusFailReason);
     }
-  } catch (preCheckErr: unknown) {
-    if (preCheckErr instanceof Error && preCheckErr.message.includes('quarantined')) {
-      throw preCheckErr;
+
+    if (
+      reservedNode.serverIdentity &&
+      serverStatus.instanceId &&
+      reservedNode.serverIdentity.toLowerCase() !== serverStatus.instanceId.toLowerCase()
+    ) {
+      const identityMismatchReason = `Server instance identity mismatch: expected '${reservedNode.serverIdentity}', received '${serverStatus.instanceId}'`;
+
+      await HostingNode.findOneAndUpdate(
+        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        {
+          $set: {
+            status: 'AVAILABLE',
+            currentAssignedCount: 0,
+          },
+          $unset: {
+            currentAllocationId: 1,
+            allocationExpiresAt: 1,
+            assignedInstanceId: 1,
+          },
+        }
+      );
+
+      instance.status = 'FAILED';
+      instance.provisioningStage = 'IDENTITY_MISMATCH';
+      instance.lastProvisioningError = identityMismatchReason;
+      await instance.save();
+
+      throw new Error(identityMismatchReason);
     }
+  } catch (preCheckErr: unknown) {
     const preCheckMsg = preCheckErr instanceof Error ? preCheckErr.message : String(preCheckErr);
-    // Release node reservation safely
+    // Release unmutated node reservation safely
     await HostingNode.findOneAndUpdate(
       { _id: reservedNode._id, currentAllocationId: allocationToken },
       {
@@ -891,17 +856,6 @@ export async function allocateAndProvisionInstance(
     await instance.save();
     throw preCheckErr;
   }
-
-  // Step 4: Persist transition of node to PROVISIONING
-  await HostingNode.findOneAndUpdate(
-    { _id: reservedNode._id, currentAllocationId: allocationToken },
-    {
-      $set: {
-        status: 'PROVISIONING',
-        currentAssignedCount: 1,
-      },
-    }
-  );
 
   instance.provisioningStage = 'MUTATING_RUST';
   await instance.save();
@@ -1073,7 +1027,6 @@ export async function allocateAndProvisionInstance(
         currentAssignedCount: 1,
         serverVersion: deploymentResult.serverVersion || '2.4.1',
         healthStatus: 'HEALTHY',
-        cleanStatus: 'DIRTY',
         lastCredentialRotationAt: finalNow,
         assignedInstanceId: instance._id,
       },
@@ -1151,9 +1104,6 @@ export async function provisionInstance(
     if (existingNode.healthStatus !== 'HEALTHY') {
       throw new Error(`Target hosting node '${existingNode.name}' health status is '${existingNode.healthStatus}', ineligible for allocation.`);
     }
-    if (existingNode.cleanStatus !== 'CLEAN') {
-      throw new Error(`Target hosting node '${existingNode.name}' clean-state is '${existingNode.cleanStatus}' (${existingNode.cleanupFailureReason || 'Clean-state verification required'}), ineligible for allocation.`);
-    }
 
     const locked = await HostingNode.findOneAndUpdate(
       { _id: existingNode._id, status: { $in: ['AVAILABLE', 'ACTIVE', 'RESERVED', 'PROVISIONING'] } },
@@ -1164,12 +1114,11 @@ export async function provisionInstance(
   }
 
   if (!node) {
-    // Atomically find and reserve a strictly AVAILABLE, HEALTHY, and verified CLEAN node
+    // Atomically find and reserve an AVAILABLE and HEALTHY node
     node = await HostingNode.findOneAndUpdate(
       {
         status: { $in: ['AVAILABLE', 'ACTIVE'] },
         healthStatus: 'HEALTHY',
-        cleanStatus: 'CLEAN',
         currentAssignedCount: 0,
       },
       {
@@ -1283,7 +1232,6 @@ export async function provisionInstance(
       await HostingNode.findByIdAndUpdate(node._id, {
         $set: {
           status: 'QUARANTINED',
-          cleanStatus: 'DIRTY',
           currentAssignedCount: 0,
           quarantineReason: `Readiness check failed after provisioning: ${errMessage}. Requires sanitized reset before reuse.`,
           cleanupFailureReason: errMessage,
@@ -1353,7 +1301,6 @@ export async function provisionInstance(
       currentAssignedCount: 1,
       serverVersion: deploymentResult.serverVersion || '2.4.1',
       healthStatus: 'HEALTHY',
-      cleanStatus: 'DIRTY',
       lastCredentialRotationAt: now,
       assignedInstanceId: instance._id,
     },

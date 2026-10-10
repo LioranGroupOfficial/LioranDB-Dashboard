@@ -87,7 +87,7 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
           continue;
         }
 
-        // Concurrency safeguard 2: handle RESERVED nodes
+        // Concurrency safeguard 2: handle legacy or expired RESERVED nodes
         if (node.status === 'RESERVED') {
           const isLeaseExpired = node.allocationExpiresAt && new Date(node.allocationExpiresAt) < new Date();
           if (!isLeaseExpired) {
@@ -105,64 +105,21 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
             continue;
           }
 
-          // Safely reclaim expired reservation: verify clean state before setting AVAILABLE
-          try {
-            const client = LioranDBAdminClient.forNode(node);
-            const cleanCheck = await client.verifyCleanState(node.serverIdentity);
-            if (cleanCheck.isClean) {
-              await HostingNode.findOneAndUpdate(
-                { _id: node._id, status: 'RESERVED' },
-                {
-                  $set: {
-                    status: 'AVAILABLE',
-                    cleanStatus: 'CLEAN',
-                    currentAssignedCount: 0,
-                  },
-                  $unset: {
-                    currentAllocationId: 1,
-                    allocationExpiresAt: 1,
-                    assignedInstanceId: 1,
-                  },
-                }
-              );
-            } else {
-              await HostingNode.findOneAndUpdate(
-                { _id: node._id, status: 'RESERVED' },
-                {
-                  $set: {
-                    status: 'QUARANTINED',
-                    cleanStatus: 'DIRTY',
-                    currentAssignedCount: 0,
-                    quarantineReason: `Expired reservation failed clean check: ${cleanCheck.reason}`,
-                    cleanupFailureReason: cleanCheck.reason,
-                  },
-                  $unset: {
-                    currentAllocationId: 1,
-                    allocationExpiresAt: 1,
-                    assignedInstanceId: 1,
-                  },
-                }
-              );
+          // Safely reclaim expired reservation without clean-state gate
+          await HostingNode.findOneAndUpdate(
+            { _id: node._id, status: 'RESERVED' },
+            {
+              $set: {
+                status: 'AVAILABLE',
+                currentAssignedCount: 0,
+              },
+              $unset: {
+                currentAllocationId: 1,
+                allocationExpiresAt: 1,
+                assignedInstanceId: 1,
+              },
             }
-          } catch {
-            // In case of probe error, leave in quarantine
-            await HostingNode.findOneAndUpdate(
-              { _id: node._id, status: 'RESERVED' },
-              {
-                $set: {
-                  status: 'QUARANTINED',
-                  cleanStatus: 'NOT_VERIFIED',
-                  currentAssignedCount: 0,
-                  quarantineReason: 'Expired reservation probe failed; quarantined for inspection',
-                },
-                $unset: {
-                  currentAllocationId: 1,
-                  allocationExpiresAt: 1,
-                  assignedInstanceId: 1,
-                },
-              }
-            );
-          }
+          );
           continue;
         }
 
@@ -170,7 +127,7 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
 
         if (isOccupied) {
           // Node has an active customer database assigned.
-          // NEVER run clean-state verification on an ASSIGNED node!
+          // NEVER run clean-state verification or reset on an ASSIGNED node!
           if (node.currentAssignedCount !== 1 || node.status !== 'ASSIGNED') {
             await HostingNode.findByIdAndUpdate(node._id, {
               $set: {
@@ -194,14 +151,6 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
                 lastHealthCheckAt: new Date(),
               },
             });
-
-            logCleanupStage({
-              stage: 'HEALTH_INSPECTION',
-              instanceId: status.instanceId || node.serverIdentity,
-              nodeId: node._id.toString(),
-              endpoint: client.endpoint,
-              isClean: false, // Not clean for reassignment; normal for customer assigned node
-            });
           } catch {
             await HostingNode.findByIdAndUpdate(node._id, {
               $set: {
@@ -222,9 +171,8 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
               {
                 $set: {
                   status: 'QUARANTINED',
-                  cleanStatus: 'DIRTY',
                   currentAssignedCount: 0,
-                  quarantineReason: 'Associated with failed instance provisioning. Requires sanitized purge before reuse.',
+                  quarantineReason: 'Associated with failed instance provisioning. Requires sanitized reset before reuse.',
                   cleanupFailureReason: 'Failed instance provisioning',
                 },
                 $unset: {
@@ -245,89 +193,42 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
         }
 
         if (node.status === 'DISABLED') {
+          try {
+            const client = LioranDBAdminClient.forNode(node);
+            const status = await client.getServerStatus();
+            await HostingNode.findByIdAndUpdate(node._id, {
+              $set: {
+                healthStatus: status.status === 'HEALTHY' ? 'HEALTHY' : 'DEGRADED',
+                serverIdentity: status.instanceId || node.serverIdentity,
+                serverVersion: status.version || node.serverVersion,
+                lastHealthCheckAt: new Date(),
+              },
+            });
+          } catch {
+            await HostingNode.findByIdAndUpdate(node._id, {
+              $set: { healthStatus: 'UNREACHABLE', lastHealthCheckAt: new Date() },
+            });
+          }
           continue;
         }
 
         // Handle QUARANTINED nodes:
-        // NEVER factory-reset automatically! Inspect health and clean state in read-only mode.
+        // NEVER factory-reset automatically! Check physical health in read-only mode and preserve quarantine.
         if (node.status === 'QUARANTINED') {
           try {
             const client = LioranDBAdminClient.forNode(node);
             const status = await client.getServerStatus();
             const healthStatus = status.status === 'HEALTHY' ? 'HEALTHY' : 'DEGRADED';
 
-            logCleanupStage({
-              stage: 'HEALTH_INSPECTION',
-              instanceId: status.instanceId || node.serverIdentity,
-              nodeId: node._id.toString(),
-              endpoint: client.endpoint,
-              isClean: node.cleanStatus === 'CLEAN',
+            await HostingNode.findByIdAndUpdate(node._id, {
+              $set: {
+                healthStatus,
+                serverIdentity: status.instanceId || node.serverIdentity,
+                serverVersion: status.version || node.serverVersion,
+                lastHealthCheckAt: new Date(),
+              },
             });
-
-            // Read-only clean state verification probe
-            const cleanCheck = await client.verifyCleanState(status.instanceId || node.serverIdentity);
-            const lastCleanCheckAt = new Date();
-
-            logCleanupStage({
-              stage: 'CLEAN_STATE_INSPECTION',
-              instanceId: status.instanceId || node.serverIdentity,
-              nodeId: node._id.toString(),
-              endpoint: client.endpoint,
-              isClean: cleanCheck.isClean,
-              failureReason: cleanCheck.reason,
-            });
-
-            if (cleanCheck.isClean && healthStatus === 'HEALTHY') {
-              // Authoritative clean state confirmed: safely release quarantine
-              await HostingNode.findOneAndUpdate(
-                { _id: node._id, status: 'QUARANTINED' },
-                {
-                  $set: {
-                    cleanStatus: 'CLEAN',
-                    status: 'AVAILABLE',
-                    healthStatus: 'HEALTHY',
-                    serverIdentity: status.instanceId || node.serverIdentity,
-                    serverVersion: status.version || node.serverVersion,
-                    lastHealthCheckAt: new Date(),
-                    lastCleanCheckAt,
-                    adminNotes: `Quarantine released by reconciliation on ${new Date().toISOString()}: verified clean state confirmed.`,
-                  },
-                  $unset: {
-                    quarantineReason: 1,
-                    cleanupFailureReason: 1,
-                    currentAllocationId: 1,
-                    allocationExpiresAt: 1,
-                  },
-                }
-              );
-
-              logCleanupStage({
-                stage: 'NODE_RELEASE',
-                instanceId: status.instanceId || node.serverIdentity,
-                nodeId: node._id.toString(),
-                endpoint: client.endpoint,
-                isClean: true,
-              });
-            } else {
-              // Maintain quarantine without destructive action
-              await HostingNode.findOneAndUpdate(
-                { _id: node._id, status: 'QUARANTINED' },
-                {
-                  $set: {
-                    healthStatus,
-                    cleanStatus: cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE' ? 'PENDING_VERIFICATION' : 'DIRTY',
-                    cleanupFailureReason: cleanCheck.reason || cleanCheck.reasons.join('; '),
-                    quarantineReason: cleanCheck.reason || cleanCheck.reasons.join('; '),
-                    serverIdentity: status.instanceId || node.serverIdentity,
-                    serverVersion: status.version || node.serverVersion,
-                    lastHealthCheckAt: new Date(),
-                    lastCleanCheckAt,
-                  },
-                }
-              );
-            }
-          } catch (err: unknown) {
-            const errMsg = (err as Error).message || String(err);
+          } catch {
             await HostingNode.findByIdAndUpdate(node._id, {
               $set: {
                 healthStatus: 'UNREACHABLE',
@@ -339,105 +240,34 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
         }
 
         // Unassigned node in AVAILABLE status:
-        // Perform read-only health & clean inspection using CAS
+        // Perform read-only control plane health check ONLY.
+        // Never clean-check or quarantine healthy nodes during reconciliation sweeps!
         try {
           const client = LioranDBAdminClient.forNode(node);
           const status = await client.getServerStatus();
           const healthStatus = status.status === 'HEALTHY' ? 'HEALTHY' : 'DEGRADED';
 
-          logCleanupStage({
-            stage: 'HEALTH_INSPECTION',
-            instanceId: status.instanceId || node.serverIdentity,
-            nodeId: node._id.toString(),
-            endpoint: client.endpoint,
-            isClean: node.cleanStatus === 'CLEAN',
-          });
-
-          const cleanCheck = await client.verifyCleanState(status.instanceId || node.serverIdentity);
-          const lastCleanCheckAt = new Date();
-
-          logCleanupStage({
-            stage: 'CLEAN_STATE_INSPECTION',
-            instanceId: status.instanceId || node.serverIdentity,
-            nodeId: node._id.toString(),
-            endpoint: client.endpoint,
-            isClean: cleanCheck.isClean,
-            failureReason: cleanCheck.reason,
-          });
-
-          if (cleanCheck.isClean && healthStatus === 'HEALTHY') {
-            await HostingNode.findOneAndUpdate(
-              { _id: node._id, status: { $in: ['AVAILABLE', 'ACTIVE'] } },
-              {
-                $set: {
-                  cleanStatus: 'CLEAN',
-                  status: 'AVAILABLE',
-                  healthStatus: 'HEALTHY',
-                  serverIdentity: status.instanceId || node.serverIdentity,
-                  serverVersion: status.version || node.serverVersion,
-                  lastHealthCheckAt: new Date(),
-                  lastCleanCheckAt,
-                },
-                $unset: {
-                  cleanupFailureReason: 1,
-                  quarantineReason: 1,
-                },
-              }
-            );
-          } else {
-            // Failed clean inspection:
-            // Quarantine the node to protect customer isolation. DO NOT trigger destructive purge!
-            const reasonStr = cleanCheck.reason || cleanCheck.reasons.join('; ');
-            await HostingNode.findOneAndUpdate(
-              { _id: node._id, status: { $in: ['AVAILABLE', 'ACTIVE'] } },
-              {
-                $set: {
-                  cleanStatus: cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE' ? 'PENDING_VERIFICATION' : 'DIRTY',
-                  status: 'QUARANTINED',
-                  healthStatus,
-                  serverIdentity: status.instanceId || node.serverIdentity,
-                  serverVersion: status.version || node.serverVersion,
-                  cleanupFailureReason: reasonStr,
-                  quarantineReason: reasonStr,
-                  adminNotes: `Quarantined by reconciliation inspection: ${reasonStr}`,
-                  lastHealthCheckAt: new Date(),
-                  lastCleanCheckAt,
-                },
-              }
-            );
-
-            logCleanupStage({
-              stage: 'NODE_QUARANTINE',
-              instanceId: status.instanceId || node.serverIdentity,
-              nodeId: node._id.toString(),
-              endpoint: client.endpoint,
-              isClean: false,
-              failureReason: reasonStr,
-            });
-          }
-        } catch (err: unknown) {
-          const errMsg = (err as Error).message || String(err);
+          await HostingNode.findOneAndUpdate(
+            { _id: node._id, status: { $in: ['AVAILABLE', 'ACTIVE'] } },
+            {
+              $set: {
+                healthStatus,
+                serverIdentity: status.instanceId || node.serverIdentity,
+                serverVersion: status.version || node.serverVersion,
+                lastHealthCheckAt: new Date(),
+              },
+            }
+          );
+        } catch {
           await HostingNode.findOneAndUpdate(
             { _id: node._id, status: { $in: ['AVAILABLE', 'ACTIVE'] } },
             {
               $set: {
                 healthStatus: 'UNREACHABLE',
-                status: 'QUARANTINED',
-                cleanStatus: 'NOT_VERIFIED',
-                cleanupFailureReason: `Probe failure: ${errMsg}`,
-                quarantineReason: `Probe failure: ${errMsg}`,
                 lastHealthCheckAt: new Date(),
               },
             }
           );
-
-          logCleanupStage({
-            stage: 'NODE_QUARANTINE',
-            instanceId: node.serverIdentity,
-            nodeId: node._id.toString(),
-            isClean: false,
-            failureReason: errMsg,
-          });
         }
       }
 

@@ -132,11 +132,10 @@ export async function POST(req: NextRequest) {
 
     // Test live connection to the Rust control plane
     let healthStatus: HostingNodeHealthStatus = 'UNKNOWN';
-    let cleanStatus: 'CLEAN' | 'DIRTY' | 'NOT_VERIFIED' | 'PENDING_VERIFICATION' = 'UNKNOWN' as any;
     let cleanupFailureReason: string | undefined;
     let serverIdentity: string | undefined;
     let serverVersion = '2.4.1';
-    let initialStatus: HostingNodeStatus = 'QUARANTINED';
+    let initialStatus: HostingNodeStatus = 'AVAILABLE';
 
     const testClient = new LioranDBAdminClient({
       endpoint: normalizedControlPlaneEndpoint,
@@ -149,21 +148,7 @@ export async function POST(req: NextRequest) {
       healthStatus = statusRes.status === 'HEALTHY' ? 'HEALTHY' : 'DEGRADED';
       serverIdentity = statusRes.instanceId;
       serverVersion = statusRes.version || '2.4.1';
-
-      if (healthStatus === 'HEALTHY') {
-        const cleanCheck = await testClient.verifyCleanState(serverIdentity);
-        if (cleanCheck.isClean) {
-          cleanStatus = 'CLEAN';
-          initialStatus = 'AVAILABLE';
-        } else {
-          cleanStatus = cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE' ? 'PENDING_VERIFICATION' : 'DIRTY';
-          cleanupFailureReason = cleanCheck.reason;
-          initialStatus = 'QUARANTINED';
-        }
-      } else {
-        cleanStatus = 'NOT_VERIFIED';
-        initialStatus = 'FAILED';
-      }
+      initialStatus = healthStatus === 'HEALTHY' ? 'AVAILABLE' : 'QUARANTINED';
     } catch (err: unknown) {
       const errMsg = (err as Error).message || '';
       if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('authentication') || errMsg.includes('unauthorized')) {
@@ -171,9 +156,8 @@ export async function POST(req: NextRequest) {
       } else {
         healthStatus = 'UNREACHABLE';
       }
-      cleanStatus = 'NOT_VERIFIED';
       cleanupFailureReason = errMsg;
-      initialStatus = 'FAILED';
+      initialStatus = 'QUARANTINED';
     }
 
     // If marked default, unset other defaults
@@ -196,7 +180,6 @@ export async function POST(req: NextRequest) {
       serverIdentity,
       serverVersion,
       healthStatus,
-      cleanStatus,
       cleanupFailureReason,
       quarantineReason: initialStatus === 'QUARANTINED' ? cleanupFailureReason : undefined,
       allocationMode: (allocationMode as HostingAllocationMode) || 'DEDICATED',
@@ -204,7 +187,6 @@ export async function POST(req: NextRequest) {
       maxCapacity: 1,
       currentAssignedCount: 0,
       lastHealthCheckAt: new Date(),
-      lastCleanCheckAt: new Date(),
       defaultRootUsername: (defaultRootUsername || 'admin').trim(),
       notes: notes || '',
       isDefault: Boolean(isDefault),

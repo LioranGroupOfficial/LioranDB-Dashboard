@@ -75,16 +75,14 @@ export async function POST(
     if (purgeResult.success && purgeResult.verifiedClean) {
       lockedNode.status = 'AVAILABLE';
       lockedNode.healthStatus = 'HEALTHY';
-      lockedNode.cleanStatus = 'CLEAN';
       lockedNode.quarantineReason = undefined;
       lockedNode.cleanupFailureReason = undefined;
       lockedNode.currentAssignedCount = 0;
       lockedNode.lastResetAt = now;
-      lockedNode.lastCleanCheckAt = now;
       if (purgeResult.rotatedRootPassword) {
         lockedNode.lastCredentialRotationAt = now;
       }
-      lockedNode.adminNotes = `Administrator cleanup succeeded on ${now.toISOString()} by ${admin.email || admin.userId}. Clean state verified.`;
+      lockedNode.adminNotes = `Administrator cleanup succeeded on ${now.toISOString()} by ${admin.email || admin.userId}. Engine reset verified.`;
       await lockedNode.save();
 
       await createAuditLog({
@@ -95,7 +93,6 @@ export async function POST(
         metadata: {
           action: 'ADMIN_PURGE_AND_RESET_SUCCESS',
           nodeName: lockedNode.name,
-          verifiedClean: true,
           preResetMemory: purgeResult.preResetMemoryBytes,
           postResetMemory: purgeResult.postResetMemoryBytes,
         },
@@ -103,16 +100,15 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        message: `Hosting node "${lockedNode.name}" was successfully sanitized and verified clean. Quarantine released.`,
+        message: `Hosting node "${lockedNode.name}" was successfully sanitized. Quarantine released.`,
         purgeResult,
         node: lockedNode,
       });
     } else {
       // Post-cleanup verification failed or error occurred
-      const failureReason = purgeResult.error || 'Clean-state verification failed post-reset.';
+      const failureReason = purgeResult.error || 'Server reset failed.';
       lockedNode.status = 'QUARANTINED';
       lockedNode.healthStatus = 'DEGRADED';
-      lockedNode.cleanStatus = 'DIRTY';
       lockedNode.cleanupFailureReason = failureReason;
       lockedNode.quarantineReason = failureReason;
       lockedNode.adminNotes = `Administrator cleanup failed on ${now.toISOString()}: ${failureReason}`;
@@ -133,7 +129,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: `Sanitization executed but clean-state verification failed: ${failureReason}. Node remains quarantined.`,
+          error: `Server reset failed: ${failureReason}. Node remains quarantined.`,
           purgeResult,
           node: lockedNode,
         },

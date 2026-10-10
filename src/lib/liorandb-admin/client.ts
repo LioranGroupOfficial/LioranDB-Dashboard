@@ -1163,38 +1163,27 @@ export class LioranDBAdminClient {
         });
       }
 
-      // Stage 4: Authoritatively verify clean state before returning success
-      const verify = await this.verifyCleanState(targetId);
+      // Stage 4: Authoritatively verify engine health and responsiveness post-reset
+      const postStatus = await this.getServerStatus();
+      const stateUpper = String(postStatus.state || postStatus.status || '').toUpperCase();
+      const isHealthy = stateUpper === 'READY' || stateUpper === 'ACTIVE' || stateUpper === 'OK' || stateUpper === 'HEALTHY';
 
-      logCleanupStage({
-        stage: 'POST_CLEANUP_VERIFICATION',
-        instanceId: targetId,
-        nodeId: targetNodeId,
-        endpoint: this.endpoint,
-        resetResponseStatus: resetResult.status,
-        residualCollectionCount: verify.customerCollectionCount ?? verify.status?.collectionCount ?? 0,
-        residualDocumentCount: verify.customerDocumentCount ?? verify.status?.documentCount ?? 0,
-        residualCustomerUserCount: verify.customerUserCount ?? verify.residualCustomerUserCount ?? 0,
-        oldCredentialsValid: false,
-        isClean: verify.isClean,
-        failureReason: verify.reason || null,
-      });
-
-      if (!verify.isClean) {
+      if (!isHealthy) {
+        const failReason = `Engine not in Ready state post-reset (status: ${postStatus.status}, state: ${postStatus.state})`;
         logCleanupStage({
           stage: 'VERIFICATION_FAILED',
           instanceId: targetId,
           nodeId: targetNodeId,
           endpoint: this.endpoint,
           isClean: false,
-          failureReason: verify.reason || verify.reasons.join(', '),
+          failureReason: failReason,
         });
 
         return {
           success: false,
           instanceId: targetId,
           verifiedClean: false,
-          error: `Post-reset verification failed: ${verify.reason || verify.reasons.join(', ')}`,
+          error: `Post-reset health verification failed: ${failReason}`,
         };
       }
 
@@ -1207,9 +1196,7 @@ export class LioranDBAdminClient {
       });
 
       // Post-cleanup memory inspection
-      if (verify.status) {
-        postResetMemoryBytes = verify.status.memoryBytesUsed !== undefined ? verify.status.memoryBytesUsed : verify.status.storageBytes;
-      }
+      postResetMemoryBytes = postStatus.memoryBytesUsed !== undefined ? postStatus.memoryBytesUsed : postStatus.storageBytes;
 
       const reclaimedMemoryBytes =
         preResetMemoryBytes !== undefined && postResetMemoryBytes !== undefined

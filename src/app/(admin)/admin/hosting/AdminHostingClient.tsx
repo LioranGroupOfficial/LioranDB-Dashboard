@@ -49,8 +49,6 @@ export interface AdminHostingNodeItem {
   assignedInstanceStatus?: string;
   assignedDatabaseId?: string;
   lastHealthCheckAt?: string;
-  lastCleanCheckAt?: string;
-  cleanStatus?: 'CLEAN' | 'DIRTY' | 'NOT_VERIFIED' | 'PENDING_VERIFICATION' | 'UNKNOWN';
   quarantineReason?: string;
   cleanupFailureReason?: string;
   lastResetAt?: string;
@@ -79,6 +77,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   // Testing & Diagnostics
   const [testingNodeId, setTestingNodeId] = useState<string | null>(null);
   const [purgingNodeId, setPurgingNodeId] = useState<string | null>(null);
+  const [togglingNodeId, setTogglingNodeId] = useState<string | null>(null);
   const [testingForm, setTestingForm] = useState(false);
   const [formTestResult, setFormTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [diagnosticModal, setDiagnosticModal] = useState<{
@@ -173,11 +172,11 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     }
   }
 
-  // Administrator-Authorized Purge, Sanitize & Clean Verification
+  // Administrator-Authorized Purge & Reset
   async function handlePurgeNode(node: AdminHostingNodeItem) {
     if (
       !confirm(
-        `Are you sure you want to sanitize and purge hosting node "${node.name}"?\n\nThis will trigger an authoritative engine reset, wipe any residual tenant state, rotate root credentials, and authoritatively verify clean state before releasing the node for allocation.`
+        `Are you sure you want to reset and purge hosting node "${node.name}"?\n\nThis is a destructive action that will perform an authoritative server reset, wipe all customer data, and regenerate root credentials.`
       )
     ) {
       return;
@@ -192,22 +191,64 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       if (res.ok && data.success) {
         setFeedbackMsg({
           type: 'success',
-          text: `Node "${node.name}" successfully purged, sanitized, and verified clean. Quarantine released!`,
+          text: `Node "${node.name}" successfully reset and returned to AVAILABLE.`,
         });
       } else {
         setFeedbackMsg({
           type: 'error',
-          text: `Purge on "${node.name}" failed: ${data.error || 'Clean verification failed post-reset. Node remains quarantined.'}`,
+          text: `Reset on "${node.name}" failed: ${data.error || 'Rust server reset failed.'}`,
         });
       }
       await refreshNodes();
     } catch (err: unknown) {
       setFeedbackMsg({
         type: 'error',
-        text: err instanceof Error ? err.message : 'Network error executing purge',
+        text: err instanceof Error ? err.message : 'Network error executing reset',
       });
     } finally {
       setPurgingNodeId(null);
+      setLoading(false);
+    }
+  }
+
+  // Toggle Node Enabled / Disabled
+  async function handleToggleDisableNode(node: AdminHostingNodeItem) {
+    const isCurrentlyDisabled = node.status === 'DISABLED';
+    if (!isCurrentlyDisabled && node.currentAssignedCount > 0) {
+      alert(`Cannot disable hosting node "${node.name}" because it currently has an active customer database assigned.`);
+      return;
+    }
+
+    const actionText = isCurrentlyDisabled ? 'enable' : 'disable';
+    if (!confirm(`Are you sure you want to ${actionText} hosting node "${node.name}"?`)) {
+      return;
+    }
+
+    setTogglingNodeId(node._id);
+    setLoading(true);
+    setFeedbackMsg(null);
+    try {
+      const newStatus = isCurrentlyDisabled ? 'AVAILABLE' : 'DISABLED';
+      const res = await fetch(`/api/admin/hosting/${node._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Failed to ${actionText} node`);
+
+      setFeedbackMsg({
+        type: 'success',
+        text: `Hosting node "${node.name}" has been ${isCurrentlyDisabled ? 'enabled' : 'disabled'}.`,
+      });
+      await refreshNodes();
+    } catch (err: unknown) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : `Failed to ${actionText} node`,
+      });
+    } finally {
+      setTogglingNodeId(null);
       setLoading(false);
     }
   }
@@ -445,8 +486,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   const stats = useMemo(() => {
     const totalNodes = nodes.length;
     const healthyNodes = nodes.filter((n) => n.healthStatus === 'HEALTHY' || n.status === 'AVAILABLE' || n.status === 'ACTIVE').length;
-    const availableNodes = nodes.filter((n) => (n.status === 'AVAILABLE' || n.status === 'ACTIVE') && n.currentAssignedCount === 0 && n.cleanStatus !== 'DIRTY').length;
-    const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0).length;
+    const availableNodes = nodes.filter((n) => (n.status === 'AVAILABLE' || n.status === 'ACTIVE') && n.currentAssignedCount === 0).length;
+    const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0 || n.status === 'ASSIGNED').length;
 
     return { totalNodes, healthyNodes, availableNodes, totalAssigned };
   }, [nodes]);
@@ -596,11 +637,10 @@ export default function AdminHostingClient({ initialNodes }: Props) {
           <table className="w-full text-left text-xs">
             <thead className="bg-[var(--surface-2)] text-[var(--text-muted)] uppercase font-mono border-b border-[var(--border)]">
               <tr>
-                <th className="px-4 py-3 font-medium">Node &amp; Version</th>
-                <th className="px-4 py-3 font-medium">Control Plane &amp; Health</th>
-                <th className="px-4 py-3 font-medium">Client DB &amp; gRPC</th>
-                <th className="px-4 py-3 font-medium">Root User</th>
-                <th className="px-4 py-3 font-medium">Allocation (1:1)</th>
+                <th className="px-4 py-3 font-medium">Node</th>
+                <th className="px-4 py-3 font-medium">Endpoint</th>
+                <th className="px-4 py-3 font-medium">Health</th>
+                <th className="px-4 py-3 font-medium">Allocation</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
@@ -608,7 +648,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
             <tbody className="divide-y divide-[var(--border)] font-mono">
               {filteredNodes.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-[var(--text-muted)] text-xs font-sans">
+                  <td colSpan={6} className="px-6 py-12 text-center text-[var(--text-muted)] text-xs font-sans">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Server className="w-6 h-6 opacity-40" />
                       <span>No hosting nodes found. Click &quot;Add Hosting Node&quot; to configure database infrastructure.</span>
@@ -636,10 +676,10 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                        <div className="text-[11px] text-[var(--text-muted)] mt-0.5 font-sans">
                           {node.region} • <span className="font-mono">{node.slug}</span>
                           {node.serverIdentity && (
-                            <span className="block text-[10px] text-[var(--text-muted)] opacity-80">
+                            <span className="block text-[10px] text-[var(--text-muted)] opacity-80 font-mono">
                               ID: {node.serverIdentity} (v{node.serverVersion || '2.4.1'})
                             </span>
                           )}
@@ -647,10 +687,19 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       </td>
 
                       <td className="px-4 py-3.5 text-xs">
-                        <div className="text-[var(--text-strong)] font-mono truncate max-w-[200px]" title={cpEndpoint}>
-                          {cpEndpoint}
+                        <div className="text-[var(--text-strong)] font-mono">
+                          DB: {node.dbUrl}:{node.port}
                         </div>
-                        <div className="mt-1">
+                        <div className="text-[11px] text-[var(--text-muted)] font-mono">
+                          gRPC: {node.grpcUrl}:{node.grpcPort}
+                        </div>
+                        <div className="text-[10px] text-[var(--text-muted)] font-mono truncate max-w-[180px]" title={cpEndpoint}>
+                          CP: {cpEndpoint}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-xs">
+                        <div>
                           <span
                             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] text-[9px] font-mono font-semibold uppercase tracking-wider ${
                               node.healthStatus === 'HEALTHY'
@@ -661,15 +710,11 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                             {node.healthStatus || 'UNKNOWN'}
                           </span>
                         </div>
-                      </td>
-
-                      <td className="px-4 py-3.5 text-xs text-[var(--text-secondary)]">
-                        <div>DB: <span className="text-[var(--text-strong)]">{node.dbUrl}:{node.port}</span></div>
-                        <div className="text-[11px] text-[var(--text-muted)]">gRPC: {node.grpcUrl}:{node.grpcPort}</div>
-                      </td>
-
-                      <td className="px-4 py-3.5 text-xs text-[var(--text-strong)]">
-                        <span className="font-bold">{node.defaultRootUsername}</span>
+                        {node.lastHealthCheckAt && (
+                          <div className="text-[10px] text-[var(--text-muted)] mt-1 font-mono">
+                            Checked: {new Date(node.lastHealthCheckAt).toLocaleTimeString()}
+                          </div>
+                        )}
                       </td>
 
                       <td className="px-4 py-3.5">
@@ -702,50 +747,35 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                             className={`inline-flex items-center px-2 py-0.5 rounded-[4px] text-[11px] font-mono uppercase tracking-wider ${
                               node.status === 'AVAILABLE' || node.status === 'ACTIVE'
                                 ? 'bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-semibold'
-                                : node.status === 'ASSIGNED' || node.status === 'RESERVED'
+                                : node.status === 'ASSIGNED'
                                 ? 'bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)]'
+                                : node.status === 'PROVISIONING' || node.status === 'RESETTING'
+                                ? 'bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-semibold'
                                 : node.status === 'QUARANTINED'
-                                ? 'bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border-strong)] font-bold'
+                                ? 'bg-red-500/10 text-red-500 dark:text-red-400 border border-red-500/20 font-bold'
                                 : 'text-[var(--text-muted)] border border-[var(--border)]'
                             }`}
                           >
                             {node.status}
                           </span>
-                          {node.cleanStatus && node.cleanStatus !== 'UNKNOWN' && (
-                            <div className="text-[10px] font-mono text-[var(--text-muted)]">
-                              Clean: <span className="font-semibold text-[var(--text-strong)]">{node.cleanStatus}</span>
-                            </div>
-                          )}
-                          {node.quarantineReason && (
+                          {node.status === 'QUARANTINED' && (node.quarantineReason || node.cleanupFailureReason) && (
                             <div
-                              className="text-[10px] text-[var(--text-muted)] truncate max-w-[150px] font-sans"
-                              title={node.quarantineReason}
+                              className="text-[10px] text-red-500 dark:text-red-400 max-w-[200px] font-sans break-words mt-1"
+                              title={node.quarantineReason || node.cleanupFailureReason}
                             >
-                              {node.quarantineReason}
+                              Reason: {node.quarantineReason || node.cleanupFailureReason}
                             </div>
                           )}
                         </div>
                       </td>
 
                       <td className="px-4 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {node.currentAssignedCount === 0 && (
-                            <button
-                              type="button"
-                              onClick={() => handlePurgeNode(node)}
-                              disabled={purgingNodeId === node._id}
-                              title="Administrator recovery: purge tenant data, factory reset, and verify clean state"
-                              className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1 text-[var(--text-strong)]"
-                            >
-                              <Shield className={`w-3 h-3 ${purgingNodeId === node._id ? 'animate-spin text-[var(--text-muted)]' : ''}`} />
-                              <span>{purgingNodeId === node._id ? 'Purging...' : 'Purge'}</span>
-                            </button>
-                          )}
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
                           <button
                             type="button"
                             onClick={() => handleTestNode(node)}
                             disabled={testingNodeId === node._id}
-                            title="Run live diagnostic health test against Rust control plane"
+                            title="Test connection to Rust control plane"
                             className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1 text-[var(--text-strong)]"
                           >
                             <Activity className={`w-3 h-3 ${testingNodeId === node._id ? 'animate-spin text-[var(--text-muted)]' : 'text-[var(--text-strong)]'}`} />
@@ -754,10 +784,38 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                           <button
                             type="button"
                             onClick={() => openEditModal(node)}
+                            title="Edit node parameters"
                             className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1"
                           >
                             <Edit2 className="w-3 h-3" />
                             <span>Edit</span>
+                          </button>
+                          {node.currentAssignedCount === 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handlePurgeNode(node)}
+                              disabled={purgingNodeId === node._id}
+                              title="Destructive factory reset: wipes tenant data and regenerates root credentials"
+                              className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1 text-[var(--text-strong)]"
+                            >
+                              <Shield className={`w-3 h-3 ${purgingNodeId === node._id ? 'animate-spin text-[var(--text-muted)]' : ''}`} />
+                              <span>{purgingNodeId === node._id ? 'Resetting...' : 'Reset/Purge'}</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDisableNode(node)}
+                            disabled={togglingNodeId === node._id || (node.status !== 'DISABLED' && node.currentAssignedCount > 0)}
+                            title={
+                              node.status === 'DISABLED'
+                                ? 'Enable hosting node for deployments'
+                                : node.currentAssignedCount > 0
+                                ? 'Cannot disable node with active instances'
+                                : 'Disable hosting node'
+                            }
+                            className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1 disabled:opacity-40"
+                          >
+                            <span>{node.status === 'DISABLED' ? 'Enable' : 'Disable'}</span>
                           </button>
                           <button
                             type="button"
@@ -1189,7 +1247,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                     <span>LioranDB Rust Server Healthy &amp; Online</span>
                   </div>
                   <p className="text-[11px] mt-1 text-[var(--text-muted)] font-mono">
-                    Response received in {diagnosticModal.data?.latencyMs}ms. Control plane verified healthy (Status: {diagnosticModal.data?.status || 'AVAILABLE'}, Cleanliness: {diagnosticModal.data?.cleanStatus || 'UNKNOWN'}).
+                    Response received in {diagnosticModal.data?.latencyMs}ms. Control plane verified healthy (Status: {diagnosticModal.data?.status || 'AVAILABLE'}, Health: {diagnosticModal.data?.healthStatus || 'HEALTHY'}).
                   </p>
                 </div>
 
@@ -1205,10 +1263,6 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                   <div className="flex justify-between">
                     <span className="text-[var(--text-muted)]">Health Status:</span>
                     <span className="text-[var(--text-strong)] font-bold">{diagnosticModal.data?.healthStatus || 'HEALTHY'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--text-muted)]">Clean Status:</span>
-                    <span className="font-bold text-[var(--text-strong)]">{diagnosticModal.data?.cleanStatus || 'UNKNOWN'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[var(--text-muted)]">Allocation Status:</span>
