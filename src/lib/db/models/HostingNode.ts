@@ -143,10 +143,17 @@ HostingNodeSchema.index({ status: 1, allocationMode: 1, currentAssignedCount: 1 
 HostingNodeSchema.index({ status: 1, healthStatus: 1, currentAssignedCount: 1 });
 HostingNodeSchema.index({ currentAllocationId: 1, allocationExpiresAt: 1 });
 
+export const ACTIVE_CUSTOMER_DATABASE_STATUSES = [
+  'ACTIVE',
+  'RUNNING',
+  'SUSPENDED',
+  'STOPPED',
+] as const;
+
 /**
  * Validates strict allocation eligibility:
  * Node must be AVAILABLE (or legacy ACTIVE), HEALTHY, unassigned (within maxCapacity),
- * have valid connectivity, and not currently locked by an active reservation.
+ * not quarantined, not disabled, have valid connectivity, and not currently locked by an active reservation.
  */
 export function isNodeAllocatable(node: Partial<IHostingNode> | null | undefined): boolean {
   if (!node) return false;
@@ -154,9 +161,23 @@ export function isNodeAllocatable(node: Partial<IHostingNode> | null | undefined
   const isHealthy = node.healthStatus === 'HEALTHY';
   const hasCapacity = (node.currentAssignedCount || 0) < (node.maxCapacity || 1);
   const hasHost = Boolean(node.dbUrl && node.dbUrl.trim());
-  const isNotLocked = !node.currentAllocationId || (node.allocationExpiresAt && new Date(node.allocationExpiresAt) < new Date());
+  const isNotLocked =
+    !node.currentAllocationId ||
+    (node.allocationExpiresAt && new Date(node.allocationExpiresAt).getTime() < Date.now());
+  const isNotQuarantined = node.status !== 'QUARANTINED' && !node.quarantineReason;
+  const isNotResetting = node.status !== 'RESETTING';
+  const isNotDisabled = node.status !== 'DISABLED';
 
-  return isAvailableStatus && isHealthy && hasCapacity && hasHost && isNotLocked;
+  return (
+    isAvailableStatus &&
+    isHealthy &&
+    hasCapacity &&
+    hasHost &&
+    isNotLocked &&
+    isNotQuarantined &&
+    isNotResetting &&
+    isNotDisabled
+  );
 }
 
 const HostingNode: Model<IHostingNode> =

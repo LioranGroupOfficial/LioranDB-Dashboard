@@ -17,12 +17,22 @@ export default async function AdminHostingPage() {
     nodes.map(async (n) => {
       const activeInstance = await ManagedDatabase.findOne({
         hostingNodeId: n._id,
-        status: { $nin: ['TERMINATED', 'DELETED'] },
+        status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
       })
         .select('name status _id')
         .lean();
 
-      const assignedCount = activeInstance ? 1 : 0;
+      const provisioningInstance = !activeInstance
+        ? await ManagedDatabase.findOne({
+            hostingNodeId: n._id,
+            status: 'PROVISIONING',
+          })
+            .select('name status _id')
+            .lean()
+        : null;
+
+      const effectiveInstance = activeInstance || provisioningInstance;
+      const assignedCount = activeInstance ? 1 : n.status === 'ASSIGNED' ? 1 : 0;
 
       return {
         _id: n._id.toString(),
@@ -44,9 +54,9 @@ export default async function AdminHostingPage() {
         status: n.status,
         maxCapacity: 1,
         currentAssignedCount: assignedCount,
-        assignedInstanceName: activeInstance?.name || undefined,
-        assignedInstanceStatus: activeInstance?.status || undefined,
-        assignedDatabaseId: activeInstance?._id?.toString() || undefined,
+        assignedInstanceName: effectiveInstance?.name || undefined,
+        assignedInstanceStatus: effectiveInstance?.status || undefined,
+        assignedDatabaseId: effectiveInstance?._id?.toString() || undefined,
         lastHealthCheckAt: n.lastHealthCheckAt ? new Date(n.lastHealthCheckAt).toISOString() : undefined,
         lastResetAt: n.lastResetAt ? new Date(n.lastResetAt).toISOString() : undefined,
         lastCredentialRotationAt: n.lastCredentialRotationAt ? new Date(n.lastCredentialRotationAt).toISOString() : undefined,

@@ -101,18 +101,11 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     }
 
     if (!node) {
-      // Select an available unassigned dedicated hosting node with healthy control plane
-      node = await HostingNode.findOne({
-        status: { $in: ['AVAILABLE', 'ACTIVE'] },
-        healthStatus: 'HEALTHY',
-        currentAssignedCount: 0,
-      });
-    }
-
-    if (!node) {
       return {
         success: false,
-        error: 'No dedicated database hosting servers are currently available. Please email support@liorandb.com for this query.',
+        error: params.nodeId
+          ? `Requested hosting node '${params.nodeId}' was not found or is ineligible for allocation.`
+          : 'Dedicated hosting node must be allocated via the authoritative allocation service.',
       };
     }
 
@@ -649,22 +642,42 @@ export async function allocateAndProvisionInstance(
   const cleanName = params.name.trim().toLowerCase();
   const targetDbName = (params.databaseName || cleanName).replace(/-/g, '_');
 
+  // Find genuinely active customer instances to ensure dedicated 1:1 isolation
+  const activeCustomerInstances = await ManagedDatabase.find({
+    status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
+    hostingNodeId: { $exists: true, $ne: null },
+  })
+    .select('hostingNodeId')
+    .lean();
+
+  const occupiedNodeIds = activeCustomerInstances
+    .map((inst) => inst.hostingNodeId?.toString())
+    .filter((id): id is string => Boolean(id));
+
   // Step 1: Atomic conditional claim (CAS) on an allocatable node
   let reservedNode: IHostingNode | null = null;
 
+  const allocatableFilter: any = {
+    status: { $in: ['AVAILABLE', 'ACTIVE'] },
+    healthStatus: 'HEALTHY',
+    currentAssignedCount: 0,
+    $or: [
+      { currentAllocationId: { $exists: false } },
+      { currentAllocationId: null },
+      { currentAllocationId: '' },
+      { allocationExpiresAt: { $exists: false } },
+      { allocationExpiresAt: null },
+      { allocationExpiresAt: { $lt: new Date() } },
+    ],
+  };
+
   if (params.nodeId) {
+    if (occupiedNodeIds.includes(params.nodeId.toString())) {
+      throw new Error(`Requested hosting node '${params.nodeId}' is currently assigned to an active customer.`);
+    }
+    allocatableFilter._id = params.nodeId;
     reservedNode = await HostingNode.findOneAndUpdate(
-      {
-        _id: params.nodeId,
-        status: { $in: ['AVAILABLE', 'ACTIVE'] },
-        healthStatus: 'HEALTHY',
-        currentAssignedCount: 0,
-        $or: [
-          { currentAllocationId: { $exists: false } },
-          { currentAllocationId: null },
-          { allocationExpiresAt: { $lt: new Date() } },
-        ],
-      },
+      allocatableFilter,
       {
         $set: {
           status: 'PROVISIONING',
@@ -676,17 +689,11 @@ export async function allocateAndProvisionInstance(
       { returnDocument: 'after' }
     );
   } else {
+    if (occupiedNodeIds.length > 0) {
+      allocatableFilter._id = { $nin: occupiedNodeIds };
+    }
     reservedNode = await HostingNode.findOneAndUpdate(
-      {
-        status: { $in: ['AVAILABLE', 'ACTIVE'] },
-        healthStatus: 'HEALTHY',
-        currentAssignedCount: 0,
-        $or: [
-          { currentAllocationId: { $exists: false } },
-          { currentAllocationId: null },
-          { allocationExpiresAt: { $lt: new Date() } },
-        ],
-      },
+      allocatableFilter,
       {
         $set: {
           status: 'PROVISIONING',
@@ -707,7 +714,7 @@ export async function allocateAndProvisionInstance(
 
   // Step 2: Create ManagedDatabase record linked to this allocation
   const masterUsername = reservedNode.defaultRootUsername || 'admin';
-  const masterPassword = params.initialPassword || generateDatabasePassword(24);
+  let masterPassword = params.initialPassword || generateDatabasePassword(24);
   const controlPlaneEndpoint = resolveControlPlaneEndpoint(reservedNode);
   const hourlyRatePaise = plan.hourlyRatePaise || (params.planId === 'shared' ? 100 : 800);
   const backupMonthlyPaise = params.backupEnabled ? BACKUP_MONTHLY_PAISE : 0;
@@ -774,8 +781,9 @@ export async function allocateAndProvisionInstance(
 
   // Step 3: Check Rust server health and identity before making any mutations
   const client = LioranDBAdminClient.forNode(reservedNode);
+  let serverStatus;
   try {
-    const serverStatus = await client.getServerStatus();
+    serverStatus = await client.getServerStatus();
     if (serverStatus.status !== 'HEALTHY' && serverStatus.state !== 'Ready') {
       const statusFailReason = `Server is not in Ready state (current state: ${serverStatus.state || serverStatus.status})`;
 
@@ -799,6 +807,7 @@ export async function allocateAndProvisionInstance(
       instance.status = 'FAILED';
       instance.provisioningStage = 'HEALTH_CHECK_FAILED';
       instance.lastProvisioningError = statusFailReason;
+      instance.hostingNodeId = undefined; // Disassociate so failed record never blocks capacity
       await instance.save();
 
       throw new Error(statusFailReason);
@@ -829,6 +838,7 @@ export async function allocateAndProvisionInstance(
       instance.status = 'FAILED';
       instance.provisioningStage = 'IDENTITY_MISMATCH';
       instance.lastProvisioningError = identityMismatchReason;
+      instance.hostingNodeId = undefined;
       await instance.save();
 
       throw new Error(identityMismatchReason);
@@ -853,8 +863,67 @@ export async function allocateAndProvisionInstance(
     instance.status = 'FAILED';
     instance.provisioningStage = 'PRE_CHECK_FAILED';
     instance.lastProvisioningError = preCheckMsg;
+    instance.hostingNodeId = undefined;
     await instance.save();
     throw preCheckErr;
+  }
+
+  // Step 4: Determine whether an authoritative server reset is actually required
+  // A reset is NOT required every time: a sanitized, unassigned AVAILABLE node is already eligible.
+  // A reset IS required if the server reports residual customer databases or if node was marked needing reset.
+  const hasResidualDatabases = (serverStatus.database_count || 0) > 1 || (serverStatus.total_databases || 0) > 1;
+  const hasResidualUsers = (serverStatus.user_count || 0) > 1;
+  const needsReset = (reservedNode as any).requiresReset || hasResidualDatabases || hasResidualUsers;
+
+  if (needsReset) {
+    try {
+      const targetInstanceId = reservedNode.serverIdentity || serverStatus.instanceId || 'primary';
+      const resetResult = await client.resetInstance({
+        instanceId: targetInstanceId,
+        confirmation: 'RESET_INSTANCE',
+      });
+
+      if (resetResult.state !== 'Ready' && resetResult.status !== 'READY' && resetResult.status !== 'ACTIVE') {
+        throw new Error(`Authoritative reset returned unexpected state: ${resetResult.state || resetResult.status}`);
+      }
+
+      if (resetResult.newGeneratedRootPassword) {
+        masterPassword = resetResult.newGeneratedRootPassword;
+      }
+
+      await HostingNode.findByIdAndUpdate(reservedNode._id, {
+        $set: {
+          lastResetAt: new Date(),
+          encryptedDefaultRootPassword: resetResult.newGeneratedRootPassword
+            ? encrypt(resetResult.newGeneratedRootPassword)
+            : reservedNode.encryptedDefaultRootPassword,
+        },
+        $unset: { requiresReset: 1 },
+      });
+    } catch (resetErr: unknown) {
+      const resetMsg = resetErr instanceof Error ? resetErr.message : String(resetErr);
+      await HostingNode.findOneAndUpdate(
+        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        {
+          $set: {
+            status: 'QUARANTINED',
+            currentAssignedCount: 0,
+            quarantineReason: `Authoritative pre-provision reset failed: ${resetMsg}. Requires manual recovery.`,
+            cleanupFailureReason: resetMsg,
+          },
+          $unset: {
+            currentAllocationId: 1,
+            allocationExpiresAt: 1,
+            assignedInstanceId: 1,
+          },
+        }
+      );
+      instance.status = 'FAILED';
+      instance.provisioningStage = 'RESET_FAILED';
+      instance.lastProvisioningError = resetMsg;
+      await instance.save();
+      throw new Error(`Pre-provisioning reset failed on node ${reservedNode.name}: ${resetMsg}`);
+    }
   }
 
   instance.provisioningStage = 'MUTATING_RUST';
@@ -1114,9 +1183,18 @@ export async function provisionInstance(
   }
 
   if (!node) {
-    // Atomically find and reserve an AVAILABLE and HEALTHY node
+    const activeInstances = await ManagedDatabase.find({
+      status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
+      hostingNodeId: { $exists: true, $ne: null },
+    })
+      .select('hostingNodeId')
+      .lean();
+    const occupiedNodeIds = activeInstances.map((i) => i.hostingNodeId?.toString()).filter(Boolean);
+
+    // Atomically find and reserve an AVAILABLE and HEALTHY node not occupied by active customers
     node = await HostingNode.findOneAndUpdate(
       {
+        ...(occupiedNodeIds.length > 0 ? { _id: { $nin: occupiedNodeIds } } : {}),
         status: { $in: ['AVAILABLE', 'ACTIVE'] },
         healthStatus: 'HEALTHY',
         currentAssignedCount: 0,

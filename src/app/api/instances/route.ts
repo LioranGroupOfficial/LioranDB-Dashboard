@@ -90,11 +90,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Enforce 2 databases per user limit
+    // Enforce 2 databases per user limit (only active and in-progress databases count)
     const MAX_DATABASES_PER_USER = 2;
     const activeDatabasesCount = await ManagedDatabase.countDocuments({
       $or: [{ customerId: user._id }, { userId: user._id }],
-      status: { $nin: ['TERMINATED', 'DELETED'] },
+      status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED', 'PROVISIONING'] },
     });
 
     if (user.role !== 'admin' && activeDatabasesCount >= MAX_DATABASES_PER_USER) {
@@ -109,11 +109,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check unique name for this customer
+    // Check unique name for this customer among active instances
     const existing = await ManagedDatabase.findOne({
       customerId: user._id,
       name: name.trim().toLowerCase(),
-      status: { $ne: 'TERMINATED' },
+      status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED', 'PROVISIONING'] },
     });
 
     if (existing) {

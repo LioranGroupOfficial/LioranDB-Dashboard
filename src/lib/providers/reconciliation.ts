@@ -82,20 +82,86 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
 
       // 3. Inspect each hosting node safely
       for (const node of allNodes) {
-        // Concurrency safeguard 1: never touch a node currently undergoing active reset or in-progress provisioning
-        if (node.status === 'RESETTING' || node.status === 'PROVISIONING') {
+        // Concurrency safeguard 1: never touch a node currently undergoing active reset
+        if (node.status === 'RESETTING') {
           continue;
         }
 
-        // Concurrency safeguard 2: handle legacy or expired RESERVED nodes
-        if (node.status === 'RESERVED') {
-          const isLeaseExpired = node.allocationExpiresAt && new Date(node.allocationExpiresAt) < new Date();
+        // Concurrency safeguard 2: handle in-progress or expired PROVISIONING nodes
+        if (node.status === 'PROVISIONING') {
+          const isLeaseExpired =
+            !node.allocationExpiresAt || new Date(node.allocationExpiresAt).getTime() < Date.now();
           if (!isLeaseExpired) {
             // Active allocation in progress: skip to protect reservation
             continue;
           }
 
-          // Stale expired reservation lease: check if any in-flight ManagedDatabase is attached
+          // Expired PROVISIONING lease: inspect associated instance stage
+          const stuckInstance = await ManagedDatabase.findOne({
+            hostingNodeId: node._id,
+            status: { $in: ['PROVISIONING', 'PENDING'] },
+          }).sort({ updatedAt: -1 });
+
+          const wasMutated =
+            stuckInstance?.provisioningStage === 'MUTATING_RUST' ||
+            stuckInstance?.provisioningStage === 'READINESS_FAILED' ||
+            stuckInstance?.provisioningStage === 'MUTATION_FAILED';
+
+          if (wasMutated) {
+            await HostingNode.findOneAndUpdate(
+              { _id: node._id, status: 'PROVISIONING' },
+              {
+                $set: {
+                  status: 'QUARANTINED',
+                  currentAssignedCount: 0,
+                  quarantineReason: 'Provisioning reservation expired after server mutations were initiated. Requires reset.',
+                  cleanupFailureReason: 'Expired reservation during mutation',
+                },
+                $unset: {
+                  currentAllocationId: 1,
+                  allocationExpiresAt: 1,
+                  assignedInstanceId: 1,
+                },
+              }
+            );
+            if (stuckInstance) {
+              stuckInstance.status = 'FAILED';
+              stuckInstance.lastProvisioningError = 'Provisioning timed out after mutations';
+              await stuckInstance.save();
+            }
+          } else {
+            // Pre-mutation timeout: safely reclaim node to AVAILABLE
+            await HostingNode.findOneAndUpdate(
+              { _id: node._id, status: 'PROVISIONING' },
+              {
+                $set: {
+                  status: 'AVAILABLE',
+                  currentAssignedCount: 0,
+                },
+                $unset: {
+                  currentAllocationId: 1,
+                  allocationExpiresAt: 1,
+                  assignedInstanceId: 1,
+                },
+              }
+            );
+            if (stuckInstance) {
+              stuckInstance.status = 'FAILED';
+              stuckInstance.lastProvisioningError = 'Provisioning reservation lease expired';
+              stuckInstance.hostingNodeId = undefined;
+              await stuckInstance.save();
+            }
+          }
+          continue;
+        }
+
+        // Concurrency safeguard 3: handle legacy or expired RESERVED nodes
+        if (node.status === 'RESERVED') {
+          const isLeaseExpired = !node.allocationExpiresAt || new Date(node.allocationExpiresAt).getTime() < Date.now();
+          if (!isLeaseExpired) {
+            continue;
+          }
+
           const hasInFlightInstance = await ManagedDatabase.exists({
             hostingNodeId: node._id,
             status: { $in: ['PROVISIONING', 'ACTIVE', 'RUNNING'] },
@@ -105,7 +171,6 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
             continue;
           }
 
-          // Safely reclaim expired reservation without clean-state gate
           await HostingNode.findOneAndUpdate(
             { _id: node._id, status: 'RESERVED' },
             {
@@ -165,24 +230,45 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
         // Node is NOT occupied by an active customer instance.
         // Check if associated with an unresolved FAILED instance
         if (failedNodeSet.has(node._id.toString())) {
-          if (node.status !== 'QUARANTINED' && node.status !== 'RESETTING') {
-            await HostingNode.findOneAndUpdate(
-              { _id: node._id, status: { $nin: ['RESETTING', 'QUARANTINED'] } },
-              {
-                $set: {
-                  status: 'QUARANTINED',
-                  currentAssignedCount: 0,
-                  quarantineReason: 'Associated with failed instance provisioning. Requires sanitized reset before reuse.',
-                  cleanupFailureReason: 'Failed instance provisioning',
-                },
-                $unset: {
-                  currentAllocationId: 1,
-                  allocationExpiresAt: 1,
-                },
-              }
+          const failedInst = await ManagedDatabase.findOne({
+            hostingNodeId: node._id,
+            status: 'FAILED',
+          }).sort({ updatedAt: -1 });
+
+          const isSanitized =
+            node.lastResetAt &&
+            failedInst?.updatedAt &&
+            new Date(node.lastResetAt).getTime() >= new Date(failedInst.updatedAt).getTime();
+          const wasPreMutationFailure =
+            failedInst?.provisioningStage === 'HEALTH_CHECK_FAILED' ||
+            failedInst?.provisioningStage === 'PRE_CHECK_FAILED' ||
+            failedInst?.provisioningStage === 'IDENTITY_MISMATCH';
+
+          if (isSanitized || wasPreMutationFailure) {
+            await ManagedDatabase.updateMany(
+              { hostingNodeId: node._id, status: 'FAILED' },
+              { $unset: { hostingNodeId: 1 } }
             );
+          } else {
+            if (node.status !== 'QUARANTINED' && node.status !== 'RESETTING') {
+              await HostingNode.findOneAndUpdate(
+                { _id: node._id, status: { $nin: ['RESETTING', 'QUARANTINED'] } },
+                {
+                  $set: {
+                    status: 'QUARANTINED',
+                    currentAssignedCount: 0,
+                    quarantineReason: `Associated with failed instance provisioning (${failedInst?.lastProvisioningError || 'Unresolved failure'}). Requires sanitized reset before reuse.`,
+                    cleanupFailureReason: failedInst?.lastProvisioningError || 'Failed instance provisioning',
+                  },
+                  $unset: {
+                    currentAllocationId: 1,
+                    allocationExpiresAt: 1,
+                  },
+                }
+              );
+            }
+            continue;
           }
-          continue;
         }
 
         // Unassigned node: ensure assignment count is 0

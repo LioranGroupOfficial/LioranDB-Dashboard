@@ -718,7 +718,17 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       </td>
 
                       <td className="px-4 py-3.5">
-                        {isAssigned ? (
+                        {node.status === 'PROVISIONING' ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-semibold">
+                              <RotateCw className="w-3 h-3 animate-spin text-[var(--text-muted)]" />
+                              RESERVED (1/1)
+                            </span>
+                            <div className="text-[11px] text-[var(--text-muted)] truncate max-w-[140px]" title={node.assignedInstanceName || 'Provisioning'}>
+                              {node.assignedInstanceName || 'Provisioning'}
+                            </div>
+                          </div>
+                        ) : isAssigned ? (
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-bold">
                               <Database className="w-3 h-3" />

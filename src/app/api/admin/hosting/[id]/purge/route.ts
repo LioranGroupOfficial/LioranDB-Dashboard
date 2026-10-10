@@ -22,16 +22,16 @@ export async function POST(
       return NextResponse.json({ error: 'Hosting node not found' }, { status: 404 });
     }
 
-    // Safety check 1: Never purge a node with active customer databases
+    // Safety check 1: Never purge a node with genuinely active customer databases
     const activeDatabases = await ManagedDatabase.countDocuments({
       hostingNodeId: node._id,
-      status: { $nin: ['TERMINATED', 'DELETED'] },
+      status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
     });
 
     if (activeDatabases > 0) {
       return NextResponse.json(
         {
-          error: `Cannot purge hosting node: ${activeDatabases} active customer database(s) are assigned to this node. Terminate databases first.`,
+          error: `Cannot purge hosting node: ${activeDatabases} active customer database(s) are assigned to this node. Terminate active databases first.`,
         },
         { status: 400 }
       );
@@ -49,12 +49,7 @@ export async function POST(
     const lockedNode = await HostingNode.findOneAndUpdate(
       {
         _id: node._id,
-        status: { $nin: ['RESETTING', 'PROVISIONING', 'ASSIGNED'] },
-        $or: [
-          { currentAllocationId: { $exists: false } },
-          { currentAllocationId: null },
-          { allocationExpiresAt: { $lt: new Date() } },
-        ],
+        status: { $nin: ['RESETTING', 'ASSIGNED'] },
       },
       {
         $set: {
@@ -72,7 +67,7 @@ export async function POST(
 
     if (!lockedNode) {
       return NextResponse.json(
-        { error: 'Cannot purge hosting node: it is currently active, assigned, reserved, or undergoing another reset operation.' },
+        { error: 'Cannot purge hosting node: it is currently active or assigned to a customer, or undergoing another reset operation.' },
         { status: 409 }
       );
     }
@@ -113,6 +108,19 @@ export async function POST(
             allocationExpiresAt: 1,
             assignedInstanceId: 1,
           },
+        }
+      );
+
+      // Clean up any residual non-active instance records linked to this node
+      await ManagedDatabase.updateMany(
+        { hostingNodeId: lockedNode._id, status: { $nin: ['ACTIVE', 'RUNNING'] } },
+        {
+          $set: {
+            status: 'TERMINATED',
+            terminatedAt: now,
+            terminationReason: 'Node purged and reset by administrator',
+          },
+          $unset: { hostingNodeId: 1 },
         }
       );
 

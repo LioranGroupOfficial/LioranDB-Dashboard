@@ -20,18 +20,30 @@ export async function GET(_req: NextRequest) {
       nodes.map(async (node) => {
         const activeInstance = await ManagedDatabase.findOne({
           hostingNodeId: node._id,
-          status: { $nin: ['TERMINATED', 'DELETED'] },
+          status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
         })
           .select('name status _id')
           .lean();
 
+        const provisioningInstance = !activeInstance
+          ? await ManagedDatabase.findOne({
+              hostingNodeId: node._id,
+              status: 'PROVISIONING',
+            })
+              .select('name status _id')
+              .lean()
+          : null;
+
+        const effectiveInstance = activeInstance || provisioningInstance;
+        const assignedCount = activeInstance ? 1 : node.status === 'ASSIGNED' ? 1 : 0;
+
         return {
           ...node,
           maxCapacity: 1,
-          currentAssignedCount: activeInstance ? 1 : 0,
-          assignedInstanceName: activeInstance?.name || undefined,
-          assignedInstanceStatus: activeInstance?.status || undefined,
-          assignedDatabaseId: activeInstance?._id?.toString() || undefined,
+          currentAssignedCount: assignedCount,
+          assignedInstanceName: effectiveInstance?.name || undefined,
+          assignedInstanceStatus: effectiveInstance?.status || undefined,
+          assignedDatabaseId: effectiveInstance?._id?.toString() || undefined,
         };
       })
     );

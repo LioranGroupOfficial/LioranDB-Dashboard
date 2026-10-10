@@ -25,16 +25,16 @@ export async function POST(
       return NextResponse.json({ error: 'Hosting node not found' }, { status: 404 });
     }
 
-    // Safety constraint: Never reset a node that has active customer databases
+    // Safety constraint: Never reset a node that has genuinely active customer databases
     const activeInstancesCount = await ManagedDatabase.countDocuments({
       hostingNodeId: node._id,
-      status: { $nin: ['TERMINATED', 'DELETED'] },
+      status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
     });
 
     if (activeInstancesCount > 0) {
       return NextResponse.json(
         {
-          error: `Cannot sanitize hosting node: ${activeInstancesCount} active customer database(s) are assigned to this node. Drain or delete databases first.`,
+          error: `Cannot sanitize hosting node: ${activeInstancesCount} active customer database(s) are assigned to this node. Drain or delete active databases first.`,
         },
         { status: 400 }
       );
@@ -78,12 +78,28 @@ export async function POST(
       lockedNode.quarantineReason = undefined;
       lockedNode.cleanupFailureReason = undefined;
       lockedNode.currentAssignedCount = 0;
+      lockedNode.currentAllocationId = undefined;
+      lockedNode.allocationExpiresAt = undefined;
+      lockedNode.assignedInstanceId = undefined;
       lockedNode.lastResetAt = now;
       if (purgeResult.rotatedRootPassword) {
         lockedNode.lastCredentialRotationAt = now;
       }
       lockedNode.adminNotes = `Administrator cleanup succeeded on ${now.toISOString()} by ${admin.email || admin.userId}. Engine reset verified.`;
       await lockedNode.save();
+
+      // Clean up any residual non-active instance records linked to this node
+      await ManagedDatabase.updateMany(
+        { hostingNodeId: lockedNode._id, status: { $nin: ['ACTIVE', 'RUNNING'] } },
+        {
+          $set: {
+            status: 'TERMINATED',
+            terminatedAt: now,
+            terminationReason: 'Node sanitized and reset by administrator',
+          },
+          $unset: { hostingNodeId: 1 },
+        }
+      );
 
       await createAuditLog({
         userId: admin.userId,
