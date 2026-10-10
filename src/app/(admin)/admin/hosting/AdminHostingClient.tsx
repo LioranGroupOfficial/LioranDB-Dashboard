@@ -730,8 +730,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                               <AlertCircle className="w-3 h-3 text-red-500" />
                               QUARANTINED (0/1)
                             </span>
-                            <div className="text-[10px] text-red-500 dark:text-red-400 font-sans truncate max-w-[140px]" title={node.quarantineReason || 'Quarantined'}>
-                              {node.quarantineReason && node.quarantineReason.includes('backup') ? 'Residual backup config' : 'Isolation Hold'}
+                            <div className="text-[10px] text-red-500 dark:text-red-400 font-sans truncate max-w-[140px]" title={node.quarantineReason || `${node.name} unavailable: reset required.`}>
+                              Reset Required
                             </div>
                           </div>
                         ) : node.status === 'RESETTING' ? (
@@ -803,12 +803,14 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                           >
                             {node.status}
                           </span>
-                          {node.status === 'QUARANTINED' && (node.quarantineReason || node.cleanupFailureReason) && (
+                          {node.status === 'QUARANTINED' && (
                             <div
                               className="text-[10px] text-red-500 dark:text-red-400 max-w-[200px] font-sans break-words mt-1"
-                              title={node.quarantineReason || node.cleanupFailureReason}
+                              title={node.quarantineReason || `${node.name} unavailable: reset required.`}
                             >
-                              Reason: {node.quarantineReason?.includes('backup') ? `${node.name} requires reset: residual backup configuration.` : (node.quarantineReason || node.cleanupFailureReason)}
+                              {node.quarantineReason?.includes('unavailable') || node.quarantineReason?.includes('reset required')
+                                ? node.quarantineReason
+                                : `${node.name} unavailable: reset required.`}
                             </div>
                           )}
                         </div>

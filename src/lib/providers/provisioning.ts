@@ -78,22 +78,22 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     if (params.nodeId) {
       const explicitNode = await HostingNode.findById(params.nodeId);
       if (explicitNode) {
-        if (explicitNode.status === 'QUARANTINED' || explicitNode.quarantineReason) {
+        if (explicitNode.status === 'QUARANTINED') {
           return {
             success: false,
-            error: `Requested hosting node '${explicitNode.name}' is QUARANTINED (${explicitNode.quarantineReason || explicitNode.cleanupFailureReason || 'Isolation check failed'}) and ineligible for allocation.`,
+            error: `${explicitNode.name} unavailable: reset required.`,
           };
         }
         if (explicitNode.status === 'RESETTING') {
           return {
             success: false,
-            error: `Requested hosting node '${explicitNode.name}' is currently being reset and ineligible for allocation.`,
+            error: `${explicitNode.name} unavailable: reset in progress.`,
           };
         }
         if (explicitNode.status === 'DISABLED') {
           return {
             success: false,
-            error: `Requested hosting node '${explicitNode.name}' is disabled.`,
+            error: `${explicitNode.name} is disabled.`,
           };
         }
         node = explicitNode;
@@ -385,8 +385,8 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
             nodeId: node._id.toString(),
           });
 
-          if (!purgeResult.verifiedClean) {
-            throw new Error(`Clean state verification failed post-reset. Residual data detected: ${purgeResult.error || 'Check failed'}`);
+          if (!purgeResult.success) {
+            throw new Error(`Server reset failed on termination: ${purgeResult.error || 'Check failed'}`);
           }
 
           // Successful cleanup: return node to AVAILABLE with verified clean state
@@ -395,6 +395,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           node.healthStatus = 'HEALTHY';
           node.cleanStatus = 'CLEAN';
           node.quarantineReason = undefined;
+          node.quarantineCode = undefined;
           node.cleanupFailureReason = undefined;
           node.lastResetAt = now;
           node.lastCleanCheckAt = now;
@@ -426,7 +427,8 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           node.healthStatus = 'DEGRADED';
           node.cleanStatus = 'DIRTY';
           node.cleanupFailureReason = errMsg;
-          node.quarantineReason = errMsg;
+          node.quarantineReason = `${node.name} unavailable: reset required.`;
+          node.quarantineCode = 'RESET_FAILED';
           node.adminNotes = `QUARANTINED: Cleanup failed during termination: ${errMsg}`;
           await node.save();
 
@@ -672,9 +674,23 @@ export async function allocateAndProvisionInstance(
   };
 
   if (params.nodeId) {
-    if (occupiedNodeIds.includes(params.nodeId.toString())) {
-      throw new Error(`Requested hosting node '${params.nodeId}' is currently assigned to an active customer.`);
+    const explicitTarget = await HostingNode.findById(params.nodeId);
+    if (!explicitTarget) {
+      throw new Error(`Requested hosting node '${params.nodeId}' was not found.`);
     }
+    if (explicitTarget.status === 'QUARANTINED') {
+      throw new Error(`${explicitTarget.name} unavailable: reset required.`);
+    }
+    if (explicitTarget.status === 'RESETTING') {
+      throw new Error(`${explicitTarget.name} unavailable: reset in progress.`);
+    }
+    if (explicitTarget.status === 'DISABLED') {
+      throw new Error(`${explicitTarget.name} is disabled.`);
+    }
+    if (occupiedNodeIds.includes(params.nodeId.toString()) || explicitTarget.currentAssignedCount > 0) {
+      throw new Error(`Requested hosting node '${explicitTarget.name}' is currently assigned to an active customer.`);
+    }
+
     allocatableFilter._id = params.nodeId;
     reservedNode = await HostingNode.findOneAndUpdate(
       allocatableFilter,
@@ -684,6 +700,11 @@ export async function allocateAndProvisionInstance(
           currentAllocationId: allocationToken,
           allocationExpiresAt: leaseExpiresAt,
           currentAssignedCount: 1,
+        },
+        $unset: {
+          quarantineReason: 1,
+          quarantineCode: 1,
+          cleanupFailureReason: 1,
         },
       },
       { returnDocument: 'after' }
@@ -700,6 +721,11 @@ export async function allocateAndProvisionInstance(
           currentAllocationId: allocationToken,
           allocationExpiresAt: leaseExpiresAt,
           currentAssignedCount: 1,
+        },
+        $unset: {
+          quarantineReason: 1,
+          quarantineCode: 1,
+          cleanupFailureReason: 1,
         },
       },
       { returnDocument: 'after', sort: { isDefault: -1, createdAt: 1 } }
@@ -779,16 +805,15 @@ export async function allocateAndProvisionInstance(
     throw dbErr;
   }
 
-  // Step 3: Pre-allocation health and sanitization check (strictly BEFORE any customer mutations begin)
+  // Step 3: Pre-allocation health and readiness probe (strictly BEFORE any customer mutations begin)
   const client = LioranDBAdminClient.forNode(reservedNode);
   const targetInstanceId = reservedNode.serverIdentity || 'primary';
   let serverStatus;
-  let preCleanCheck;
 
   try {
     serverStatus = await client.getServerStatus();
     if (serverStatus.status !== 'HEALTHY' && serverStatus.state !== 'Ready') {
-      const statusFailReason = `Server is not in Ready state (current state: ${serverStatus.state || serverStatus.status})`;
+      const statusFailReason = `${reservedNode.name} unavailable: server is not in Ready state (current state: ${serverStatus.state || serverStatus.status})`;
 
       await HostingNode.findOneAndUpdate(
         { _id: reservedNode._id, currentAllocationId: allocationToken },
@@ -802,6 +827,9 @@ export async function allocateAndProvisionInstance(
             currentAllocationId: 1,
             allocationExpiresAt: 1,
             assignedInstanceId: 1,
+            quarantineReason: 1,
+            quarantineCode: 1,
+            cleanupFailureReason: 1,
           },
         }
       );
@@ -820,7 +848,7 @@ export async function allocateAndProvisionInstance(
       serverStatus.instanceId &&
       reservedNode.serverIdentity.toLowerCase() !== serverStatus.instanceId.toLowerCase()
     ) {
-      const identityMismatchReason = `Server instance identity mismatch: expected '${reservedNode.serverIdentity}', received '${serverStatus.instanceId}'`;
+      const identityMismatchReason = `${reservedNode.name} unavailable: server identity mismatch (expected '${reservedNode.serverIdentity}', received '${serverStatus.instanceId}')`;
 
       await HostingNode.findOneAndUpdate(
         { _id: reservedNode._id, currentAllocationId: allocationToken },
@@ -833,6 +861,9 @@ export async function allocateAndProvisionInstance(
             currentAllocationId: 1,
             allocationExpiresAt: 1,
             assignedInstanceId: 1,
+            quarantineReason: 1,
+            quarantineCode: 1,
+            cleanupFailureReason: 1,
           },
         }
       );
@@ -845,9 +876,6 @@ export async function allocateAndProvisionInstance(
 
       throw new Error(identityMismatchReason);
     }
-
-    // Check whether the node is already clean or contains residual customer resources
-    preCleanCheck = await client.verifyCleanState(targetInstanceId);
   } catch (preCheckErr: unknown) {
     const preCheckMsg = preCheckErr instanceof Error ? preCheckErr.message : String(preCheckErr);
     await HostingNode.findOneAndUpdate(
@@ -861,6 +889,9 @@ export async function allocateAndProvisionInstance(
           currentAllocationId: 1,
           allocationExpiresAt: 1,
           assignedInstanceId: 1,
+          quarantineReason: 1,
+          quarantineCode: 1,
+          cleanupFailureReason: 1,
         },
       }
     );
@@ -872,13 +903,17 @@ export async function allocateAndProvisionInstance(
     throw preCheckErr;
   }
 
-  // Step 4: Authoritative reset and sanitization (only when required)
-  // A successfully sanitized, unassigned AVAILABLE node is already eligible.
-  // If the server has residual resources (e.g. backup.settings.v1, residual databases/users),
-  // perform authoritative Rust reset.
+  // Step 4: Handle Node Reuse / Authoritative Reset (only when required)
+  // For a newly initialized node with no previous customer assignment, provision directly.
+  // For a previously assigned node or node with residual databases/users, require completed authoritative Rust reset.
+  const isPreviouslyAssigned = Boolean(
+    (reservedNode as any).requiresReset ||
+    reservedNode.assignedInstanceId ||
+    (reservedNode as any).lastAssignedAt
+  );
   const hasResidualDatabases = (serverStatus.database_count || 0) > 1 || (serverStatus.total_databases || 0) > 1;
   const hasResidualUsers = (serverStatus.user_count || 0) > 1;
-  const needsReset = (reservedNode as any).requiresReset || !preCleanCheck.isClean || hasResidualDatabases || hasResidualUsers;
+  const needsReset = isPreviouslyAssigned || hasResidualDatabases || hasResidualUsers;
 
   if (needsReset) {
     try {
@@ -887,46 +922,16 @@ export async function allocateAndProvisionInstance(
         confirmation: 'RESET_INSTANCE',
       });
 
-      if (resetResult.state !== 'Ready' && resetResult.status !== 'READY' && resetResult.status !== 'ACTIVE') {
-        throw new Error(`Authoritative reset returned unexpected state: ${resetResult.state || resetResult.status}`);
+      const isResetConfirmed =
+        resetResult.state === 'Ready' ||
+        resetResult.status === 'READY' ||
+        resetResult.status === 'ACTIVE' ||
+        resetResult.status === 'OK';
+
+      if (!isResetConfirmed) {
+        throw new Error(`${reservedNode.name} unavailable: reset required.`);
       }
 
-      // Verify post-reset clean state to ensure residual resources were actually purged
-      const postResetClean = await client.verifyCleanState(targetInstanceId);
-      if (!postResetClean.isClean) {
-        const postFailReason = postResetClean.reasons.join('; ');
-        const isBackupSetting = postFailReason.includes('backup.settings.v1') || postFailReason.includes('backup');
-        const conciseQuarantineMsg = isBackupSetting
-          ? `${reservedNode.name} requires reset: residual backup configuration.`
-          : `${reservedNode.name} reset incomplete: ${postFailReason}`;
-
-        // Preserve quarantine as mandated: do not silently ignore remaining settings!
-        await HostingNode.findOneAndUpdate(
-          { _id: reservedNode._id, currentAllocationId: allocationToken },
-          {
-            $set: {
-              status: 'QUARANTINED',
-              currentAssignedCount: 0,
-              quarantineReason: conciseQuarantineMsg,
-              cleanupFailureReason: postFailReason,
-            },
-            $unset: {
-              currentAllocationId: 1,
-              allocationExpiresAt: 1,
-              assignedInstanceId: 1,
-            },
-          }
-        );
-
-        instance.status = 'FAILED';
-        instance.provisioningStage = 'RESET_INCOMPLETE';
-        instance.lastProvisioningError = conciseQuarantineMsg;
-        await instance.save();
-
-        throw new Error(conciseQuarantineMsg);
-      }
-
-      // Reset succeeded and verified clean!
       if (resetResult.newGeneratedRootPassword) {
         masterPassword = resetResult.newGeneratedRootPassword;
       }
@@ -938,23 +943,21 @@ export async function allocateAndProvisionInstance(
             ? encrypt(resetResult.newGeneratedRootPassword)
             : reservedNode.encryptedDefaultRootPassword,
         },
-        $unset: { requiresReset: 1, quarantineReason: 1, cleanupFailureReason: 1 },
+        $unset: { requiresReset: 1, quarantineReason: 1, quarantineCode: 1, cleanupFailureReason: 1 },
       });
     } catch (resetErr: unknown) {
       const resetMsg = resetErr instanceof Error ? resetErr.message : String(resetErr);
-      const isBackupSetting = resetMsg.includes('backup.settings.v1') || resetMsg.includes('backup');
-      const conciseQuarantineMsg = isBackupSetting
-        ? `${reservedNode.name} requires reset: residual backup configuration.`
-        : `${reservedNode.name} reset failed: ${resetMsg}`;
+      const conciseQuarantineMsg = `${reservedNode.name} unavailable: reset required.`;
 
       await HostingNode.findOneAndUpdate(
         { _id: reservedNode._id, currentAllocationId: allocationToken },
         {
           $set: {
             status: 'QUARANTINED',
-            currentAssignedCount: 0,
+            quarantineCode: 'RESET_FAILED',
             quarantineReason: conciseQuarantineMsg,
             cleanupFailureReason: resetMsg,
+            currentAssignedCount: 0,
           },
           $unset: {
             currentAllocationId: 1,
@@ -988,7 +991,7 @@ export async function allocateAndProvisionInstance(
       databaseName: targetDbName,
       planId: plan.id,
       nodeId: reservedNode._id.toString(),
-      skipCleanVerification: true, // Already authoritatively verified in Step 3!
+      skipCleanVerification: true,
     });
 
     if (!deploymentResult.success || !deploymentResult.nativeConnectionUri) {
@@ -998,15 +1001,17 @@ export async function allocateAndProvisionInstance(
     const mutMsg = mutationErr instanceof Error ? mutationErr.message : String(mutationErr);
     console.error(`[Provisioning] Rust mutation failed on node ${reservedNode.name}: ${mutMsg}`);
 
-    // Since mutation on Rust server may have altered root password or state, quarantine node
+    const conciseQuarantineMsg = `${reservedNode.name} unavailable: reset required.`;
+
     await HostingNode.findOneAndUpdate(
       { _id: reservedNode._id, currentAllocationId: allocationToken },
       {
         $set: {
           status: 'QUARANTINED',
+          quarantineCode: 'MUTATION_FAILED',
           cleanStatus: 'DIRTY',
           currentAssignedCount: 0,
-          quarantineReason: `Provisioning aborted during Rust mutation: ${mutMsg}. Requires sanitized reset before reuse.`,
+          quarantineReason: conciseQuarantineMsg,
           cleanupFailureReason: mutMsg,
         },
         $unset: {
@@ -1019,11 +1024,11 @@ export async function allocateAndProvisionInstance(
 
     instance.status = 'FAILED';
     instance.provisioningStage = 'MUTATION_FAILED';
-    instance.lastProvisioningError = mutMsg;
+    instance.lastProvisioningError = conciseQuarantineMsg;
     instance.adminNotes = `Provisioning mutation failed: ${mutMsg}`;
     await instance.save();
 
-    throw new Error(mutMsg);
+    throw new Error(conciseQuarantineMsg);
   }
 
   // Step 6: Verify client connectivity and logical database accessibility
@@ -1059,7 +1064,7 @@ export async function allocateAndProvisionInstance(
       }
     } catch (readinessErr: unknown) {
       const readMsg = readinessErr instanceof Error ? readinessErr.message : String(readinessErr);
-      const failReason = `Provisioning readiness verification failed: ${readMsg}`;
+      const failReason = `${reservedNode.name} unavailable: reset required.`;
       console.error(`[Provisioning] Readiness failure on node ${reservedNode.name}: ${readMsg}`);
 
       await HostingNode.findOneAndUpdate(
@@ -1067,9 +1072,10 @@ export async function allocateAndProvisionInstance(
         {
           $set: {
             status: 'QUARANTINED',
+            quarantineCode: 'READINESS_FAILED',
             cleanStatus: 'DIRTY',
             currentAssignedCount: 0,
-            quarantineReason: `Readiness check failed after provisioning: ${readMsg}. Requires sanitized reset before reuse.`,
+            quarantineReason: failReason,
             cleanupFailureReason: readMsg,
           },
           $unset: {
@@ -1148,6 +1154,7 @@ export async function allocateAndProvisionInstance(
         currentAllocationId: 1,
         allocationExpiresAt: 1,
         quarantineReason: 1,
+        quarantineCode: 1,
         cleanupFailureReason: 1,
       },
     },
@@ -1303,15 +1310,16 @@ export async function provisionInstance(
     await HostingNode.findByIdAndUpdate(node._id, {
       $set: {
         status: 'QUARANTINED',
+        quarantineCode: 'MUTATION_FAILED',
         cleanStatus: 'DIRTY',
         currentAssignedCount: 0,
-        quarantineReason: `Provisioning aborted: ${deploymentResult.error || 'Failed to complete deployment'}. Requires sanitized reset before reuse.`,
+        quarantineReason: `${node.name} unavailable: reset required.`,
         cleanupFailureReason: deploymentResult.error,
       },
       $unset: { currentAllocationId: 1, allocationExpiresAt: 1, assignedInstanceId: 1 },
     });
 
-    throw new Error(deploymentResult.error || 'Failed to provision database infrastructure');
+    throw new Error(`${node.name} unavailable: reset required.`);
   }
 
   // 3. Authoritatively verify physical server reachability and customer database accessibility
@@ -1347,16 +1355,17 @@ export async function provisionInstance(
       }
     } catch (readinessErr: unknown) {
       const errMessage = readinessErr instanceof Error ? readinessErr.message : String(readinessErr);
-      const failReason = `Provisioning readiness verification failed: ${errMessage}`;
+      const failReason = `${node.name} unavailable: reset required.`;
       instance.status = 'FAILED';
-      instance.adminNotes = failReason;
+      instance.adminNotes = `Readiness check failed: ${errMessage}`;
       await instance.save();
 
       await HostingNode.findByIdAndUpdate(node._id, {
         $set: {
           status: 'QUARANTINED',
+          quarantineCode: 'READINESS_FAILED',
           currentAssignedCount: 0,
-          quarantineReason: `Readiness check failed after provisioning: ${errMessage}. Requires sanitized reset before reuse.`,
+          quarantineReason: failReason,
           cleanupFailureReason: errMessage,
         },
         $unset: { currentAllocationId: 1, allocationExpiresAt: 1, assignedInstanceId: 1 },

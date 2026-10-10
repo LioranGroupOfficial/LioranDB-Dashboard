@@ -61,6 +61,7 @@ export interface IHostingNode extends Document {
   lastCleanupAttemptAt?: Date;
   cleanupFailureReason?: string;
   quarantineReason?: string;
+  quarantineCode?: string;
   encryptedDefaultRootPassword?: string;
   defaultRootUsername?: string;
   notes?: string;
@@ -130,6 +131,7 @@ const HostingNodeSchema = new Schema<IHostingNode>(
     lastCleanupAttemptAt: { type: Date },
     cleanupFailureReason: { type: String },
     quarantineReason: { type: String },
+    quarantineCode: { type: String },
     encryptedDefaultRootPassword: { type: String },
     defaultRootUsername: { type: String, default: 'admin', trim: true },
     notes: { type: String },
@@ -164,7 +166,7 @@ export function isNodeAllocatable(node: Partial<IHostingNode> | null | undefined
   const isNotLocked =
     !node.currentAllocationId ||
     (node.allocationExpiresAt && new Date(node.allocationExpiresAt).getTime() < Date.now());
-  const isNotQuarantined = node.status !== 'QUARANTINED' && !node.quarantineReason;
+  const isNotQuarantined = node.status !== 'QUARANTINED';
   const isNotResetting = node.status !== 'RESETTING';
   const isNotDisabled = node.status !== 'DISABLED';
 

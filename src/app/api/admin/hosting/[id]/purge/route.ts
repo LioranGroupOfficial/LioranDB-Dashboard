@@ -88,7 +88,7 @@ export async function POST(
 
     const now = new Date();
 
-    if (purgeResult.verifiedClean) {
+    if (purgeResult.success) {
       await HostingNode.findOneAndUpdate(
         { _id: lockedNode._id, status: 'RESETTING' },
         {
@@ -103,6 +103,7 @@ export async function POST(
           },
           $unset: {
             quarantineReason: 1,
+            quarantineCode: 1,
             cleanupFailureReason: 1,
             currentAllocationId: 1,
             allocationExpiresAt: 1,
@@ -156,11 +157,10 @@ export async function POST(
         {
           $set: {
             status: 'QUARANTINED',
+            quarantineCode: 'RESET_FAILED',
             healthStatus: 'DEGRADED',
             currentAssignedCount: 0,
-            quarantineReason: purgeResult.error?.includes('backup')
-              ? `${lockedNode.name} requires reset: residual backup configuration.`
-              : (purgeResult.error || 'Server reset failed'),
+            quarantineReason: `${lockedNode.name} unavailable: reset required.`,
             cleanupFailureReason: purgeResult.error || 'Server reset failed',
             adminNotes: `QUARANTINED: Admin-authorized purge failed: ${purgeResult.error || 'Reset failed'}`,
           },

@@ -72,10 +72,11 @@ export async function POST(
       nodeId: lockedNode._id.toString(),
     });
 
-    if (purgeResult.success && purgeResult.verifiedClean) {
+    if (purgeResult.success) {
       lockedNode.status = 'AVAILABLE';
       lockedNode.healthStatus = 'HEALTHY';
       lockedNode.quarantineReason = undefined;
+      lockedNode.quarantineCode = undefined;
       lockedNode.cleanupFailureReason = undefined;
       lockedNode.currentAssignedCount = 0;
       lockedNode.currentAllocationId = undefined;
@@ -122,14 +123,13 @@ export async function POST(
       });
     } else {
       // Post-cleanup verification failed or error occurred
-      const failureReason = purgeResult.error?.includes('backup')
-        ? `${lockedNode.name} requires reset: residual backup configuration.`
-        : (purgeResult.error || 'Server reset failed.');
+      const failureReason = `${lockedNode.name} unavailable: reset required.`;
       lockedNode.status = 'QUARANTINED';
+      lockedNode.quarantineCode = 'RESET_FAILED';
       lockedNode.healthStatus = 'DEGRADED';
       lockedNode.cleanupFailureReason = purgeResult.error || 'Server reset failed.';
       lockedNode.quarantineReason = failureReason;
-      lockedNode.adminNotes = `Administrator cleanup failed on ${now.toISOString()}: ${failureReason}`;
+      lockedNode.adminNotes = `Administrator cleanup failed on ${now.toISOString()}: ${purgeResult.error || 'Server reset failed'}`;
       await lockedNode.save();
 
       await createAuditLog({

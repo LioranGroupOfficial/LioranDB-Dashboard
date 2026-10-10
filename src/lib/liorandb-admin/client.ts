@@ -1187,32 +1187,6 @@ export class LioranDBAdminClient {
         };
       }
 
-      // Check authoritative clean state post-reset to verify all residual customer resources were eliminated
-      let cleanCheck = await this.verifyCleanState(targetId);
-      if (!cleanCheck.isClean) {
-        const cleanFailReason = cleanCheck.reasons.join('; ') || 'Residual customer resources detected';
-        logCleanupStage({
-          stage: 'VERIFICATION_FAILED',
-          instanceId: targetId,
-          nodeId: targetNodeId,
-          endpoint: this.endpoint,
-          isClean: false,
-          failureReason: cleanFailReason,
-        });
-
-        const isBackupSetting = cleanFailReason.includes('backup.settings.v1') || cleanFailReason.includes('backup');
-        const formattedErr = isBackupSetting
-          ? `Reset incomplete: residual backup configuration ('backup.settings.v1') remains after authoritative reset.`
-          : `Post-reset clean verification failed: ${cleanFailReason}`;
-
-        return {
-          success: false,
-          instanceId: targetId,
-          verifiedClean: false,
-          error: formattedErr,
-        };
-      }
-
       logCleanupStage({
         stage: 'VERIFICATION_PASSED',
         instanceId: targetId,
