@@ -1,0 +1,57 @@
+
+name: Deploy LioranDB Dashboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: liorandb-dashboard-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Ubuntu VPS
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Deploy dashboard
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          ssh -o BatchMode=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "DEPLOY_SHA='$DEPLOY_SHA' bash -se" <<'REMOTE'
+          set -Eeuo pipefail
+
+          cd /var/www/lioran/dashboard
+
+          git fetch origin main
+          git checkout --detach "$DEPLOY_SHA"
+
+          npm ci
+          npm run build
+
+          sudo -n systemctl restart liorandb-dashboard
+          sudo -n systemctl is-active --quiet liorandb-dashboard
+
+          echo "Deployment completed: $DEPLOY_SHA"
+          REMOTE
