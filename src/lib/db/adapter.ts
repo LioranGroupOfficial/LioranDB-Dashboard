@@ -757,6 +757,20 @@ export function isCollectionNotFoundError(err: any): boolean {
   );
 }
 
+export function isUnsupportedOperatorError(err: any): boolean {
+  if (!err) return false;
+  const serverCode = String(err.serverCode || '').toLowerCase();
+  const code = String(err.code || '');
+  const msg = String(err.message || '').toLowerCase();
+  return (
+    serverCode === 'unsupportedoperator' ||
+    serverCode === 'unsupported_operator' ||
+    msg.includes('unsupportedoperator') ||
+    msg.includes('unsupported operator') ||
+    (code === 'LDB_VALIDATION_FAILED' && (msg.includes('operator') || serverCode.includes('operator')))
+  );
+}
+
 export class Model<T = any> {
   public readonly modelName: string;
   public readonly collectionName: string;
@@ -1414,6 +1428,16 @@ export class Model<T = any> {
           await this.ensureCollectionReady(db).catch(() => {});
           return 0;
         }
+        if (isUnsupportedOperatorError(err)) {
+          let allDocs: any[] = [];
+          try {
+            const cursor = collection.find({});
+            allDocs = (await cursor.toArray()) as any[];
+          } catch {
+            allDocs = [];
+          }
+          return allDocs.filter((d) => matchesFilter(d, normFilter)).length;
+        }
         throw err;
       }
     }
@@ -1442,6 +1466,29 @@ export class Model<T = any> {
       if (isCollectionNotFoundError(err)) {
         await this.ensureCollectionReady(db).catch(() => {});
         docs = [];
+      } else if (isUnsupportedOperatorError(err)) {
+        let allRemote: any[] = [];
+        try {
+          const cursor = collection.find({}, { sort: params.sort });
+          allRemote = (await cursor.toArray()) as any[];
+        } catch {
+          try {
+            const cursor = collection.find({});
+            allRemote = (await cursor.toArray()) as any[];
+          } catch {
+            allRemote = [];
+          }
+        }
+        docs = allRemote.filter((d) => matchesFilter(d, normFilter));
+        if (params.skip) {
+          docs = docs.slice(params.skip);
+        }
+        if (params.limit) {
+          docs = docs.slice(0, params.limit);
+        }
+        if (params.single && docs.length > 0) {
+          docs = [docs[0]];
+        }
       } else {
         throw err;
       }

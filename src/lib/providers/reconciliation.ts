@@ -10,13 +10,13 @@ export async function reconcileHostingNodes(): Promise<void> {
   await connectToDatabase();
 
   // 1. Auto-migrate any stale localhost port 8080 entries to 27018
-  const staleNodes = await HostingNode.find({
-    $or: [
-      { controlPlaneEndpoint: /:8080/ },
-      { httpPort: 8080 },
-      { port: 8080 },
-    ],
-  });
+  const allNodes = await HostingNode.find();
+  const staleNodes = allNodes.filter(
+    (node) =>
+      node.port === 8080 ||
+      node.httpPort === 8080 ||
+      (typeof node.controlPlaneEndpoint === 'string' && node.controlPlaneEndpoint.includes(':8080'))
+  );
 
   for (const node of staleNodes) {
     if (isLocalhost(node.dbUrl) || isLocalhost(node.controlPlaneEndpoint || '')) {
@@ -28,12 +28,10 @@ export async function reconcileHostingNodes(): Promise<void> {
   }
 
   // 3. Reconcile orphan nodes that have no active instances
-  const activeInstances = await ManagedDatabase.find({
-    status: { $nin: ['TERMINATED', 'DELETED'] },
-    hostingNodeId: { $exists: true, $ne: null },
-  })
-    .select('hostingNodeId')
-    .lean();
+  const allInstances = await ManagedDatabase.find().select('status hostingNodeId').lean();
+  const activeInstances = allInstances.filter(
+    (inst) => inst.status !== 'TERMINATED' && inst.status !== 'DELETED' && Boolean(inst.hostingNodeId)
+  );
 
   const occupiedNodeIds = activeInstances
     .map((inst) => inst.hostingNodeId?.toString())
@@ -42,10 +40,9 @@ export async function reconcileHostingNodes(): Promise<void> {
   const occupiedSet = new Set(occupiedNodeIds);
 
   // 4. Safely inspect and sanitize unassigned nodes
-  const unassignedNodes = await HostingNode.find({
-    _id: { $nin: Array.from(occupiedSet) },
-    status: { $ne: 'DISABLED' },
-  });
+  const unassignedNodes = allNodes.filter(
+    (node) => !occupiedSet.has(node._id.toString()) && node.status !== 'DISABLED'
+  );
 
   for (const node of unassignedNodes) {
     try {
