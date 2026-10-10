@@ -5,6 +5,7 @@ import {
   CollectionIndexDefinition,
   ConfigurationError,
   ConnectionError,
+  NotFoundError,
   DRIVER_ERROR_CODES,
 } from '@liorandb/driver';
 import { ObjectId, Types } from './object-id';
@@ -730,6 +731,32 @@ function isAlreadyExistsError(err: any): boolean {
   );
 }
 
+export function isCollectionNotFoundError(err: any): boolean {
+  if (!err) return false;
+  const msg = String(err.message || '').toLowerCase();
+  const code = String(err.code || '');
+  const serverCode = String(err.serverCode || '');
+  const status = Number(err.status || err.httpStatus || 0);
+
+  return (
+    code === 'LDB_COLLECTION_NOT_FOUND' ||
+    code === (DRIVER_ERROR_CODES as any).COLLECTION_NOT_FOUND ||
+    serverCode === 'CollectionNotFound' ||
+    err instanceof NotFoundError ||
+    err?.name === 'NotFoundError' ||
+    (status === 404 && (
+      code === 'LDB_COLLECTION_NOT_FOUND' ||
+      serverCode === 'CollectionNotFound' ||
+      msg.includes('collection') ||
+      msg.includes('not found') ||
+      msg.includes('could not find the requested liorandb resource')
+    )) ||
+    msg.includes('collectionnotfound') ||
+    msg.includes('collection not found') ||
+    msg.includes('could not find the requested liorandb resource')
+  );
+}
+
 export class Model<T = any> {
   public readonly modelName: string;
   public readonly collectionName: string;
@@ -1079,8 +1106,16 @@ export class Model<T = any> {
     const collection = db.collection(this.collectionName);
     const serializedFilter = serializeForLioran(normFilter);
 
-    const res = await collection.deleteOne(serializedFilter);
-    return { deletedCount: res.deletedCount, acknowledged: true };
+    try {
+      const res = await collection.deleteOne(serializedFilter);
+      return { deletedCount: res.deletedCount, acknowledged: true };
+    } catch (err: any) {
+      if (isCollectionNotFoundError(err)) {
+        await this.ensureCollectionReady(db).catch(() => {});
+        return { deletedCount: 0, acknowledged: true };
+      }
+      throw err;
+    }
   }
 
   public async deleteMany(filter: any): Promise<DeleteResult> {
@@ -1103,8 +1138,16 @@ export class Model<T = any> {
     const collection = db.collection(this.collectionName);
     const serializedFilter = serializeForLioran(normFilter);
 
-    const res = await collection.deleteMany(serializedFilter);
-    return { deletedCount: res.deletedCount, acknowledged: true };
+    try {
+      const res = await collection.deleteMany(serializedFilter);
+      return { deletedCount: res.deletedCount, acknowledged: true };
+    } catch (err: any) {
+      if (isCollectionNotFoundError(err)) {
+        await this.ensureCollectionReady(db).catch(() => {});
+        return { deletedCount: 0, acknowledged: true };
+      }
+      throw err;
+    }
   }
 
   public async findOneAndUpdate(filter: any, update: any, options?: QueryOptions): Promise<HydratedDocument<T> | null> {
@@ -1225,9 +1268,17 @@ export class Model<T = any> {
     const collection = db.collection(this.collectionName);
     const serializedPipeline = serializeForLioran(pipeline);
 
-    const cursor = collection.aggregate<TResult>(serializedPipeline);
-    const results = await cursor.toArray();
-    return Array.from(results);
+    try {
+      const cursor = collection.aggregate<TResult>(serializedPipeline);
+      const results = await cursor.toArray();
+      return Array.from(results);
+    } catch (err: any) {
+      if (isCollectionNotFoundError(err)) {
+        await this.ensureCollectionReady(db).catch(() => {});
+        return [];
+      }
+      throw err;
+    }
   }
 
   /**
@@ -1356,27 +1407,44 @@ export class Model<T = any> {
     const serializedFilter = serializeForLioran(normFilter);
 
     if (params.count) {
-      return await collection.countDocuments(serializedFilter);
+      try {
+        return await collection.countDocuments(serializedFilter);
+      } catch (err: any) {
+        if (isCollectionNotFoundError(err)) {
+          await this.ensureCollectionReady(db).catch(() => {});
+          return 0;
+        }
+        throw err;
+      }
     }
 
     let docs: any[] = [];
 
-    if (params.single) {
-      const found = await collection.findOne(serializedFilter, {
-        sort: params.sort,
-        projection: parsedProj.driverProjection,
-      });
-      if (found) {
-        docs = [found];
+    try {
+      if (params.single) {
+        const found = await collection.findOne(serializedFilter, {
+          sort: params.sort,
+          projection: parsedProj.driverProjection,
+        });
+        if (found) {
+          docs = [found];
+        }
+      } else {
+        const cursor = collection.find(serializedFilter, {
+          sort: params.sort,
+          skip: params.skip,
+          limit: params.limit,
+          projection: parsedProj.driverProjection,
+        });
+        docs = (await cursor.toArray()) as any[];
       }
-    } else {
-      const cursor = collection.find(serializedFilter, {
-        sort: params.sort,
-        skip: params.skip,
-        limit: params.limit,
-        projection: parsedProj.driverProjection,
-      });
-      docs = (await cursor.toArray()) as any[];
+    } catch (err: any) {
+      if (isCollectionNotFoundError(err)) {
+        await this.ensureCollectionReady(db).catch(() => {});
+        docs = [];
+      } else {
+        throw err;
+      }
     }
 
     if (parsedProj.excludedFields || parsedProj.includedFields) {

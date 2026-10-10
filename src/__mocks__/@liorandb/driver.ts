@@ -91,6 +91,7 @@ export const DRIVER_ERROR_CODES = {
   PERMISSION_DENIED: 'LDB_PERMISSION_DENIED',
   DUPLICATE_KEY: 'LDB_DUPLICATE_KEY',
   CONFLICT: 'LDB_CONFLICT',
+  COLLECTION_NOT_FOUND: 'LDB_COLLECTION_NOT_FOUND',
   VALIDATION_FAILED: 'LDB_VALIDATION_FAILED',
   CLIENT_CLOSED: 'LDB_CLIENT_CLOSED',
 } as const;
@@ -106,6 +107,13 @@ export class LioranDriverError extends Error {
   }
   toDiagnosticString(): string {
     return `${this.name}: ${this.message} (code: ${this.code})`;
+  }
+}
+
+export class NotFoundError extends LioranDriverError {
+  constructor(message = 'Resource not found', options: any = {}) {
+    super(message, { code: DRIVER_ERROR_CODES.COLLECTION_NOT_FOUND, category: 'not-found', ...options });
+    this.name = 'NotFoundError';
   }
 }
 

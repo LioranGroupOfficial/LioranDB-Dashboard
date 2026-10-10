@@ -142,6 +142,19 @@ export async function connectToDatabase(): Promise<{ client: LioranDBClient; db:
         const db = client.db(targetDbName);
         global.__liorandbClient = client;
         global.__liorandbDb = db;
+
+        // Auto-initialize Connexus collections and declared indexes in the background
+        if (targetDbName === 'lcs') {
+          (async () => {
+            try {
+              const { initConnexusCollectionsAndIndexes } = await import('./index');
+              await initConnexusCollectionsAndIndexes(db);
+            } catch (initErr) {
+              console.warn('[DB] Notice initializing Connexus collections and indexes:', (initErr as Error)?.message || initErr);
+            }
+          })();
+        }
+
         return client;
       } catch (err) {
         global.__liorandbPromise = null;
