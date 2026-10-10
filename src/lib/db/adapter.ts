@@ -259,6 +259,7 @@ export function normalizeFilter(filter: any): any {
  */
 export function serializeForLioran(value: any): any {
   if (value === null || value === undefined) return value;
+  if (typeof value === 'function') return undefined;
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return value;
   }
@@ -272,17 +273,20 @@ export function serializeForLioran(value: any): any {
     return { $regex: value.source, $options: value.flags };
   }
   if (Array.isArray(value)) {
-    return value.map(serializeForLioran);
+    return value.map(serializeForLioran).filter((v) => v !== undefined);
   }
   if (typeof value === 'object') {
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(value)) {
-      if (v === undefined) continue;
-      out[k] = serializeForLioran(v);
+      if (v === undefined || typeof v === 'function') continue;
+      const serialized = serializeForLioran(v);
+      if (serialized !== undefined) {
+        out[k] = serialized;
+      }
     }
     return out;
   }
-  return value;
+  return undefined;
 }
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -667,17 +671,17 @@ export class Model<T = any> {
 
     const doc: any = {
       ...docData,
-      _id: docData._id instanceof ObjectId ? docData._id : new ObjectId(docData._id),
+      ...(docData._id ? { _id: docData._id instanceof ObjectId ? docData._id : new ObjectId(docData._id) } : {}),
       _isNew: isNew,
       save: async function (this: any): Promise<any> {
         return model._saveDocument(this);
       },
       toObject: function (this: any): any {
-        const clone = { ...this };
-        delete clone.save;
-        delete clone.toObject;
-        delete clone.toJSON;
-        delete clone._isNew;
+        const clone: Record<string, any> = {};
+        for (const [key, val] of Object.entries(this)) {
+          if (typeof val === 'function' || key === '_isNew') continue;
+          clone[key] = val;
+        }
         return clone;
       },
       toJSON: function (this: any): any {
@@ -698,7 +702,7 @@ export class Model<T = any> {
 
   private _applyDefaults(data: any): any {
     const out = { ...data };
-    if (!out._id) {
+    if (!out._id && this.schema.options._id !== false) {
       out._id = new ObjectId();
     }
 
@@ -1145,11 +1149,12 @@ export class Model<T = any> {
    */
   public async _saveDocument(doc: any): Promise<HydratedDocument<T>> {
     const isNew = doc._isNew !== false;
-    const raw = doc.toObject ? doc.toObject() : { ...doc };
-    delete raw.save;
-    delete raw.toObject;
-    delete raw.toJSON;
-    delete raw._isNew;
+    const raw: Record<string, any> = {};
+    const source = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+    for (const [key, val] of Object.entries(source)) {
+      if (typeof val === 'function' || key === '_isNew') continue;
+      raw[key] = val;
+    }
 
     const now = new Date();
     if (this.schema.options.timestamps) {
