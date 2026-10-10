@@ -316,6 +316,93 @@ export function normalizeDocument(doc: any): any {
   return out;
 }
 
+export interface ParsedProjection {
+  driverProjection?: string[];
+  includedFields?: string[];
+  excludedFields?: string[];
+}
+
+/**
+ * Normalizes projections for LioranDB HTTP compatibility.
+ * Since LioranDB HTTP transport only supports inclusion fields, exclusion projections (e.g. -passwordHash)
+ * are excluded from the HTTP request and applied post-query by the adapter.
+ */
+export function parseProjection(projection: any): ParsedProjection {
+  if (!projection) return {};
+
+  const inclusions: string[] = [];
+  const exclusions: string[] = [];
+
+  if (typeof projection === 'string') {
+    const parts = projection.split(/\s+/).filter(Boolean);
+    for (const part of parts) {
+      if (part.startsWith('-')) {
+        exclusions.push(part.slice(1));
+      } else if (part.startsWith('+')) {
+        inclusions.push(part.slice(1));
+      } else {
+        inclusions.push(part);
+      }
+    }
+  } else if (Array.isArray(projection)) {
+    for (const item of projection) {
+      if (typeof item === 'string') {
+        if (item.startsWith('-')) {
+          exclusions.push(item.slice(1));
+        } else if (item.startsWith('+')) {
+          inclusions.push(item.slice(1));
+        } else {
+          inclusions.push(item);
+        }
+      }
+    }
+  } else if (typeof projection === 'object') {
+    for (const [key, val] of Object.entries(projection)) {
+      if (val === 0 || val === false || val === -1) {
+        exclusions.push(key);
+      } else if (val === 1 || val === true) {
+        inclusions.push(key);
+      }
+    }
+  }
+
+  // If there are exclusions, the driver HTTP transport cannot handle them.
+  // We omit driverProjection (so driver fetches all fields) and apply exclusions client-side.
+  if (exclusions.length > 0) {
+    return {
+      driverProjection: undefined,
+      excludedFields: exclusions,
+      includedFields: inclusions.length > 0 ? inclusions : undefined,
+    };
+  }
+
+  if (inclusions.length > 0) {
+    return {
+      driverProjection: inclusions,
+      includedFields: inclusions,
+    };
+  }
+
+  return {};
+}
+
+export function applyProjectionToDoc(doc: any, parsed: ParsedProjection): any {
+  if (!doc || typeof doc !== 'object') return doc;
+  if (parsed.excludedFields && parsed.excludedFields.length > 0) {
+    for (const field of parsed.excludedFields) {
+      delete doc[field];
+    }
+  }
+  if (parsed.includedFields && parsed.includedFields.length > 0) {
+    for (const key of Object.keys(doc)) {
+      if (key !== '_id' && !parsed.includedFields.includes(key)) {
+        delete doc[key];
+      }
+    }
+  }
+  return doc;
+}
+
 /**
  * In-memory document matching engine supporting MongoDB operators (used for tests only).
  */
@@ -1212,6 +1299,7 @@ export class Model<T = any> {
     populate: Array<{ path: string; select?: string }>;
   }): Promise<any> {
     const normFilter = normalizeFilter(params.filter);
+    const parsedProj = parseProjection(params.projection);
 
     if (isMemoryModeEnabled()) {
       const store = getMemoryCollection(this.databaseName, this.collectionName);
@@ -1234,6 +1322,12 @@ export class Model<T = any> {
 
       if (params.limit) {
         docs = docs.slice(0, params.limit);
+      }
+
+      if (parsedProj.excludedFields || parsedProj.includedFields) {
+        for (const d of docs) {
+          applyProjectionToDoc(d, parsedProj);
+        }
       }
 
       if (params.count) {
@@ -1270,7 +1364,7 @@ export class Model<T = any> {
     if (params.single) {
       const found = await collection.findOne(serializedFilter, {
         sort: params.sort,
-        projection: params.projection,
+        projection: parsedProj.driverProjection,
       });
       if (found) {
         docs = [found];
@@ -1280,9 +1374,15 @@ export class Model<T = any> {
         sort: params.sort,
         skip: params.skip,
         limit: params.limit,
-        projection: params.projection,
+        projection: parsedProj.driverProjection,
       });
       docs = (await cursor.toArray()) as any[];
+    }
+
+    if (parsedProj.excludedFields || parsedProj.includedFields) {
+      for (const d of docs) {
+        applyProjectionToDoc(d, parsedProj);
+      }
     }
 
     // Populate references if requested
