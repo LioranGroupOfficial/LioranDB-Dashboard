@@ -70,6 +70,9 @@ export interface IManagedDatabase extends Document {
   adminNotes?: string;
   providerDeploymentId?: string;
   hostingNodeId?: Types.ObjectId;
+  allocationToken?: string; // Fencing token matching HostingNode.currentAllocationId
+  provisioningStage?: string; // Explicit sub-stage during provisioning
+  lastProvisioningError?: string; // Stored error message on failure
   grpcUrl?: string;
   grpcPort?: number;
   createdAt: Date;
@@ -151,12 +154,16 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
     terminationReason: { type: String },
     adminNotes: { type: String },
     providerDeploymentId: { type: String },
+    allocationToken: { type: String, index: true },
+    provisioningStage: { type: String },
+    lastProvisioningError: { type: String },
   },
   { timestamps: true }
 );
 
 ManagedDatabaseSchema.index({ customerId: 1, status: 1 });
 ManagedDatabaseSchema.index({ userId: 1, status: 1 });
+ManagedDatabaseSchema.index({ hostingNodeId: 1, status: 1 });
 
 const ManagedDatabase: Model<IManagedDatabase> =
   models.ManagedDatabase ||

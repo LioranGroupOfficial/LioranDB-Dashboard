@@ -13,12 +13,13 @@
  */
 
 import { connectToDatabase, ManagedDatabase, HostingNode, BillingInterval } from '../db';
-import { encrypt } from '../crypto';
+import { encrypt, generateSecureToken, generateDatabasePassword } from '../crypto';
 import { BACKUP_MONTHLY_PAISE, getPlan } from '../plans';
 import type { IManagedDatabase } from '../db/models/ManagedDatabase';
 import type { IHostingNode } from '../db/models/HostingNode';
 import { LioranDBAdminClient } from '../liorandb-admin/client';
 import { buildLioranDBConnectionUri } from '../liorandb-admin/uri';
+import { resolveControlPlaneEndpoint } from '../liorandb-admin/url';
 import { LioranDBAdminError, LioranDBUnreachableError } from '../liorandb-admin/errors';
 import { reconcileHostingNodes } from './reconciliation';
 
@@ -33,6 +34,7 @@ export interface DeploymentParams {
   databaseName: string;
   planId: string;
   nodeId?: string;
+  skipCleanVerification?: boolean;
 }
 
 export interface DeploymentResult {
@@ -120,20 +122,22 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
     try {
       // 1. Authoritatively verify clean state and live server status before customer allocation
-      const cleanCheck = await client.verifyCleanState(node.serverIdentity);
-      if (!cleanCheck.isClean) {
-        console.error(`[Provisioning] Node '${node.name}' failed pre-provision clean state check: ${cleanCheck.reasons.join(', ')}`);
-        node.status = 'QUARANTINED';
-        node.healthStatus = 'DEGRADED';
-        node.cleanStatus = cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE' ? 'PENDING_VERIFICATION' : 'DIRTY';
-        node.cleanupFailureReason = cleanCheck.reason || cleanCheck.reasons.join('; ');
-        node.quarantineReason = node.cleanupFailureReason;
-        node.adminNotes = `Pre-provision clean state failed: ${node.cleanupFailureReason}`;
-        await node.save();
-        return {
-          success: false,
-          error: `Target hosting node '${node.name}' clean-state verification failed (${node.cleanupFailureReason}) and has been quarantined. Customer data isolation protected.`,
-        };
+      if (!params.skipCleanVerification) {
+        const cleanCheck = await client.verifyCleanState(node.serverIdentity);
+        if (!cleanCheck.isClean) {
+          console.error(`[Provisioning] Node '${node.name}' failed pre-provision clean state check: ${cleanCheck.reasons.join(', ')}`);
+          node.status = 'QUARANTINED';
+          node.healthStatus = 'DEGRADED';
+          node.cleanStatus = cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE' ? 'PENDING_VERIFICATION' : 'DIRTY';
+          node.cleanupFailureReason = cleanCheck.reason || cleanCheck.reasons.join('; ');
+          node.quarantineReason = node.cleanupFailureReason;
+          node.adminNotes = `Pre-provision clean state failed: ${node.cleanupFailureReason}`;
+          await node.save();
+          return {
+            success: false,
+            error: `Target hosting node '${node.name}' clean-state verification failed (${node.cleanupFailureReason}) and has been quarantined. Customer data isolation protected.`,
+          };
+        }
       }
 
       const status = await client.getServerStatus();
@@ -611,8 +615,502 @@ export const provisioningProvider: LioranProvisioningProvider = new Proxy({} as 
   },
 });
 
+export interface AllocateAndProvisionParams {
+  customerId: string | any;
+  customerEmail: string;
+  name: string;
+  planId: string;
+  databaseName?: string;
+  username?: string;
+  initialPassword?: string;
+  backupEnabled?: boolean;
+  couponCode?: string;
+  couponDiscountPercentage?: number;
+  nodeId?: string;
+}
+
+export interface AllocateAndProvisionResult {
+  instance: IManagedDatabase;
+  node: IHostingNode;
+  masterPassword: string;
+  nativeConnectionUri: string;
+}
+
 /**
- * High-level provisioning service method
+ * Authoritative Centralized 1:1 Hosting Node Allocation & Provisioning Service (Phase 2 & 4).
+ *
+ * Implements an explicit, durable, concurrency-safe saga:
+ *   1. Atomic CAS reservation claim with fencing token (currentAllocationId) and lease.
+ *   2. Link ManagedDatabase record as PROVISIONING with allocation token.
+ *   3. Authoritative pre-mutation clean verification (verifyCleanState) before ANY tenant changes.
+ *   4. Conditional transition to PROVISIONING upon passing clean verification.
+ *   5. Real Rust server mutation (root rotation + customer user creation) with skipCleanVerification.
+ *   6. Driver connectivity verification (without false clean-reassignment checks).
+ *   7. Atomic commit of customer allocation: instance -> ACTIVE, node -> ASSIGNED.
+ *   8. Start billing intervals ONLY after successful ACTIVE transition.
+ *   9. Concurrency-safe compensation on failure (release clean nodes, quarantine mutated nodes).
+ */
+export async function allocateAndProvisionInstance(
+  params: AllocateAndProvisionParams
+): Promise<AllocateAndProvisionResult> {
+  await connectToDatabase();
+
+  const now = new Date();
+  const allocationToken = `alloc_${Date.now()}_${generateSecureToken(8)}`;
+  const leaseDurationMs = 120_000; // 2 minutes reservation lease
+  const leaseExpiresAt = new Date(Date.now() + leaseDurationMs);
+
+  const plan = getPlan(params.planId);
+  if (!plan) {
+    throw new Error('Invalid database plan selected.');
+  }
+
+  const cleanName = params.name.trim().toLowerCase();
+  const targetDbName = (params.databaseName || cleanName).replace(/-/g, '_');
+
+  // Step 1: Atomic conditional claim (CAS) on an allocatable node
+  let reservedNode: IHostingNode | null = null;
+
+  if (params.nodeId) {
+    reservedNode = await HostingNode.findOneAndUpdate(
+      {
+        _id: params.nodeId,
+        status: { $in: ['AVAILABLE', 'ACTIVE'] },
+        healthStatus: 'HEALTHY',
+        cleanStatus: 'CLEAN',
+        currentAssignedCount: 0,
+        $or: [
+          { currentAllocationId: { $exists: false } },
+          { currentAllocationId: null },
+          { allocationExpiresAt: { $lt: new Date() } },
+        ],
+      },
+      {
+        $set: {
+          status: 'RESERVED',
+          currentAllocationId: allocationToken,
+          allocationExpiresAt: leaseExpiresAt,
+        },
+      },
+      { returnDocument: 'after' }
+    );
+  } else {
+    reservedNode = await HostingNode.findOneAndUpdate(
+      {
+        status: { $in: ['AVAILABLE', 'ACTIVE'] },
+        healthStatus: 'HEALTHY',
+        cleanStatus: 'CLEAN',
+        currentAssignedCount: 0,
+        $or: [
+          { currentAllocationId: { $exists: false } },
+          { currentAllocationId: null },
+          { allocationExpiresAt: { $lt: new Date() } },
+        ],
+      },
+      {
+        $set: {
+          status: 'RESERVED',
+          currentAllocationId: allocationToken,
+          allocationExpiresAt: leaseExpiresAt,
+        },
+      },
+      { returnDocument: 'after', sort: { isDefault: -1, createdAt: 1 } }
+    );
+  }
+
+  if (!reservedNode) {
+    throw new Error(
+      'No dedicated database hosting servers are currently available. Please email support@liorandb.com for this query.'
+    );
+  }
+
+  // Step 2: Create ManagedDatabase record linked to this allocation
+  const masterUsername = reservedNode.defaultRootUsername || 'admin';
+  const masterPassword = params.initialPassword || generateDatabasePassword(24);
+  const controlPlaneEndpoint = resolveControlPlaneEndpoint(reservedNode);
+  const hourlyRatePaise = plan.hourlyRatePaise || (params.planId === 'shared' ? 100 : 800);
+  const backupMonthlyPaise = params.backupEnabled ? BACKUP_MONTHLY_PAISE : 0;
+
+  let instance: IManagedDatabase;
+  try {
+    instance = await ManagedDatabase.create({
+      customerId: params.customerId,
+      userId: params.customerId,
+      hostingNodeId: reservedNode._id,
+      name: cleanName,
+      planId: plan.id,
+      planName: plan.name,
+      hourlyRatePaise,
+      backupEnabled: Boolean(params.backupEnabled),
+      backupMonthlyPaise,
+      couponCode: params.couponCode,
+      couponDiscountPercentage: params.couponDiscountPercentage || 0,
+      status: 'PROVISIONING',
+      allocationToken,
+      provisioningStage: 'RESERVED',
+      host: reservedNode.dbUrl,
+      port: reservedNode.port || 27018,
+      grpcUrl: reservedNode.grpcUrl,
+      grpcPort: reservedNode.grpcPort || 27019,
+      controlPlaneEndpoint,
+      databaseName: targetDbName,
+      username: masterUsername,
+      rootUsername: masterUsername,
+      databaseUsers: [
+        {
+          username: masterUsername,
+          role: 'admin',
+          status: 'ACTIVE',
+          encryptedPassword: encrypt(masterPassword),
+          createdAt: now,
+        },
+      ],
+    });
+
+    // Update node with assignedInstanceId
+    await HostingNode.findOneAndUpdate(
+      { _id: reservedNode._id, currentAllocationId: allocationToken },
+      { $set: { assignedInstanceId: instance._id } }
+    );
+  } catch (dbErr: unknown) {
+    // Release node reservation back to AVAILABLE if instance creation failed before any Rust call
+    await HostingNode.findOneAndUpdate(
+      { _id: reservedNode._id, currentAllocationId: allocationToken },
+      {
+        $set: {
+          status: 'AVAILABLE',
+          cleanStatus: 'CLEAN',
+          currentAssignedCount: 0,
+        },
+        $unset: {
+          currentAllocationId: 1,
+          allocationExpiresAt: 1,
+          assignedInstanceId: 1,
+        },
+      }
+    );
+    throw dbErr;
+  }
+
+  // Step 3: Authoritative pre-mutation clean verification & server identity check
+  const client = LioranDBAdminClient.forNode(reservedNode);
+  try {
+    const cleanCheck = await client.verifyCleanState(reservedNode.serverIdentity);
+    if (!cleanCheck.isClean) {
+      const failReason = cleanCheck.reason || cleanCheck.reasons.join('; ');
+      console.error(
+        `[Provisioning] Node '${reservedNode.name}' failed pre-provision clean state check: ${failReason}`
+      );
+
+      // Node failed pre-allocation check: quarantine node and mark instance FAILED
+      await HostingNode.findOneAndUpdate(
+        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        {
+          $set: {
+            status: 'QUARANTINED',
+            healthStatus: 'DEGRADED',
+            cleanStatus:
+              cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE'
+                ? 'PENDING_VERIFICATION'
+                : 'DIRTY',
+            quarantineReason: `Pre-allocation clean verification failed: ${failReason}`,
+            cleanupFailureReason: failReason,
+            adminNotes: `Quarantined during pre-allocation check: ${failReason}`,
+            currentAssignedCount: 0,
+          },
+          $unset: {
+            currentAllocationId: 1,
+            allocationExpiresAt: 1,
+            assignedInstanceId: 1,
+          },
+        }
+      );
+
+      instance.status = 'FAILED';
+      instance.provisioningStage = 'CLEAN_CHECK_FAILED';
+      instance.lastProvisioningError = failReason;
+      instance.adminNotes = `Pre-allocation clean check failed: ${failReason}`;
+      await instance.save();
+
+      throw new Error(
+        `Target hosting node '${reservedNode.name}' clean-state verification failed (${failReason}) and has been quarantined. Customer data isolation protected.`
+      );
+    }
+
+    const serverStatus = await client.getServerStatus();
+    if (serverStatus.status !== 'HEALTHY' && serverStatus.state !== 'Ready') {
+      const statusFailReason = `Server is not in Ready state (current state: ${serverStatus.state || serverStatus.status})`;
+
+      // Release reservation back to AVAILABLE if clean, or quarantine if degraded
+      await HostingNode.findOneAndUpdate(
+        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        {
+          $set: {
+            status: 'AVAILABLE',
+            healthStatus: 'DEGRADED',
+            currentAssignedCount: 0,
+          },
+          $unset: {
+            currentAllocationId: 1,
+            allocationExpiresAt: 1,
+            assignedInstanceId: 1,
+          },
+        }
+      );
+
+      instance.status = 'FAILED';
+      instance.provisioningStage = 'HEALTH_CHECK_FAILED';
+      instance.lastProvisioningError = statusFailReason;
+      await instance.save();
+
+      throw new Error(statusFailReason);
+    }
+  } catch (preCheckErr: unknown) {
+    if (preCheckErr instanceof Error && preCheckErr.message.includes('quarantined')) {
+      throw preCheckErr;
+    }
+    const preCheckMsg = preCheckErr instanceof Error ? preCheckErr.message : String(preCheckErr);
+    // Release node reservation safely
+    await HostingNode.findOneAndUpdate(
+      { _id: reservedNode._id, currentAllocationId: allocationToken },
+      {
+        $set: {
+          status: 'AVAILABLE',
+          currentAssignedCount: 0,
+        },
+        $unset: {
+          currentAllocationId: 1,
+          allocationExpiresAt: 1,
+          assignedInstanceId: 1,
+        },
+      }
+    );
+    instance.status = 'FAILED';
+    instance.provisioningStage = 'PRE_CHECK_FAILED';
+    instance.lastProvisioningError = preCheckMsg;
+    await instance.save();
+    throw preCheckErr;
+  }
+
+  // Step 4: Persist transition of node to PROVISIONING
+  await HostingNode.findOneAndUpdate(
+    { _id: reservedNode._id, currentAllocationId: allocationToken },
+    {
+      $set: {
+        status: 'PROVISIONING',
+        currentAssignedCount: 1,
+      },
+    }
+  );
+
+  instance.provisioningStage = 'MUTATING_RUST';
+  await instance.save();
+
+  // Step 5: Execute Rust Control Plane Mutations
+  let deploymentResult: DeploymentResult;
+  try {
+    deploymentResult = await provisioningProvider.createDeployment({
+      customerId: params.customerId.toString(),
+      customerEmail: params.customerEmail,
+      deploymentName: cleanName,
+      username: masterUsername,
+      password: masterPassword,
+      host: reservedNode.dbUrl,
+      port: reservedNode.port || 27018,
+      databaseName: targetDbName,
+      planId: plan.id,
+      nodeId: reservedNode._id.toString(),
+      skipCleanVerification: true, // Already authoritatively verified in Step 3!
+    });
+
+    if (!deploymentResult.success || !deploymentResult.nativeConnectionUri) {
+      throw new Error(deploymentResult.error || 'Failed to complete deployment on Rust control plane');
+    }
+  } catch (mutationErr: unknown) {
+    const mutMsg = mutationErr instanceof Error ? mutationErr.message : String(mutationErr);
+    console.error(`[Provisioning] Rust mutation failed on node ${reservedNode.name}: ${mutMsg}`);
+
+    // Since mutation on Rust server may have altered root password or state, quarantine node
+    await HostingNode.findOneAndUpdate(
+      { _id: reservedNode._id, currentAllocationId: allocationToken },
+      {
+        $set: {
+          status: 'QUARANTINED',
+          cleanStatus: 'DIRTY',
+          currentAssignedCount: 0,
+          quarantineReason: `Provisioning aborted during Rust mutation: ${mutMsg}. Requires sanitized reset before reuse.`,
+          cleanupFailureReason: mutMsg,
+        },
+        $unset: {
+          currentAllocationId: 1,
+          allocationExpiresAt: 1,
+          assignedInstanceId: 1,
+        },
+      }
+    );
+
+    instance.status = 'FAILED';
+    instance.provisioningStage = 'MUTATION_FAILED';
+    instance.lastProvisioningError = mutMsg;
+    instance.adminNotes = `Provisioning mutation failed: ${mutMsg}`;
+    await instance.save();
+
+    throw new Error(mutMsg);
+  }
+
+  // Step 6: Verify client connectivity and logical database accessibility
+  const isMockProvider = process.env.LIORANDB_MOCK_DRIVER === 'true';
+  const isConnexusInternal =
+    targetDbName === 'lcs' ||
+    cleanName.includes('connexus') ||
+    plan.id === 'connexus_internal';
+
+  if (!isMockProvider) {
+    try {
+      const { LioranDBClient } = await import('@liorandb/driver');
+      const testClient = await LioranDBClient.connect(deploymentResult.nativeConnectionUri, {
+        timeoutMS: 10000,
+        connectTimeoutMS: 5000,
+        requestTimeoutMS: 10000,
+      });
+
+      try {
+        if (!testClient.isConnected()) {
+          throw new Error('Connection established but client is not in connected state.');
+        }
+
+        const customerDb = testClient.db(targetDbName);
+        await customerDb.listCollections();
+
+        if (isConnexusInternal) {
+          const { initConnexusCollectionsAndIndexes } = await import('../db');
+          await initConnexusCollectionsAndIndexes(customerDb);
+        }
+      } finally {
+        await testClient.close().catch(() => {});
+      }
+    } catch (readinessErr: unknown) {
+      const readMsg = readinessErr instanceof Error ? readinessErr.message : String(readinessErr);
+      const failReason = `Provisioning readiness verification failed: ${readMsg}`;
+      console.error(`[Provisioning] Readiness failure on node ${reservedNode.name}: ${readMsg}`);
+
+      await HostingNode.findOneAndUpdate(
+        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        {
+          $set: {
+            status: 'QUARANTINED',
+            cleanStatus: 'DIRTY',
+            currentAssignedCount: 0,
+            quarantineReason: `Readiness check failed after provisioning: ${readMsg}. Requires sanitized reset before reuse.`,
+            cleanupFailureReason: readMsg,
+          },
+          $unset: {
+            currentAllocationId: 1,
+            allocationExpiresAt: 1,
+            assignedInstanceId: 1,
+          },
+        }
+      );
+
+      instance.status = 'FAILED';
+      instance.provisioningStage = 'READINESS_FAILED';
+      instance.lastProvisioningError = failReason;
+      instance.adminNotes = failReason;
+      await instance.save();
+
+      throw new Error(failReason);
+    }
+  }
+
+  // Step 7: Atomically commit customer allocation (ACTIVE & ASSIGNED)
+  const finalNow = new Date();
+  const effectivePassword = deploymentResult.generatedPassword || masterPassword;
+
+  instance.encryptedConnectionUri = encrypt(deploymentResult.nativeConnectionUri);
+  instance.encryptedControlPlaneCredential = encrypt(effectivePassword);
+  instance.status = 'ACTIVE';
+  instance.provisioningStage = 'COMPLETED';
+  instance.provisionedAt = finalNow;
+  instance.billingStartedAt = finalNow;
+  instance.serverVersion = deploymentResult.serverVersion || '2.4.1';
+  instance.serverHealth = 'HEALTHY';
+  instance.providerDeploymentId = deploymentResult.providerDeploymentId;
+  instance.opsPerSecondLimit = plan.opsPerSecondLimit || 3000;
+  instance.documentLimit = plan.documentLimit || 1000;
+  instance.type = plan.type || 'dedicated';
+  instance.lastCredentialRotationAt = finalNow;
+  instance.rootRotatedAt = finalNow;
+  if (instance.backupEnabled) {
+    instance.backupStartedAt = finalNow;
+  }
+
+  const updatedAdminPasswordEncrypted = encrypt(effectivePassword);
+  if (!instance.databaseUsers || instance.databaseUsers.length === 0) {
+    instance.databaseUsers = [
+      {
+        username: masterUsername,
+        role: 'admin',
+        status: 'ACTIVE',
+        encryptedPassword: updatedAdminPasswordEncrypted,
+        createdAt: finalNow,
+      },
+    ];
+  } else {
+    const adminUser = instance.databaseUsers.find((u) => u.username === masterUsername);
+    if (adminUser) {
+      adminUser.encryptedPassword = updatedAdminPasswordEncrypted;
+    }
+  }
+
+  await instance.save();
+
+  // Atomically commit node to ASSIGNED
+  const updatedNode = await HostingNode.findOneAndUpdate(
+    { _id: reservedNode._id, currentAllocationId: allocationToken },
+    {
+      $set: {
+        status: 'ASSIGNED',
+        currentAssignedCount: 1,
+        serverVersion: deploymentResult.serverVersion || '2.4.1',
+        healthStatus: 'HEALTHY',
+        cleanStatus: 'DIRTY',
+        lastCredentialRotationAt: finalNow,
+        assignedInstanceId: instance._id,
+      },
+      $unset: {
+        currentAllocationId: 1,
+        allocationExpiresAt: 1,
+        quarantineReason: 1,
+        cleanupFailureReason: 1,
+      },
+    },
+    { returnDocument: 'after' }
+  );
+
+  // Step 8: Create initial billing interval record strictly AFTER active transition
+  await BillingInterval.create({
+    instanceId: instance._id,
+    customerId: instance.customerId,
+    startedAt: finalNow,
+    hourlyRatePaise,
+    backupMonthlyPaise,
+    backupEnabled: instance.backupEnabled,
+    planId: instance.planId,
+    planName: instance.planName,
+    couponCode: instance.couponCode,
+    couponDiscountPercentage: instance.couponDiscountPercentage,
+  });
+
+  return {
+    instance,
+    node: (updatedNode || reservedNode) as IHostingNode,
+    masterPassword: effectivePassword,
+    nativeConnectionUri: deploymentResult.nativeConnectionUri,
+  };
+}
+
+/**
+ * Backward-compatible provisioning service method
  * Transitions an instance record through the state machine to ACTIVE with verified credentials.
  * Billing starts ONLY upon successful transition to ACTIVE.
  */
@@ -623,7 +1121,6 @@ export async function provisionInstance(
   const customerEmail = typeof optionsOrEmail === 'string' ? optionsOrEmail : optionsOrEmail?.customerEmail;
   const initialPassword = typeof optionsOrEmail === 'object' ? optionsOrEmail?.initialPassword : undefined;
   await connectToDatabase();
-  await reconcileHostingNodes();
 
   const instance =
     typeof instanceOrId === 'string'
@@ -658,17 +1155,19 @@ export async function provisionInstance(
       throw new Error(`Target hosting node '${existingNode.name}' clean-state is '${existingNode.cleanStatus}' (${existingNode.cleanupFailureReason || 'Clean-state verification required'}), ineligible for allocation.`);
     }
 
-    existingNode.status = 'PROVISIONING';
-    existingNode.currentAssignedCount = 1;
-    await existingNode.save();
-    node = existingNode;
+    const locked = await HostingNode.findOneAndUpdate(
+      { _id: existingNode._id, status: { $in: ['AVAILABLE', 'ACTIVE', 'RESERVED', 'PROVISIONING'] } },
+      { $set: { status: 'PROVISIONING', currentAssignedCount: 1, assignedInstanceId: instance._id } },
+      { returnDocument: 'after' }
+    );
+    node = locked || existingNode;
   }
 
   if (!node) {
     // Atomically find and reserve a strictly AVAILABLE, HEALTHY, and verified CLEAN node
     node = await HostingNode.findOneAndUpdate(
       {
-        status: 'AVAILABLE',
+        status: { $in: ['AVAILABLE', 'ACTIVE'] },
         healthStatus: 'HEALTHY',
         cleanStatus: 'CLEAN',
         currentAssignedCount: 0,
@@ -677,6 +1176,7 @@ export async function provisionInstance(
         $set: {
           status: 'PROVISIONING',
           currentAssignedCount: 1,
+          assignedInstanceId: instance._id,
         },
       },
       { returnDocument: 'after', sort: { isDefault: -1, createdAt: 1 } }
@@ -696,8 +1196,6 @@ export async function provisionInstance(
   const port = node.port || 27018;
   const grpcUrl = node.grpcUrl;
   const grpcPort = node.grpcPort || 27019;
-  const httpPort = node.httpPort || 27018;
-  const isTls = node.protocol === 'https';
   const databaseName = instance.databaseName || 'default';
   const username = instance.username || 'admin';
 
@@ -722,6 +1220,7 @@ export async function provisionInstance(
     databaseName,
     planId: instance.planId,
     nodeId: node._id.toString(),
+    skipCleanVerification: true,
   });
 
   if (!deploymentResult.success || !deploymentResult.nativeConnectionUri) {
@@ -729,16 +1228,16 @@ export async function provisionInstance(
     instance.adminNotes = deploymentResult.error || 'Failed to provision on Rust server';
     await instance.save();
 
-    // If provisioning failed, quarantine the node because credentials or user state may be dirty
-    const refreshedNode = await HostingNode.findById(node._id);
-    if (refreshedNode) {
-      refreshedNode.status = 'QUARANTINED';
-      refreshedNode.cleanStatus = 'DIRTY';
-      refreshedNode.currentAssignedCount = 0;
-      refreshedNode.quarantineReason = `Provisioning aborted: ${deploymentResult.error || 'Failed to complete deployment'}. Requires sanitized reset before reuse.`;
-      refreshedNode.adminNotes = refreshedNode.quarantineReason;
-      await refreshedNode.save();
-    }
+    await HostingNode.findByIdAndUpdate(node._id, {
+      $set: {
+        status: 'QUARANTINED',
+        cleanStatus: 'DIRTY',
+        currentAssignedCount: 0,
+        quarantineReason: `Provisioning aborted: ${deploymentResult.error || 'Failed to complete deployment'}. Requires sanitized reset before reuse.`,
+        cleanupFailureReason: deploymentResult.error,
+      },
+      $unset: { currentAllocationId: 1, allocationExpiresAt: 1, assignedInstanceId: 1 },
+    });
 
     throw new Error(deploymentResult.error || 'Failed to provision database infrastructure');
   }
@@ -764,17 +1263,12 @@ export async function provisionInstance(
           throw new Error('Connection established but client is not in connected state.');
         }
 
-        // Verify customer logical database is accessible
         const customerDb = testClient.db(databaseName);
         await customerDb.listCollections();
 
-        // 4 & 5 & 6: Distinguish infrastructure provisioning from Connexus application schema initialization
         if (isConnexusInternal) {
           const { initConnexusCollectionsAndIndexes } = await import('../db');
           await initConnexusCollectionsAndIndexes(customerDb);
-        } else {
-          // Unrelated customer instance: do NOT initialize Connexus-specific 'users' or billing collections.
-          // Customer managed databases remain empty for the customer's own application.
         }
       } finally {
         await testClient.close().catch(() => {});
@@ -786,15 +1280,16 @@ export async function provisionInstance(
       instance.adminNotes = failReason;
       await instance.save();
 
-      const refreshedNode = await HostingNode.findById(node._id);
-      if (refreshedNode) {
-        refreshedNode.status = 'QUARANTINED';
-        refreshedNode.cleanStatus = 'DIRTY';
-        refreshedNode.currentAssignedCount = 0;
-        refreshedNode.quarantineReason = `Readiness check failed after provisioning: ${errMessage}. Requires sanitized reset before reuse.`;
-        refreshedNode.adminNotes = refreshedNode.quarantineReason;
-        await refreshedNode.save();
-      }
+      await HostingNode.findByIdAndUpdate(node._id, {
+        $set: {
+          status: 'QUARANTINED',
+          cleanStatus: 'DIRTY',
+          currentAssignedCount: 0,
+          quarantineReason: `Readiness check failed after provisioning: ${errMessage}. Requires sanitized reset before reuse.`,
+          cleanupFailureReason: errMessage,
+        },
+        $unset: { currentAllocationId: 1, allocationExpiresAt: 1, assignedInstanceId: 1 },
+      });
 
       throw new Error(failReason);
     }
@@ -852,13 +1347,18 @@ export async function provisionInstance(
   await instance.save();
 
   // 4. Update hosting node status to ASSIGNED
-  node.status = 'ASSIGNED';
-  node.currentAssignedCount = 1;
-  node.serverVersion = deploymentResult.serverVersion || '2.4.1';
-  node.healthStatus = 'HEALTHY';
-  node.cleanStatus = 'DIRTY';
-  node.lastCredentialRotationAt = now;
-  await node.save();
+  await HostingNode.findByIdAndUpdate(node._id, {
+    $set: {
+      status: 'ASSIGNED',
+      currentAssignedCount: 1,
+      serverVersion: deploymentResult.serverVersion || '2.4.1',
+      healthStatus: 'HEALTHY',
+      cleanStatus: 'DIRTY',
+      lastCredentialRotationAt: now,
+      assignedInstanceId: instance._id,
+    },
+    $unset: { currentAllocationId: 1, allocationExpiresAt: 1 },
+  });
 
   // 5. Create initial billing interval record only after active verification
   await BillingInterval.create({

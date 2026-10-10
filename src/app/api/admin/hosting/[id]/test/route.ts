@@ -32,7 +32,10 @@ export async function POST(
       node.lastHealthCheckAt = new Date();
 
       let cleanCheckResult = null;
-      if (isHealthy) {
+      // Never run clean-for-reassignment check against ASSIGNED, PROVISIONING, RESERVED, or RESETTING nodes
+      const isUnassignedForRecheck = !['ASSIGNED', 'PROVISIONING', 'RESERVED', 'RESETTING'].includes(node.status);
+
+      if (isHealthy && isUnassignedForRecheck) {
         try {
           const cleanRes = await client.verifyCleanState(node.serverIdentity);
           cleanCheckResult = cleanRes;
@@ -51,7 +54,19 @@ export async function POST(
 
       // Health test updates physical healthStatus only.
       // Health check MUST NOT automatically clear quarantine or recover status without an authorized lifecycle transition.
-      await node.save();
+      await HostingNode.findByIdAndUpdate(node._id, {
+        $set: {
+          healthStatus: node.healthStatus,
+          serverIdentity: node.serverIdentity,
+          serverVersion: node.serverVersion,
+          lastHealthCheckAt: node.lastHealthCheckAt,
+          ...(isUnassignedForRecheck ? {
+            cleanStatus: node.cleanStatus,
+            cleanupFailureReason: node.cleanupFailureReason,
+            lastCleanCheckAt: node.lastCleanCheckAt,
+          } : {}),
+        },
+      });
 
       return NextResponse.json({
         success: true,

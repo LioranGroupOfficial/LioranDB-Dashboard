@@ -45,46 +45,83 @@ export async function POST(
       );
     }
 
-    // Lock node to RESETTING before destructive operations
-    node.status = 'RESETTING';
-    await node.save();
+    // Lock node to RESETTING before destructive operations using atomic CAS
+    const lockedNode = await HostingNode.findOneAndUpdate(
+      {
+        _id: node._id,
+        status: { $nin: ['RESETTING', 'PROVISIONING', 'ASSIGNED'] },
+        $or: [
+          { currentAllocationId: { $exists: false } },
+          { currentAllocationId: null },
+          { allocationExpiresAt: { $lt: new Date() } },
+        ],
+      },
+      {
+        $set: {
+          status: 'RESETTING',
+          lastCleanupAttemptAt: new Date(),
+        },
+        $unset: {
+          currentAllocationId: 1,
+          allocationExpiresAt: 1,
+          assignedInstanceId: 1,
+        },
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!lockedNode) {
+      return NextResponse.json(
+        { error: 'Cannot purge hosting node: it is currently active, assigned, reserved, or undergoing another reset operation.' },
+        { status: 409 }
+      );
+    }
 
     logCleanupStage({
       stage: 'LOCK_NODE',
-      instanceId: node.serverIdentity || node._id.toString(),
-      nodeId: node._id.toString(),
-      endpoint: node.controlPlaneEndpoint || node.dbUrl,
+      instanceId: lockedNode.serverIdentity || lockedNode._id.toString(),
+      nodeId: lockedNode._id.toString(),
+      endpoint: lockedNode.controlPlaneEndpoint || lockedNode.dbUrl,
     });
 
-    const client = LioranDBAdminClient.forNode(node);
+    const client = LioranDBAdminClient.forNode(lockedNode);
     const purgeResult = await client.purgeAndResetTenant({
-      instanceId: node.serverIdentity || 'node-1',
-      expectedInstanceName: node.name,
-      nodeId: node._id.toString(),
+      instanceId: lockedNode.serverIdentity || 'node-1',
+      expectedInstanceName: lockedNode.name,
+      nodeId: lockedNode._id.toString(),
     });
 
     const now = new Date();
 
     if (purgeResult.verifiedClean) {
-      node.status = 'AVAILABLE';
-      node.cleanStatus = 'CLEAN';
-      node.healthStatus = 'HEALTHY';
-      node.currentAssignedCount = 0;
-      node.quarantineReason = undefined;
-      node.cleanupFailureReason = undefined;
-      node.lastResetAt = now;
-      node.lastCleanCheckAt = now;
-      node.lastHealthCheckAt = now;
-      if (purgeResult.rotatedRootPassword) {
-        node.lastCredentialRotationAt = now;
-      }
-      node.adminNotes = `Admin-authorized tenant purge completed on ${now.toISOString()}. Node verified clean and released for allocation.`;
-      await node.save();
+      await HostingNode.findOneAndUpdate(
+        { _id: lockedNode._id, status: 'RESETTING' },
+        {
+          $set: {
+            status: 'AVAILABLE',
+            cleanStatus: 'CLEAN',
+            healthStatus: 'HEALTHY',
+            currentAssignedCount: 0,
+            lastResetAt: now,
+            lastCleanCheckAt: now,
+            lastHealthCheckAt: now,
+            ...(purgeResult.rotatedRootPassword ? { lastCredentialRotationAt: now } : {}),
+            adminNotes: `Admin-authorized tenant purge completed on ${now.toISOString()}. Node verified clean and released for allocation.`,
+          },
+          $unset: {
+            quarantineReason: 1,
+            cleanupFailureReason: 1,
+            currentAllocationId: 1,
+            allocationExpiresAt: 1,
+            assignedInstanceId: 1,
+          },
+        }
+      );
 
       logCleanupStage({
         stage: 'NODE_RELEASE',
-        instanceId: node.serverIdentity,
-        nodeId: node._id.toString(),
+        instanceId: lockedNode.serverIdentity,
+        nodeId: lockedNode._id.toString(),
         endpoint: client.endpoint,
         isClean: true,
       });
@@ -93,10 +130,10 @@ export async function POST(
         userId: admin.userId,
         action: 'HOSTING_NODE_UPDATED' as any,
         entityType: 'HostingNode',
-        entityId: node._id.toString(),
+        entityId: lockedNode._id.toString(),
         metadata: {
           action: 'PURGE_AND_RELEASE',
-          nodeName: node.name,
+          nodeName: lockedNode.name,
           status: 'AVAILABLE',
           cleanStatus: 'CLEAN',
         },
@@ -104,20 +141,31 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
-        message: `Hosting node "${node.name}" was successfully purged, sanitized, verified clean, and released for customer allocation.`,
+        message: `Hosting node "${lockedNode.name}" was successfully purged, sanitized, verified clean, and released for customer allocation.`,
         purgeResult,
       });
     } else {
       // Purge or clean verification failed: leave node safely QUARANTINED
-      node.status = 'QUARANTINED';
-      node.cleanStatus = 'DIRTY';
-      node.healthStatus = 'DEGRADED';
-      node.currentAssignedCount = 0;
-      node.quarantineReason = purgeResult.error || 'Clean state verification failed post-reset';
-      node.cleanupFailureReason = node.quarantineReason;
-      node.lastCleanCheckAt = now;
-      node.adminNotes = `QUARANTINED: Admin-authorized purge failed: ${node.quarantineReason}`;
-      await node.save();
+      await HostingNode.findOneAndUpdate(
+        { _id: lockedNode._id, status: 'RESETTING' },
+        {
+          $set: {
+            status: 'QUARANTINED',
+            cleanStatus: 'DIRTY',
+            healthStatus: 'DEGRADED',
+            currentAssignedCount: 0,
+            quarantineReason: purgeResult.error || 'Clean state verification failed post-reset',
+            cleanupFailureReason: purgeResult.error || 'Clean state verification failed post-reset',
+            lastCleanCheckAt: now,
+            adminNotes: `QUARANTINED: Admin-authorized purge failed: ${purgeResult.error || 'Clean check failed'}`,
+          },
+          $unset: {
+            currentAllocationId: 1,
+            allocationExpiresAt: 1,
+            assignedInstanceId: 1,
+          },
+        }
+      );
 
       logCleanupStage({
         stage: 'NODE_QUARANTINE',

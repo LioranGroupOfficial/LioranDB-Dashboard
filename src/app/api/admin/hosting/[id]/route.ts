@@ -94,8 +94,14 @@ export async function PUT(
 
     if (body.defaultRootUsername !== undefined) node.defaultRootUsername = body.defaultRootUsername.trim();
     if (body.status !== undefined) {
-      if (body.status === 'AVAILABLE' && node.currentAssignedCount > 0) {
-        return NextResponse.json({ error: 'Cannot set node status to AVAILABLE while active databases are assigned.' }, { status: 400 });
+      if (body.status === 'AVAILABLE') {
+        const activeCount = await ManagedDatabase.countDocuments({
+          hostingNodeId: node._id,
+          status: { $nin: ['TERMINATED', 'DELETED'] },
+        });
+        if (activeCount > 0 || node.currentAssignedCount > 0) {
+          return NextResponse.json({ error: 'Cannot set node status to AVAILABLE while active databases are assigned.' }, { status: 400 });
+        }
       }
       node.status = body.status;
       if (body.status !== 'QUARANTINED') {
@@ -115,7 +121,7 @@ export async function PUT(
       node.serverVersion = statusRes.version || '2.4.1';
       node.lastHealthCheckAt = new Date();
 
-      if (node.currentAssignedCount === 0) {
+      if (node.currentAssignedCount === 0 && !['ASSIGNED', 'PROVISIONING', 'RESERVED', 'RESETTING'].includes(node.status)) {
         const cleanCheck = await client.verifyCleanState(node.serverIdentity);
         node.lastCleanCheckAt = new Date();
         if (cleanCheck.isClean) {

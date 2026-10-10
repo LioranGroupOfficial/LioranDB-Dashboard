@@ -125,6 +125,42 @@ export function logCleanupStage(payload: CleanupLogPayload): void {
   console.log(`[CleanupLifecycle] ${JSON.stringify(logEntry)}`);
 }
 
+export function formatResidualResourceItem(item: unknown): string {
+  if (typeof item === 'string') return item;
+  if (!item || typeof item !== 'object') return String(item);
+  const obj = item as Record<string, unknown>;
+  const type = obj.resource_type || obj.type || obj.kind || '';
+  const idOrName = obj.name || obj.id || obj.identifier || obj.username || obj.database || '';
+  if (type && idOrName) return `${type} '${idOrName}'`;
+  if (idOrName) return String(idOrName);
+  try {
+    return JSON.stringify(obj);
+  } catch {
+    return '[Resource Object]';
+  }
+}
+
+export function formatResidualCustomerResources(residuals: unknown): string[] {
+  if (!residuals) return [];
+  if (Array.isArray(residuals)) {
+    return residuals.map(formatResidualResourceItem);
+  }
+  if (typeof residuals === 'object') {
+    const entries: string[] = [];
+    for (const [key, val] of Object.entries(residuals as Record<string, unknown>)) {
+      if (Array.isArray(val) && val.length > 0) {
+        entries.push(`${key}: [${val.map(formatResidualResourceItem).join(', ')}]`);
+      } else if (typeof val === 'number' && val > 0) {
+        entries.push(`${key}: ${val}`);
+      } else if (val) {
+        entries.push(`${key}: ${formatResidualResourceItem(val)}`);
+      }
+    }
+    return entries.length > 0 ? entries : [JSON.stringify(residuals)];
+  }
+  return [String(residuals)];
+}
+
 export function normalizeRole(role?: string): string {
   const normalized = (role || '').trim().toLowerCase().replace(/[-_\s]/g, '');
   if (normalized === 'readwrite' || normalized === 'rw') return 'read_write';
@@ -920,11 +956,36 @@ export class LioranDBAdminClient {
       reasons.push(`Clean-state instance identity mismatch: expected '${targetExpectedId}', received '${cleanData.instance_id}'`);
     }
 
-    if (cleanData.verification_complete === false) {
+    const isVerificationComplete =
+      cleanData.verification?.complete !== undefined
+        ? cleanData.verification.complete
+        : cleanData.verification_complete !== undefined
+        ? cleanData.verification_complete
+        : true;
+
+    if (isVerificationComplete === false) {
       reasons.push('Clean-state verification completeness check failed (marked incomplete by server)');
     }
 
-    const cleanEngineState = String(cleanData.engine_readiness || cleanData.state || '').toUpperCase();
+    if (cleanData.verification?.checks) {
+      const checks = cleanData.verification.checks;
+      if (Array.isArray(checks)) {
+        for (const check of checks) {
+          if (typeof check === 'string' && (check.toLowerCase().includes('fail') || check.toLowerCase().includes('error'))) {
+            reasons.push(`Verification check failed: ${check}`);
+          }
+        }
+      } else if (typeof checks === 'object') {
+        for (const [chkName, chkVal] of Object.entries(checks)) {
+          if (chkVal === false || (typeof chkVal === 'string' && (chkVal.toLowerCase().includes('fail') || chkVal.toLowerCase().includes('error')))) {
+            reasons.push(`Verification check '${chkName}' failed: ${chkVal}`);
+          }
+        }
+      }
+    }
+
+    const rawEngineState = cleanData.engine_state || cleanData.engine_readiness || cleanData.state || '';
+    const cleanEngineState = String(rawEngineState).toUpperCase();
     if (cleanEngineState && !['READY', 'ACTIVE', 'OK', 'HEALTHY', 'TRUE'].includes(cleanEngineState)) {
       reasons.push(`Clean-state reported engine is not ready: '${cleanEngineState}'`);
     }
@@ -946,16 +1007,19 @@ export class LioranDBAdminClient {
       reasons.push(`Residual customer users detected (${cleanData.customer_user_count})`);
     }
 
-    if (Array.isArray(cleanData.residual_customer_resources) && cleanData.residual_customer_resources.length > 0) {
-      reasons.push(`Residual customer resources reported: ${cleanData.residual_customer_resources.join(', ')}`);
+    if (cleanData.residual_customer_resources) {
+      const formattedResiduals = formatResidualCustomerResources(cleanData.residual_customer_resources);
+      if (formattedResiduals.length > 0) {
+        reasons.push(`Residual customer resources reported: ${formattedResiduals.join(', ')}`);
+      }
     }
 
     if (Array.isArray(cleanData.failure_reasons) && cleanData.failure_reasons.length > 0) {
-      reasons.push(...cleanData.failure_reasons);
+      reasons.push(...cleanData.failure_reasons.map((r) => (typeof r === 'string' ? r : formatResidualResourceItem(r))));
     }
 
     if (Array.isArray(cleanData.reasons) && cleanData.reasons.length > 0) {
-      reasons.push(...cleanData.reasons);
+      reasons.push(...cleanData.reasons.map((r) => (typeof r === 'string' ? r : formatResidualResourceItem(r))));
     }
 
     if (cleanData.is_clean !== true) {

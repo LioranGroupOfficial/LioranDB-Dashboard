@@ -101,14 +101,20 @@ export interface RustResetInstanceResponse {
 export interface RustCleanStateResponse {
   instance_id: string;
   engine_readiness?: boolean | string;
+  engine_state?: string;
   state?: string;
   is_clean: boolean;
   verification_complete?: boolean;
+  verification?: {
+    complete?: boolean;
+    checks?: Record<string, unknown> | string[];
+    [key: string]: unknown;
+  };
   customer_database_count?: number;
   customer_collection_count?: number;
   customer_document_count?: number;
   customer_user_count?: number;
-  residual_customer_resources?: string[] | Record<string, unknown>;
+  residual_customer_resources?: string[] | Array<Record<string, unknown> | string> | Record<string, unknown>;
   failure_reasons?: string[];
   reasons?: string[];
   system_databases?: string[];

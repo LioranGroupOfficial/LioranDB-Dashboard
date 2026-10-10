@@ -51,6 +51,9 @@ export interface IHostingNode extends Document {
   status: HostingNodeStatus;
   maxCapacity?: number; // 1 server per user/database (DEDICATED model)
   currentAssignedCount: number;
+  currentAllocationId?: string; // Atomic reservation ID / fencing token
+  allocationExpiresAt?: Date; // Expiration timestamp for pending reservation lease
+  assignedInstanceId?: Types.ObjectId; // Reference to assigned or provisioning ManagedDatabase
   lastHealthCheckAt?: Date;
   lastCleanCheckAt?: Date;
   lastResetAt?: Date;
@@ -117,6 +120,9 @@ const HostingNodeSchema = new Schema<IHostingNode>(
     },
     maxCapacity: { type: Number, default: 1 },
     currentAssignedCount: { type: Number, default: 0 },
+    currentAllocationId: { type: String, index: true },
+    allocationExpiresAt: { type: Date, index: true },
+    assignedInstanceId: { type: Schema.Types.ObjectId, ref: 'ManagedDatabase' },
     lastHealthCheckAt: { type: Date },
     lastCleanCheckAt: { type: Date },
     lastResetAt: { type: Date },
@@ -135,11 +141,12 @@ const HostingNodeSchema = new Schema<IHostingNode>(
 
 HostingNodeSchema.index({ status: 1, allocationMode: 1, currentAssignedCount: 1 });
 HostingNodeSchema.index({ status: 1, healthStatus: 1, cleanStatus: 1, currentAssignedCount: 1 });
+HostingNodeSchema.index({ currentAllocationId: 1, allocationExpiresAt: 1 });
 
 /**
  * Validates strict allocation eligibility:
- * Node must be AVAILABLE, HEALTHY, verified CLEAN, not QUARANTINED, not RESETTING,
- * unassigned (within maxCapacity), and have valid connectivity.
+ * Node must be AVAILABLE (or legacy ACTIVE), HEALTHY, verified CLEAN, not QUARANTINED, not RESETTING,
+ * unassigned (within maxCapacity), have valid connectivity, and not currently locked by an active reservation.
  */
 export function isNodeAllocatable(node: Partial<IHostingNode> | null | undefined): boolean {
   if (!node) return false;
@@ -148,8 +155,9 @@ export function isNodeAllocatable(node: Partial<IHostingNode> | null | undefined
   const isClean = node.cleanStatus === 'CLEAN';
   const hasCapacity = (node.currentAssignedCount || 0) < (node.maxCapacity || 1);
   const hasHost = Boolean(node.dbUrl && node.dbUrl.trim());
+  const isNotLocked = !node.currentAllocationId || (node.allocationExpiresAt && new Date(node.allocationExpiresAt) < new Date());
 
-  return isAvailableStatus && isHealthy && isClean && hasCapacity && hasHost;
+  return isAvailableStatus && isHealthy && isClean && hasCapacity && hasHost && isNotLocked;
 }
 
 const HostingNode: Model<IHostingNode> =
