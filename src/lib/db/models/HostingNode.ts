@@ -165,7 +165,7 @@ export function isNodeAllocatable(node: Partial<IHostingNode> | null | undefined
   const hasHost = Boolean(node.dbUrl && node.dbUrl.trim());
   const isNotLocked =
     !node.currentAllocationId ||
-    (node.allocationExpiresAt && new Date(node.allocationExpiresAt).getTime() < Date.now());
+    Boolean(node.allocationExpiresAt && new Date(node.allocationExpiresAt).getTime() < Date.now());
   const isNotQuarantined = node.status !== 'QUARANTINED';
   const isNotResetting = node.status !== 'RESETTING';
   const isNotDisabled = node.status !== 'DISABLED';

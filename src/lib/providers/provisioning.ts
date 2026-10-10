@@ -911,8 +911,10 @@ export async function allocateAndProvisionInstance(
     reservedNode.assignedInstanceId ||
     (reservedNode as any).lastAssignedAt
   );
-  const hasResidualDatabases = (serverStatus.database_count || 0) > 1 || (serverStatus.total_databases || 0) > 1;
-  const hasResidualUsers = (serverStatus.user_count || 0) > 1;
+  const statusAny = serverStatus as any;
+  const hasResidualDatabases =
+    (serverStatus.databaseCount || statusAny.database_count || statusAny.total_databases || 0) > 1;
+  const hasResidualUsers = (serverStatus.userCount || statusAny.user_count || 0) > 1;
   const needsReset = isPreviouslyAssigned || hasResidualDatabases || hasResidualUsers;
 
   if (needsReset) {

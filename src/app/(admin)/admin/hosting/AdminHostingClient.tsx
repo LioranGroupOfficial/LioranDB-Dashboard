@@ -490,7 +490,6 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       (n) =>
         (n.status === 'AVAILABLE' || n.status === 'ACTIVE') &&
         n.currentAssignedCount === 0 &&
-        n.status !== 'QUARANTINED' &&
         !n.quarantineReason
     ).length;
     const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0 || n.status === 'ASSIGNED').length;

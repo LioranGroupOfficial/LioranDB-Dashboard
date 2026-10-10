@@ -1056,6 +1056,11 @@ export class Model<T = any> {
     return new Query<number, number>(this, filter, undefined, false, true);
   }
 
+  public async exists(filter?: any): Promise<{ _id: any } | null> {
+    const doc = await this.findOne(filter).select('_id').lean();
+    return doc ? { _id: (doc as any)._id } : null;
+  }
+
   public async create(docs: any | any[], _options?: any): Promise<any> {
     if (Array.isArray(docs)) {
       const hydrated = docs.map((d) => this.hydrate(d, true));

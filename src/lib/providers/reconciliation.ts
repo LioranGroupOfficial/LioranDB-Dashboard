@@ -256,7 +256,7 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
               { $unset: { hostingNodeId: 1 } }
             );
           } else {
-            if (node.status !== 'QUARANTINED' && node.status !== 'RESETTING') {
+            if (node.status !== 'QUARANTINED') {
               await HostingNode.findOneAndUpdate(
                 { _id: node._id, status: { $nin: ['RESETTING', 'QUARANTINED'] } },
                 {
