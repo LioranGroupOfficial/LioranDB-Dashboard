@@ -238,7 +238,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
                   >
                     <Icon
                       className={`w-4 h-4 shrink-0 transition-colors ${
-                        active ? 'text-[var(--primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
+                        active ? 'text-[var(--on-primary)]' : 'text-[var(--muted)] group-hover:text-[var(--ink)]'
                       }`}
                     />
                     <span className="text-xs font-medium truncate">{item.label}</span>

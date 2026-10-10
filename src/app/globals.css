@@ -417,11 +417,17 @@
     border-color: var(--primary);
     font-weight: 600;
   }
+  .sidebar-link.active svg {
+    color: var(--on-primary);
+  }
   .dark .sidebar-link.active {
     background-color: var(--primary);
     color: var(--on-primary);
     border-color: var(--primary);
     font-weight: 600;
+  }
+  .dark .sidebar-link.active svg {
+    color: var(--on-primary);
   }
 
   .divider {
