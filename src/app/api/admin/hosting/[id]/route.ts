@@ -93,12 +93,20 @@ export async function PUT(
     }
 
     if (body.defaultRootUsername !== undefined) node.defaultRootUsername = body.defaultRootUsername.trim();
-    if (body.status !== undefined) node.status = body.status;
+    if (body.status !== undefined) {
+      if (body.status === 'AVAILABLE' && node.currentAssignedCount > 0) {
+        return NextResponse.json({ error: 'Cannot set node status to AVAILABLE while active databases are assigned.' }, { status: 400 });
+      }
+      node.status = body.status;
+      if (body.status !== 'QUARANTINED') {
+        node.quarantineReason = undefined;
+      }
+    }
     node.maxCapacity = 1;
     if (body.notes !== undefined) node.notes = body.notes;
     if (body.isDefault !== undefined) node.isDefault = Boolean(body.isDefault);
 
-    // Run live health check against Rust control plane
+    // Run live health and clean-state inspection against Rust control plane
     try {
       const client = LioranDBAdminClient.forNode(node);
       const statusRes = await client.getServerStatus();
@@ -106,6 +114,23 @@ export async function PUT(
       node.serverIdentity = statusRes.instanceId;
       node.serverVersion = statusRes.version || '2.4.1';
       node.lastHealthCheckAt = new Date();
+
+      if (node.currentAssignedCount === 0) {
+        const cleanCheck = await client.verifyCleanState(node.serverIdentity);
+        node.lastCleanCheckAt = new Date();
+        if (cleanCheck.isClean) {
+          node.cleanStatus = 'CLEAN';
+          node.cleanupFailureReason = undefined;
+          node.quarantineReason = undefined;
+        } else {
+          node.cleanStatus = cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE' ? 'PENDING_VERIFICATION' : 'DIRTY';
+          node.cleanupFailureReason = cleanCheck.reason;
+          if (node.status === 'AVAILABLE') {
+            node.status = 'QUARANTINED';
+            node.quarantineReason = cleanCheck.reason;
+          }
+        }
+      }
     } catch (err: unknown) {
       const errMsg = (err as Error).message || '';
       if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('authentication') || errMsg.includes('unauthorized')) {

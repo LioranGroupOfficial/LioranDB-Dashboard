@@ -74,14 +74,36 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     let node: IHostingNode | null = null;
 
     if (params.nodeId) {
-      node = await HostingNode.findById(params.nodeId);
+      const explicitNode = await HostingNode.findById(params.nodeId);
+      if (explicitNode) {
+        if (explicitNode.status === 'QUARANTINED' || explicitNode.quarantineReason) {
+          return {
+            success: false,
+            error: `Requested hosting node '${explicitNode.name}' is QUARANTINED (${explicitNode.quarantineReason || explicitNode.cleanupFailureReason || 'Isolation check failed'}) and ineligible for allocation.`,
+          };
+        }
+        if (explicitNode.status === 'RESETTING') {
+          return {
+            success: false,
+            error: `Requested hosting node '${explicitNode.name}' is currently being reset and ineligible for allocation.`,
+          };
+        }
+        if (explicitNode.status === 'DISABLED') {
+          return {
+            success: false,
+            error: `Requested hosting node '${explicitNode.name}' is disabled.`,
+          };
+        }
+        node = explicitNode;
+      }
     }
 
     if (!node) {
-      // Select an available unassigned dedicated hosting node
+      // Select an available unassigned dedicated hosting node that is strictly verified CLEAN
       node = await HostingNode.findOne({
         status: 'AVAILABLE',
         healthStatus: 'HEALTHY',
+        cleanStatus: 'CLEAN',
         currentAssignedCount: 0,
       });
     }
@@ -97,17 +119,20 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     const client = LioranDBAdminClient.forNode(node);
 
     try {
-      // 1. Verify clean state and live server status before allocation
-      const cleanCheck = await client.verifyCleanState();
+      // 1. Authoritatively verify clean state and live server status before customer allocation
+      const cleanCheck = await client.verifyCleanState(node.serverIdentity);
       if (!cleanCheck.isClean) {
         console.error(`[Provisioning] Node '${node.name}' failed pre-provision clean state check: ${cleanCheck.reasons.join(', ')}`);
         node.status = 'QUARANTINED';
         node.healthStatus = 'DEGRADED';
-        node.adminNotes = `Pre-provision clean state failed: ${cleanCheck.reasons.join(', ')}`;
+        node.cleanStatus = cleanCheck.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE' ? 'PENDING_VERIFICATION' : 'DIRTY';
+        node.cleanupFailureReason = cleanCheck.reason || cleanCheck.reasons.join('; ');
+        node.quarantineReason = node.cleanupFailureReason;
+        node.adminNotes = `Pre-provision clean state failed: ${node.cleanupFailureReason}`;
         await node.save();
         return {
           success: false,
-          error: `Target hosting node '${node.name}' contains residual state and has been quarantined.`,
+          error: `Target hosting node '${node.name}' clean-state verification failed (${node.cleanupFailureReason}) and has been quarantined. Customer data isolation protected.`,
         };
       }
 
@@ -347,26 +372,38 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
       { $set: { endedAt: now, stoppedAt: now } }
     );
 
-    // 3. If assigned to a hosting node, lock node to RESETTING and execute comprehensive purge
+    // 3. If assigned to a hosting node, atomically lock node to RESETTING and execute comprehensive purge
     if (instance.hostingNodeId) {
-      const node = await HostingNode.findById(instance.hostingNodeId);
-      if (node) {
-        // Lock node in RESETTING state to prevent concurrent allocation
-        node.status = 'RESETTING';
-        await node.save();
+      // Concurrency protection: atomically claim and lock the node to RESETTING
+      const node = await HostingNode.findOneAndUpdate(
+        {
+          _id: instance.hostingNodeId,
+          status: { $ne: 'RESETTING' },
+        },
+        {
+          $set: {
+            status: 'RESETTING',
+            lastCleanupAttemptAt: now,
+          },
+        },
+        { returnDocument: 'after' }
+      );
 
+      if (node) {
         logCleanupStage({
           stage: 'LOCK_NODE',
-          instanceId: instance._id.toString(),
+          instanceId: node.serverIdentity || instance._id.toString(),
           nodeId: node._id.toString(),
           endpoint: node.controlPlaneEndpoint || node.dbUrl,
         });
 
         try {
           const client = LioranDBAdminClient.forNode(node);
+          // Pass the verified cloud instance identity (e.g. "cx01"), NOT the MongoDB ObjectID
+          const targetCloudInstanceId = node.serverIdentity || 'primary';
           const purgeResult = await client.purgeAndResetTenant({
-            instanceId: instance._id.toString(),
-            expectedInstanceName: instance.name,
+            instanceId: targetCloudInstanceId,
+            expectedInstanceName: node.name,
             nodeId: node._id.toString(),
           });
 
@@ -374,12 +411,18 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
             throw new Error(`Clean state verification failed post-reset. Residual data detected: ${purgeResult.error || 'Check failed'}`);
           }
 
-          // Successful cleanup: return node to AVAILABLE
+          // Successful cleanup: return node to AVAILABLE with verified clean state
           node.status = 'AVAILABLE';
           node.currentAssignedCount = 0;
           node.healthStatus = 'HEALTHY';
+          node.cleanStatus = 'CLEAN';
+          node.quarantineReason = undefined;
+          node.cleanupFailureReason = undefined;
           node.lastResetAt = now;
-          node.lastCredentialRotationAt = now;
+          node.lastCleanCheckAt = now;
+          if (purgeResult.rotatedRootPassword) {
+            node.lastCredentialRotationAt = now;
+          }
           node.adminNotes = `Purged and reset on ${now.toISOString()}. Pre-mem: ${purgeResult.preResetMemoryBytes || 'N/A'}, Post-mem: ${purgeResult.postResetMemoryBytes || 'N/A'}`;
           await node.save();
 
@@ -389,7 +432,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
           logCleanupStage({
             stage: 'NODE_RELEASE',
-            instanceId: instance._id.toString(),
+            instanceId: targetCloudInstanceId,
             nodeId: node._id.toString(),
             endpoint: client.endpoint,
             isClean: true,
@@ -403,6 +446,9 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           // Quarantine dirty node to prevent other customers from receiving it
           node.status = 'QUARANTINED';
           node.healthStatus = 'DEGRADED';
+          node.cleanStatus = 'DIRTY';
+          node.cleanupFailureReason = errMsg;
+          node.quarantineReason = errMsg;
           node.adminNotes = `QUARANTINED: Cleanup failed during termination: ${errMsg}`;
           await node.save();
 
@@ -412,7 +458,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
           logCleanupStage({
             stage: 'NODE_QUARANTINE',
-            instanceId: instance._id.toString(),
+            instanceId: node.serverIdentity || instance._id.toString(),
             nodeId: node._id.toString(),
             isClean: false,
             failureReason: errMsg,
@@ -592,20 +638,39 @@ export async function provisionInstance(
   let node: IHostingNode | null = null;
 
   if (instance.hostingNodeId) {
-    node = await HostingNode.findById(instance.hostingNodeId);
-    if (node) {
-      node.status = 'PROVISIONING';
-      node.currentAssignedCount = 1;
-      await node.save();
+    const existingNode = await HostingNode.findById(instance.hostingNodeId);
+    if (!existingNode) {
+      throw new Error(`Target hosting node ${instance.hostingNodeId} not found.`);
     }
+    if (existingNode.status === 'QUARANTINED' || existingNode.quarantineReason) {
+      throw new Error(`Target hosting node '${existingNode.name}' is QUARANTINED (${existingNode.quarantineReason || existingNode.cleanupFailureReason || 'Isolation check failed'}) and ineligible for allocation.`);
+    }
+    if (existingNode.status === 'RESETTING') {
+      throw new Error(`Target hosting node '${existingNode.name}' is currently being reset and ineligible for allocation.`);
+    }
+    if (existingNode.status === 'DISABLED') {
+      throw new Error(`Target hosting node '${existingNode.name}' is disabled.`);
+    }
+    if (existingNode.healthStatus !== 'HEALTHY') {
+      throw new Error(`Target hosting node '${existingNode.name}' health status is '${existingNode.healthStatus}', ineligible for allocation.`);
+    }
+    if (existingNode.cleanStatus !== 'CLEAN') {
+      throw new Error(`Target hosting node '${existingNode.name}' clean-state is '${existingNode.cleanStatus}' (${existingNode.cleanupFailureReason || 'Clean-state verification required'}), ineligible for allocation.`);
+    }
+
+    existingNode.status = 'PROVISIONING';
+    existingNode.currentAssignedCount = 1;
+    await existingNode.save();
+    node = existingNode;
   }
 
   if (!node) {
-    // Atomically find and reserve an strictly AVAILABLE & HEALTHY node
+    // Atomically find and reserve a strictly AVAILABLE, HEALTHY, and verified CLEAN node
     node = await HostingNode.findOneAndUpdate(
       {
         status: 'AVAILABLE',
         healthStatus: 'HEALTHY',
+        cleanStatus: 'CLEAN',
         currentAssignedCount: 0,
       },
       {
@@ -664,11 +729,14 @@ export async function provisionInstance(
     instance.adminNotes = deploymentResult.error || 'Failed to provision on Rust server';
     await instance.save();
 
-    // Do NOT blindly make node AVAILABLE if it was quarantined during pre-check
+    // If provisioning failed, quarantine the node because credentials or user state may be dirty
     const refreshedNode = await HostingNode.findById(node._id);
-    if (refreshedNode && refreshedNode.status !== 'QUARANTINED') {
-      refreshedNode.status = 'AVAILABLE';
+    if (refreshedNode) {
+      refreshedNode.status = 'QUARANTINED';
+      refreshedNode.cleanStatus = 'DIRTY';
       refreshedNode.currentAssignedCount = 0;
+      refreshedNode.quarantineReason = `Provisioning aborted: ${deploymentResult.error || 'Failed to complete deployment'}. Requires sanitized reset before reuse.`;
+      refreshedNode.adminNotes = refreshedNode.quarantineReason;
       await refreshedNode.save();
     }
 
@@ -719,9 +787,12 @@ export async function provisionInstance(
       await instance.save();
 
       const refreshedNode = await HostingNode.findById(node._id);
-      if (refreshedNode && refreshedNode.status !== 'QUARANTINED') {
-        refreshedNode.status = 'AVAILABLE';
+      if (refreshedNode) {
+        refreshedNode.status = 'QUARANTINED';
+        refreshedNode.cleanStatus = 'DIRTY';
         refreshedNode.currentAssignedCount = 0;
+        refreshedNode.quarantineReason = `Readiness check failed after provisioning: ${errMessage}. Requires sanitized reset before reuse.`;
+        refreshedNode.adminNotes = refreshedNode.quarantineReason;
         await refreshedNode.save();
       }
 
@@ -785,6 +856,7 @@ export async function provisionInstance(
   node.currentAssignedCount = 1;
   node.serverVersion = deploymentResult.serverVersion || '2.4.1';
   node.healthStatus = 'HEALTHY';
+  node.cleanStatus = 'DIRTY';
   node.lastCredentialRotationAt = now;
   await node.save();
 

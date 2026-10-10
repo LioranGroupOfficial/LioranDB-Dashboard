@@ -41,7 +41,7 @@ const WalletSchema = new Schema<IWallet>(
   { timestamps: true }
 );
 
-WalletSchema.index({ userId: 1 });
+WalletSchema.index({ userId: 1 }, { unique: true });
 
 const Wallet: Model<IWallet> = models.Wallet || model<IWallet>('Wallet', WalletSchema);
 

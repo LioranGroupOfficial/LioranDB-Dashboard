@@ -93,6 +93,13 @@ export class LioranDBUnreachableError extends LioranDBAdminError {
   }
 }
 
+export class LioranDBCleanStateError extends LioranDBAdminError {
+  constructor(message = 'Instance clean-state verification failed', options?: { requestId?: string; cause?: unknown }) {
+    super(message, { statusCode: 422, code: 'CLEAN_STATE_VERIFICATION_FAILED', ...options });
+    this.name = 'LioranDBCleanStateError';
+  }
+}
+
 export function sanitizeErrorForLog(err: unknown): Record<string, unknown> {
   if (err instanceof LioranDBAdminError) {
     return {

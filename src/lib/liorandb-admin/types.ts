@@ -94,6 +94,44 @@ export interface RustResetInstanceResponse {
   bootstrap_credential: RustGeneratedCredential;
 }
 
+/**
+ * Authoritative Rust Server Clean-State Verification Schema
+ * Primary Path: GET /v1/admin/instance/clean-state
+ */
+export interface RustCleanStateResponse {
+  instance_id: string;
+  engine_readiness?: boolean | string;
+  state?: string;
+  is_clean: boolean;
+  verification_complete?: boolean;
+  customer_database_count?: number;
+  customer_collection_count?: number;
+  customer_document_count?: number;
+  customer_user_count?: number;
+  residual_customer_resources?: string[] | Record<string, unknown>;
+  failure_reasons?: string[];
+  reasons?: string[];
+  system_databases?: string[];
+  system_users?: string[];
+}
+
+export type CleanVerificationStatus =
+  | 'VERIFIED_CLEAN'
+  | 'DIRTY_RESIDUAL_RESOURCES'
+  | 'IDENTITY_MISMATCH'
+  | 'ENGINE_NOT_READY'
+  | 'VERIFICATION_INCOMPLETE'
+  | 'CLEAN_STATE_API_UNAVAILABLE'
+  | 'AUTHENTICATION_FAILED'
+  | 'COMMUNICATION_ERROR';
+
+export type HostingNodeCleanStatus =
+  | 'CLEAN'
+  | 'DIRTY'
+  | 'NOT_VERIFIED'
+  | 'PENDING_VERIFICATION'
+  | 'UNKNOWN';
+
 // ==========================================
 // Dashboard High-Level Types
 // ==========================================
@@ -185,10 +223,19 @@ export interface ResetInstanceResult {
 
 export interface CleanStateResult {
   isClean: boolean;
+  verificationStatus: CleanVerificationStatus;
   reasons: string[];
   reason?: string;
-  status?: LioranDBServerStatus;
+  instanceId?: string;
+  status?: LioranDBServerStatus; // Backward-compatible alias for serverStatus
+  serverStatus?: LioranDBServerStatus;
+  authoritativeCleanData?: RustCleanStateResponse;
+  customerDatabaseCount?: number;
+  customerCollectionCount?: number;
+  customerDocumentCount?: number;
+  customerUserCount?: number;
   residualCustomerUserCount?: number;
+  verificationComplete?: boolean;
 }
 
 export interface PurgeAndResetTenantResult {

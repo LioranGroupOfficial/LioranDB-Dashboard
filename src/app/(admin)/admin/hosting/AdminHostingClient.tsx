@@ -49,6 +49,10 @@ export interface AdminHostingNodeItem {
   assignedInstanceStatus?: string;
   assignedDatabaseId?: string;
   lastHealthCheckAt?: string;
+  lastCleanCheckAt?: string;
+  cleanStatus?: 'CLEAN' | 'DIRTY' | 'NOT_VERIFIED' | 'PENDING_VERIFICATION' | 'UNKNOWN';
+  quarantineReason?: string;
+  cleanupFailureReason?: string;
   lastResetAt?: string;
   lastCredentialRotationAt?: string;
   notes?: string;
@@ -74,6 +78,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
 
   // Testing & Diagnostics
   const [testingNodeId, setTestingNodeId] = useState<string | null>(null);
+  const [purgingNodeId, setPurgingNodeId] = useState<string | null>(null);
   const [testingForm, setTestingForm] = useState(false);
   const [formTestResult, setFormTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [diagnosticModal, setDiagnosticModal] = useState<{
@@ -165,6 +170,45 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       setFeedbackMsg({ type: 'error', text: msg });
     } finally {
       setTestingNodeId(null);
+    }
+  }
+
+  // Administrator-Authorized Purge, Sanitize & Clean Verification
+  async function handlePurgeNode(node: AdminHostingNodeItem) {
+    if (
+      !confirm(
+        `Are you sure you want to sanitize and purge hosting node "${node.name}"?\n\nThis will trigger an authoritative engine reset, wipe any residual tenant state, rotate root credentials, and authoritatively verify clean state before releasing the node for allocation.`
+      )
+    ) {
+      return;
+    }
+
+    setPurgingNodeId(node._id);
+    setLoading(true);
+    setFeedbackMsg(null);
+    try {
+      const res = await fetch(`/api/admin/hosting/${node._id}/purge`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFeedbackMsg({
+          type: 'success',
+          text: `Node "${node.name}" successfully purged, sanitized, and verified clean. Quarantine released!`,
+        });
+      } else {
+        setFeedbackMsg({
+          type: 'error',
+          text: `Purge on "${node.name}" failed: ${data.error || 'Clean verification failed post-reset. Node remains quarantined.'}`,
+        });
+      }
+      await refreshNodes();
+    } catch (err: unknown) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Network error executing purge',
+      });
+    } finally {
+      setPurgingNodeId(null);
+      setLoading(false);
     }
   }
 
@@ -401,7 +445,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   const stats = useMemo(() => {
     const totalNodes = nodes.length;
     const healthyNodes = nodes.filter((n) => n.healthStatus === 'HEALTHY' || n.status === 'AVAILABLE' || n.status === 'ACTIVE').length;
-    const availableNodes = nodes.filter((n) => (n.status === 'AVAILABLE' || n.status === 'ACTIVE') && n.currentAssignedCount === 0).length;
+    const availableNodes = nodes.filter((n) => (n.status === 'AVAILABLE' || n.status === 'ACTIVE') && n.currentAssignedCount === 0 && n.cleanStatus !== 'DIRTY' && n.status !== 'QUARANTINED').length;
     const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0).length;
 
     return { totalNodes, healthyNodes, availableNodes, totalAssigned };
@@ -653,21 +697,50 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       </td>
 
                       <td className="px-4 py-3.5">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-[4px] text-[11px] font-mono uppercase tracking-wider ${
-                            node.status === 'AVAILABLE' || node.status === 'ACTIVE'
-                              ? 'bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-semibold'
-                              : node.status === 'ASSIGNED' || node.status === 'RESERVED'
-                              ? 'bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)]'
-                              : 'text-[var(--text-muted)] border border-[var(--border)]'
-                          }`}
-                        >
-                          {node.status}
-                        </span>
+                        <div className="space-y-1">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-[4px] text-[11px] font-mono uppercase tracking-wider ${
+                              node.status === 'AVAILABLE' || node.status === 'ACTIVE'
+                                ? 'bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-semibold'
+                                : node.status === 'ASSIGNED' || node.status === 'RESERVED'
+                                ? 'bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)]'
+                                : node.status === 'QUARANTINED'
+                                ? 'bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border-strong)] font-bold'
+                                : 'text-[var(--text-muted)] border border-[var(--border)]'
+                            }`}
+                          >
+                            {node.status}
+                          </span>
+                          {node.cleanStatus && node.cleanStatus !== 'UNKNOWN' && (
+                            <div className="text-[10px] font-mono text-[var(--text-muted)]">
+                              Clean: <span className="font-semibold text-[var(--text-strong)]">{node.cleanStatus}</span>
+                            </div>
+                          )}
+                          {node.quarantineReason && (
+                            <div
+                              className="text-[10px] text-[var(--text-muted)] truncate max-w-[150px] font-sans"
+                              title={node.quarantineReason}
+                            >
+                              {node.quarantineReason}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {node.currentAssignedCount === 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handlePurgeNode(node)}
+                              disabled={purgingNodeId === node._id}
+                              title="Administrator recovery: purge tenant data, factory reset, and verify clean state"
+                              className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1 text-[var(--text-strong)]"
+                            >
+                              <Shield className={`w-3 h-3 ${purgingNodeId === node._id ? 'animate-spin text-[var(--text-muted)]' : ''}`} />
+                              <span>{purgingNodeId === node._id ? 'Purging...' : 'Purge'}</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleTestNode(node)}
@@ -1116,7 +1189,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                     <span>LioranDB Rust Server Healthy &amp; Online</span>
                   </div>
                   <p className="text-[11px] mt-1 text-[var(--text-muted)] font-mono">
-                    Response received in {diagnosticModal.data?.latencyMs}ms. Node status has been restored to AVAILABLE.
+                    Response received in {diagnosticModal.data?.latencyMs}ms. Control plane verified healthy (Status: {diagnosticModal.data?.status || 'AVAILABLE'}, Cleanliness: {diagnosticModal.data?.cleanStatus || 'UNKNOWN'}).
                   </p>
                 </div>
 
@@ -1132,6 +1205,10 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                   <div className="flex justify-between">
                     <span className="text-[var(--text-muted)]">Health Status:</span>
                     <span className="text-[var(--text-strong)] font-bold">{diagnosticModal.data?.healthStatus || 'HEALTHY'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--text-muted)]">Clean Status:</span>
+                    <span className="font-bold text-[var(--text-strong)]">{diagnosticModal.data?.cleanStatus || 'UNKNOWN'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[var(--text-muted)]">Allocation Status:</span>

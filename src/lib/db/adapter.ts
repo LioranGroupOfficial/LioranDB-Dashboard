@@ -100,15 +100,22 @@ export class Schema<T = any> {
     }
 
     const defaultName = nameParts.join('_');
+    const existingIndexIdx = this.declaredIndexes.findIndex((idx) => (idx.options.name || '') === (options?.name || defaultName));
+    const priorUnique = existingIndexIdx >= 0 ? Boolean(this.declaredIndexes[existingIndexIdx].options.unique) : false;
+
     const opts = {
       name: options?.name || defaultName,
-      unique: Boolean(options?.unique),
+      unique: options?.unique !== undefined ? Boolean(options.unique) : priorUnique,
       sparse: Boolean(options?.sparse),
       partialFilter: options?.partialFilter,
       ...options,
     };
 
-    this.declaredIndexes.push({ fields: declaredFields, options: opts });
+    if (existingIndexIdx >= 0) {
+      this.declaredIndexes[existingIndexIdx] = { fields: declaredFields, options: opts };
+    } else {
+      this.declaredIndexes.push({ fields: declaredFields, options: opts });
+    }
     return this;
   }
 

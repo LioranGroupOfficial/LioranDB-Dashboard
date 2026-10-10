@@ -31,21 +31,35 @@ export async function POST(
       node.serverVersion = statusRes.version || '2.4.1';
       node.lastHealthCheckAt = new Date();
 
-      // If node was marked FAILED, recover to AVAILABLE if no active instances assigned
-      if (node.status === 'FAILED') {
-        const activeCount = await ManagedDatabase.countDocuments({
-          hostingNodeId: node._id,
-          status: { $nin: ['TERMINATED', 'DELETED'] },
-        });
-        node.status = activeCount > 0 ? 'ASSIGNED' : 'AVAILABLE';
+      let cleanCheckResult = null;
+      if (isHealthy) {
+        try {
+          const cleanRes = await client.verifyCleanState(node.serverIdentity);
+          cleanCheckResult = cleanRes;
+          node.lastCleanCheckAt = new Date();
+          if (cleanRes.isClean) {
+            node.cleanStatus = 'CLEAN';
+            node.cleanupFailureReason = undefined;
+          } else {
+            node.cleanStatus = cleanRes.verificationStatus === 'CLEAN_STATE_API_UNAVAILABLE' ? 'PENDING_VERIFICATION' : 'DIRTY';
+            node.cleanupFailureReason = cleanRes.reason || cleanRes.reasons.join('; ');
+          }
+        } catch {
+          // ignore clean-state probe failure during health test
+        }
       }
 
+      // Health test updates physical healthStatus only.
+      // Health check MUST NOT automatically clear quarantine or recover status without an authorized lifecycle transition.
       await node.save();
 
       return NextResponse.json({
         success: true,
         healthy: isHealthy,
         healthStatus: node.healthStatus,
+        cleanStatus: node.cleanStatus,
+        isClean: cleanCheckResult?.isClean,
+        cleanReasons: cleanCheckResult?.reasons,
         status: node.status,
         serverIdentity: statusRes.instanceId,
         serverVersion: statusRes.version,
@@ -55,7 +69,7 @@ export async function POST(
         engineStatus: statusRes.rawEngineStatus,
         latencyMs,
         endpoint: client.endpoint,
-        message: `Connection to ${node.name} succeeded (${latencyMs}ms).`,
+        message: `Connection to ${node.name} succeeded (${latencyMs}ms). Health: ${node.healthStatus}, Clean: ${node.cleanStatus || 'UNKNOWN'}.`,
       });
     } catch (testErr: unknown) {
       const latencyMs = Date.now() - startTime;

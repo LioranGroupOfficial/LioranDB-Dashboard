@@ -42,9 +42,19 @@ export async function POST(
     if (err instanceof AppError) {
       return NextResponse.json({ error: err.message }, { status: err.statusCode });
     }
+    const errMsg = err instanceof Error ? err.message : 'Internal Server Error';
+    const is404 = (err as any)?.statusCode === 404 || (err as any)?.name === 'LioranDBNotFoundError' || errMsg.includes('404') || errMsg.includes('not found');
+    if (is404) {
+      return NextResponse.json(
+        {
+          error: 'Database engine in-process restart is not supported via the HTTP control plane (/v1/admin/instance/restart returns 404). Container process restarts must be managed via infrastructure orchestration.',
+        },
+        { status: 501 }
+      );
+    }
     console.error('[API Admin Database Restart] Error:', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal Server Error' },
+      { error: errMsg },
       { status: 500 }
     );
   }
