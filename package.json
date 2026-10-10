@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
-    "@liorandb/driver": "^2.0.6",
+    "@liorandb/driver": "^2.0.7",
     "@types/argon2": "^0.14.1",
     "@types/nodemailer": "^8.0.1",
     "argon2": "^0.45.1",
