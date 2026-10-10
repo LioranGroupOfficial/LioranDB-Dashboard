@@ -146,12 +146,10 @@ export function isNodeAllocatable(node: Partial<IHostingNode> | null | undefined
   const isAvailableStatus = node.status === 'AVAILABLE' || node.status === 'ACTIVE';
   const isHealthy = node.healthStatus === 'HEALTHY';
   const isClean = node.cleanStatus === 'CLEAN';
-  const isNotQuarantined = node.status !== 'QUARANTINED';
-  const isNotResetting = node.status !== 'RESETTING';
   const hasCapacity = (node.currentAssignedCount || 0) < (node.maxCapacity || 1);
   const hasHost = Boolean(node.dbUrl && node.dbUrl.trim());
 
-  return isAvailableStatus && isHealthy && isClean && isNotQuarantined && isNotResetting && hasCapacity && hasHost;
+  return isAvailableStatus && isHealthy && isClean && hasCapacity && hasHost;
 }
 
 const HostingNode: Model<IHostingNode> =

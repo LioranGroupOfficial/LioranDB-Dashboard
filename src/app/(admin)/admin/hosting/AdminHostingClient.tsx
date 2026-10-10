@@ -445,7 +445,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   const stats = useMemo(() => {
     const totalNodes = nodes.length;
     const healthyNodes = nodes.filter((n) => n.healthStatus === 'HEALTHY' || n.status === 'AVAILABLE' || n.status === 'ACTIVE').length;
-    const availableNodes = nodes.filter((n) => (n.status === 'AVAILABLE' || n.status === 'ACTIVE') && n.currentAssignedCount === 0 && n.cleanStatus !== 'DIRTY' && n.status !== 'QUARANTINED').length;
+    const availableNodes = nodes.filter((n) => (n.status === 'AVAILABLE' || n.status === 'ACTIVE') && n.currentAssignedCount === 0 && n.cleanStatus !== 'DIRTY').length;
     const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0).length;
 
     return { totalNodes, healthyNodes, availableNodes, totalAssigned };
