@@ -142,6 +142,8 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
                   currentAllocationId: 1,
                   allocationExpiresAt: 1,
                   assignedInstanceId: 1,
+                  quarantineReason: 1,
+                  cleanupFailureReason: 1,
                 },
               }
             );
@@ -182,6 +184,8 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
                 currentAllocationId: 1,
                 allocationExpiresAt: 1,
                 assignedInstanceId: 1,
+                quarantineReason: 1,
+                cleanupFailureReason: 1,
               },
             }
           );
@@ -257,7 +261,9 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
                   $set: {
                     status: 'QUARANTINED',
                     currentAssignedCount: 0,
-                    quarantineReason: `Associated with failed instance provisioning (${failedInst?.lastProvisioningError || 'Unresolved failure'}). Requires sanitized reset before reuse.`,
+                    quarantineReason: failedInst?.lastProvisioningError?.includes('requires reset')
+                      ? failedInst.lastProvisioningError
+                      : `${node.name} requires reset: ${failedInst?.lastProvisioningError || 'unresolved provisioning failure'}.`,
                     cleanupFailureReason: failedInst?.lastProvisioningError || 'Failed instance provisioning',
                   },
                   $unset: {

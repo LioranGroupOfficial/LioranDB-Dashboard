@@ -485,8 +485,14 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   // Stats
   const stats = useMemo(() => {
     const totalNodes = nodes.length;
-    const healthyNodes = nodes.filter((n) => n.healthStatus === 'HEALTHY' || n.status === 'AVAILABLE' || n.status === 'ACTIVE').length;
-    const availableNodes = nodes.filter((n) => (n.status === 'AVAILABLE' || n.status === 'ACTIVE') && n.currentAssignedCount === 0).length;
+    const healthyNodes = nodes.filter((n) => n.healthStatus === 'HEALTHY' && n.status !== 'QUARANTINED').length;
+    const availableNodes = nodes.filter(
+      (n) =>
+        (n.status === 'AVAILABLE' || n.status === 'ACTIVE') &&
+        n.currentAssignedCount === 0 &&
+        n.status !== 'QUARANTINED' &&
+        !n.quarantineReason
+    ).length;
     const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0 || n.status === 'ASSIGNED').length;
 
     return { totalNodes, healthyNodes, availableNodes, totalAssigned };
@@ -718,7 +724,36 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       </td>
 
                       <td className="px-4 py-3.5">
-                        {node.status === 'PROVISIONING' ? (
+                        {node.status === 'QUARANTINED' ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-red-500/10 text-red-500 dark:text-red-400 border border-red-500/20 font-bold">
+                              <AlertCircle className="w-3 h-3 text-red-500" />
+                              QUARANTINED (0/1)
+                            </span>
+                            <div className="text-[10px] text-red-500 dark:text-red-400 font-sans truncate max-w-[140px]" title={node.quarantineReason || 'Quarantined'}>
+                              {node.quarantineReason && node.quarantineReason.includes('backup') ? 'Residual backup config' : 'Isolation Hold'}
+                            </div>
+                          </div>
+                        ) : node.status === 'RESETTING' ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-semibold">
+                              <RotateCw className="w-3 h-3 animate-spin text-[var(--text-muted)]" />
+                              RESETTING (0/1)
+                            </span>
+                            <div className="text-[10px] text-[var(--text-muted)] font-mono">
+                              Authoritative Reset
+                            </div>
+                          </div>
+                        ) : node.status === 'DISABLED' ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-muted)] border border-[var(--border)] font-semibold">
+                              DISABLED (0/1)
+                            </span>
+                            <div className="text-[10px] text-[var(--text-muted)] font-mono">
+                              Administratively Off
+                            </div>
+                          </div>
+                        ) : node.status === 'PROVISIONING' ? (
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-semibold">
                               <RotateCw className="w-3 h-3 animate-spin text-[var(--text-muted)]" />
@@ -773,7 +808,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                               className="text-[10px] text-red-500 dark:text-red-400 max-w-[200px] font-sans break-words mt-1"
                               title={node.quarantineReason || node.cleanupFailureReason}
                             >
-                              Reason: {node.quarantineReason || node.cleanupFailureReason}
+                              Reason: {node.quarantineReason?.includes('backup') ? `${node.name} requires reset: residual backup configuration.` : (node.quarantineReason || node.cleanupFailureReason)}
                             </div>
                           )}
                         </div>

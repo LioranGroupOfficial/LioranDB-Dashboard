@@ -779,15 +779,17 @@ export async function allocateAndProvisionInstance(
     throw dbErr;
   }
 
-  // Step 3: Check Rust server health and identity before making any mutations
+  // Step 3: Pre-allocation health and sanitization check (strictly BEFORE any customer mutations begin)
   const client = LioranDBAdminClient.forNode(reservedNode);
+  const targetInstanceId = reservedNode.serverIdentity || 'primary';
   let serverStatus;
+  let preCleanCheck;
+
   try {
     serverStatus = await client.getServerStatus();
     if (serverStatus.status !== 'HEALTHY' && serverStatus.state !== 'Ready') {
       const statusFailReason = `Server is not in Ready state (current state: ${serverStatus.state || serverStatus.status})`;
 
-      // Release unmutated node reservation back to AVAILABLE (with degraded health status)
       await HostingNode.findOneAndUpdate(
         { _id: reservedNode._id, currentAllocationId: allocationToken },
         {
@@ -807,7 +809,7 @@ export async function allocateAndProvisionInstance(
       instance.status = 'FAILED';
       instance.provisioningStage = 'HEALTH_CHECK_FAILED';
       instance.lastProvisioningError = statusFailReason;
-      instance.hostingNodeId = undefined; // Disassociate so failed record never blocks capacity
+      instance.hostingNodeId = undefined;
       await instance.save();
 
       throw new Error(statusFailReason);
@@ -843,9 +845,11 @@ export async function allocateAndProvisionInstance(
 
       throw new Error(identityMismatchReason);
     }
+
+    // Check whether the node is already clean or contains residual customer resources
+    preCleanCheck = await client.verifyCleanState(targetInstanceId);
   } catch (preCheckErr: unknown) {
     const preCheckMsg = preCheckErr instanceof Error ? preCheckErr.message : String(preCheckErr);
-    // Release unmutated node reservation safely
     await HostingNode.findOneAndUpdate(
       { _id: reservedNode._id, currentAllocationId: allocationToken },
       {
@@ -868,16 +872,16 @@ export async function allocateAndProvisionInstance(
     throw preCheckErr;
   }
 
-  // Step 4: Determine whether an authoritative server reset is actually required
-  // A reset is NOT required every time: a sanitized, unassigned AVAILABLE node is already eligible.
-  // A reset IS required if the server reports residual customer databases or if node was marked needing reset.
+  // Step 4: Authoritative reset and sanitization (only when required)
+  // A successfully sanitized, unassigned AVAILABLE node is already eligible.
+  // If the server has residual resources (e.g. backup.settings.v1, residual databases/users),
+  // perform authoritative Rust reset.
   const hasResidualDatabases = (serverStatus.database_count || 0) > 1 || (serverStatus.total_databases || 0) > 1;
   const hasResidualUsers = (serverStatus.user_count || 0) > 1;
-  const needsReset = (reservedNode as any).requiresReset || hasResidualDatabases || hasResidualUsers;
+  const needsReset = (reservedNode as any).requiresReset || !preCleanCheck.isClean || hasResidualDatabases || hasResidualUsers;
 
   if (needsReset) {
     try {
-      const targetInstanceId = reservedNode.serverIdentity || serverStatus.instanceId || 'primary';
       const resetResult = await client.resetInstance({
         instanceId: targetInstanceId,
         confirmation: 'RESET_INSTANCE',
@@ -887,6 +891,42 @@ export async function allocateAndProvisionInstance(
         throw new Error(`Authoritative reset returned unexpected state: ${resetResult.state || resetResult.status}`);
       }
 
+      // Verify post-reset clean state to ensure residual resources were actually purged
+      const postResetClean = await client.verifyCleanState(targetInstanceId);
+      if (!postResetClean.isClean) {
+        const postFailReason = postResetClean.reasons.join('; ');
+        const isBackupSetting = postFailReason.includes('backup.settings.v1') || postFailReason.includes('backup');
+        const conciseQuarantineMsg = isBackupSetting
+          ? `${reservedNode.name} requires reset: residual backup configuration.`
+          : `${reservedNode.name} reset incomplete: ${postFailReason}`;
+
+        // Preserve quarantine as mandated: do not silently ignore remaining settings!
+        await HostingNode.findOneAndUpdate(
+          { _id: reservedNode._id, currentAllocationId: allocationToken },
+          {
+            $set: {
+              status: 'QUARANTINED',
+              currentAssignedCount: 0,
+              quarantineReason: conciseQuarantineMsg,
+              cleanupFailureReason: postFailReason,
+            },
+            $unset: {
+              currentAllocationId: 1,
+              allocationExpiresAt: 1,
+              assignedInstanceId: 1,
+            },
+          }
+        );
+
+        instance.status = 'FAILED';
+        instance.provisioningStage = 'RESET_INCOMPLETE';
+        instance.lastProvisioningError = conciseQuarantineMsg;
+        await instance.save();
+
+        throw new Error(conciseQuarantineMsg);
+      }
+
+      // Reset succeeded and verified clean!
       if (resetResult.newGeneratedRootPassword) {
         masterPassword = resetResult.newGeneratedRootPassword;
       }
@@ -898,17 +938,22 @@ export async function allocateAndProvisionInstance(
             ? encrypt(resetResult.newGeneratedRootPassword)
             : reservedNode.encryptedDefaultRootPassword,
         },
-        $unset: { requiresReset: 1 },
+        $unset: { requiresReset: 1, quarantineReason: 1, cleanupFailureReason: 1 },
       });
     } catch (resetErr: unknown) {
       const resetMsg = resetErr instanceof Error ? resetErr.message : String(resetErr);
+      const isBackupSetting = resetMsg.includes('backup.settings.v1') || resetMsg.includes('backup');
+      const conciseQuarantineMsg = isBackupSetting
+        ? `${reservedNode.name} requires reset: residual backup configuration.`
+        : `${reservedNode.name} reset failed: ${resetMsg}`;
+
       await HostingNode.findOneAndUpdate(
         { _id: reservedNode._id, currentAllocationId: allocationToken },
         {
           $set: {
             status: 'QUARANTINED',
             currentAssignedCount: 0,
-            quarantineReason: `Authoritative pre-provision reset failed: ${resetMsg}. Requires manual recovery.`,
+            quarantineReason: conciseQuarantineMsg,
             cleanupFailureReason: resetMsg,
           },
           $unset: {
@@ -920,9 +965,9 @@ export async function allocateAndProvisionInstance(
       );
       instance.status = 'FAILED';
       instance.provisioningStage = 'RESET_FAILED';
-      instance.lastProvisioningError = resetMsg;
+      instance.lastProvisioningError = conciseQuarantineMsg;
       await instance.save();
-      throw new Error(`Pre-provisioning reset failed on node ${reservedNode.name}: ${resetMsg}`);
+      throw new Error(conciseQuarantineMsg);
     }
   }
 

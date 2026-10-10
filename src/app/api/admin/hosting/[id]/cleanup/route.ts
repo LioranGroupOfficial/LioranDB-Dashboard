@@ -122,10 +122,12 @@ export async function POST(
       });
     } else {
       // Post-cleanup verification failed or error occurred
-      const failureReason = purgeResult.error || 'Server reset failed.';
+      const failureReason = purgeResult.error?.includes('backup')
+        ? `${lockedNode.name} requires reset: residual backup configuration.`
+        : (purgeResult.error || 'Server reset failed.');
       lockedNode.status = 'QUARANTINED';
       lockedNode.healthStatus = 'DEGRADED';
-      lockedNode.cleanupFailureReason = failureReason;
+      lockedNode.cleanupFailureReason = purgeResult.error || 'Server reset failed.';
       lockedNode.quarantineReason = failureReason;
       lockedNode.adminNotes = `Administrator cleanup failed on ${now.toISOString()}: ${failureReason}`;
       await lockedNode.save();

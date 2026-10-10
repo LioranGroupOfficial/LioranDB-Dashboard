@@ -1163,7 +1163,7 @@ export class LioranDBAdminClient {
         });
       }
 
-      // Stage 4: Authoritatively verify engine health and responsiveness post-reset
+      // Stage 4: Authoritatively verify engine health and clean state post-reset
       const postStatus = await this.getServerStatus();
       const stateUpper = String(postStatus.state || postStatus.status || '').toUpperCase();
       const isHealthy = stateUpper === 'READY' || stateUpper === 'ACTIVE' || stateUpper === 'OK' || stateUpper === 'HEALTHY';
@@ -1184,6 +1184,32 @@ export class LioranDBAdminClient {
           instanceId: targetId,
           verifiedClean: false,
           error: `Post-reset health verification failed: ${failReason}`,
+        };
+      }
+
+      // Check authoritative clean state post-reset to verify all residual customer resources were eliminated
+      let cleanCheck = await this.verifyCleanState(targetId);
+      if (!cleanCheck.isClean) {
+        const cleanFailReason = cleanCheck.reasons.join('; ') || 'Residual customer resources detected';
+        logCleanupStage({
+          stage: 'VERIFICATION_FAILED',
+          instanceId: targetId,
+          nodeId: targetNodeId,
+          endpoint: this.endpoint,
+          isClean: false,
+          failureReason: cleanFailReason,
+        });
+
+        const isBackupSetting = cleanFailReason.includes('backup.settings.v1') || cleanFailReason.includes('backup');
+        const formattedErr = isBackupSetting
+          ? `Reset incomplete: residual backup configuration ('backup.settings.v1') remains after authoritative reset.`
+          : `Post-reset clean verification failed: ${cleanFailReason}`;
+
+        return {
+          success: false,
+          instanceId: targetId,
+          verifiedClean: false,
+          error: formattedErr,
         };
       }
 

@@ -158,7 +158,9 @@ export async function POST(
             status: 'QUARANTINED',
             healthStatus: 'DEGRADED',
             currentAssignedCount: 0,
-            quarantineReason: purgeResult.error || 'Server reset failed',
+            quarantineReason: purgeResult.error?.includes('backup')
+              ? `${lockedNode.name} requires reset: residual backup configuration.`
+              : (purgeResult.error || 'Server reset failed'),
             cleanupFailureReason: purgeResult.error || 'Server reset failed',
             adminNotes: `QUARANTINED: Admin-authorized purge failed: ${purgeResult.error || 'Reset failed'}`,
           },
