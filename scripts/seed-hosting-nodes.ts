@@ -18,10 +18,9 @@ for (const file of ['.env.local', '.env.production', '.env']) {
   if (fs.existsSync(full)) loadEnv({ path: full, override: false, quiet: true });
 }
 
-const { connectToDatabase, disconnectFromDatabase, HostingNode, ManagedDatabase, User } =
-  await import('../src/lib/db');
-const { encrypt } = await import('../src/lib/crypto');
-const { LioranDBAdminClient } = await import('../src/lib/liorandb-admin/client');
+import { connectToDatabase, disconnectFromDatabase, HostingNode, ManagedDatabase, User } from '../src/lib/db';
+import { encrypt } from '../src/lib/crypto';
+import { LioranDBAdminClient } from '../src/lib/liorandb-admin/client';
 
 const flags = new Set(process.argv.slice(2));
 const apply = flags.has('--apply');
@@ -213,6 +212,15 @@ async function run() {
   console.log('No customer records, databaseUsers, subscriptions, or Rust server data were modified.');
 }
 
-try { await run(); }
-catch (e) { console.error('FAILED:', e); process.exitCode = 1; }
-finally { await disconnectFromDatabase(); }
+async function main() {
+  try {
+    await run();
+  } catch (e) {
+    console.error('FAILED:', e);
+    process.exitCode = 1;
+  } finally {
+    await disconnectFromDatabase();
+  }
+}
+
+main();
