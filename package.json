@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "seed:admin": "tsx scripts/seed-admin.ts",
     "seed:dev": "tsx scripts/seed-dev.ts",
+    "seed:hosting": "tsx scripts/seed-hosting-nodes.ts",
     "test": "jest",
     "test:e2e": "playwright test"
   },
