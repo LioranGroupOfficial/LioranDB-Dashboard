@@ -33,6 +33,7 @@ export interface LioranDBConnectionUriOptions {
   scheme?: LioranDBScheme;
   tls?: boolean;
   transport?: 'grpc' | 'http';
+  allowHttpFallback?: boolean;
   appName?: string;
   authSource?: string;
   options?: Record<string, string | number | boolean>;
@@ -48,6 +49,7 @@ export interface ParsedLioranDBUri {
   databaseName: string;
   tls?: boolean;
   transport?: 'grpc' | 'http';
+  allowHttpFallback?: boolean;
   appName?: string;
   authSource?: string;
   options: Record<string, string>;
@@ -96,6 +98,9 @@ export function buildLioranDBConnectionUri(options: LioranDBConnectionUriOptions
   }
   if (options.transport) {
     queryParams.set('transport', options.transport);
+  }
+  if (options.allowHttpFallback !== undefined) {
+    queryParams.set('allowHttpFallback', options.allowHttpFallback ? 'true' : 'false');
   }
   if (options.appName) {
     queryParams.set('appName', options.appName);
@@ -153,6 +158,8 @@ export function parseLioranDBConnectionUri(uri: string): ParsedLioranDBUri {
   const tls = tlsParam === 'true' ? true : tlsParam === 'false' ? false : undefined;
   const transportParam = parsed.searchParams.get('transport');
   const transport = transportParam === 'grpc' || transportParam === 'http' ? transportParam : undefined;
+  const fallbackParam = parsed.searchParams.get('allowHttpFallback');
+  const allowHttpFallback = fallbackParam === 'true' ? true : fallbackParam === 'false' ? false : undefined;
   const appName = parsed.searchParams.get('appName') || undefined;
   const authSource = parsed.searchParams.get('authSource') || undefined;
 
@@ -171,6 +178,7 @@ export function parseLioranDBConnectionUri(uri: string): ParsedLioranDBUri {
     databaseName: database,
     tls,
     transport,
+    allowHttpFallback,
     appName,
     authSource,
     options: optionsMap,

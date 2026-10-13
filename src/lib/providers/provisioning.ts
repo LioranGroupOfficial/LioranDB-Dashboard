@@ -168,6 +168,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         scheme: isTls ? 'liorandb+https' : 'liorandb',
         tls: isTls,
         transport: 'grpc',
+        allowHttpFallback: false,
       });
 
       return {
@@ -206,6 +207,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         scheme: isTls ? 'liorandb+https' : 'liorandb',
         tls: isTls,
         transport: 'grpc',
+        allowHttpFallback: false,
       });
 
       instance.encryptedConnectionUri = encrypt(newUri);
@@ -290,6 +292,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         scheme: isTls ? 'liorandb+https' : 'liorandb',
         tls: isTls,
         transport: 'grpc',
+        allowHttpFallback: false,
       });
 
       instance.encryptedConnectionUri = encrypt(newUri);
@@ -1044,6 +1047,8 @@ export async function allocateAndProvisionInstance(
     try {
       const { LioranDBClient } = await import('@liorandb/driver');
       const testClient = await LioranDBClient.connect(deploymentResult.nativeConnectionUri, {
+        transport: 'grpc',
+        allowHttpFallback: false,
         timeoutMS: 10000,
         connectTimeoutMS: 5000,
         requestTimeoutMS: 10000,
@@ -1335,6 +1340,8 @@ export async function provisionInstance(
     try {
       const { LioranDBClient } = await import('@liorandb/driver');
       const testClient = await LioranDBClient.connect(deploymentResult.nativeConnectionUri, {
+        transport: 'grpc',
+        allowHttpFallback: false,
         timeoutMS: 10000,
         connectTimeoutMS: 5000,
         requestTimeoutMS: 10000,

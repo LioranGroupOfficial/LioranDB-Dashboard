@@ -51,6 +51,7 @@ export class Db {
 
 export class LioranDBClient {
   public uri: string;
+  public options?: any;
   private _connected = true;
 
   static async connect(uri: string, _options?: any): Promise<LioranDBClient> {
@@ -59,6 +60,7 @@ export class LioranDBClient {
 
   constructor(uri: string, _options?: any) {
     this.uri = uri;
+    this.options = _options;
   }
   async connect(): Promise<this> {
     this._connected = true;
@@ -155,9 +157,14 @@ export class ConfigurationError extends LioranDriverError {
   }
 }
 
-export function parseConnectionString(uri: string): any {
+export function parseConnectionString(uri: string, overrides: any = {}): any {
   try {
     const parsed = new URL(uri.replace(/^liorandb(\+https)?:\/\//, 'http://'));
+    const searchParams = parsed.searchParams;
+    const transport = overrides.transport || searchParams.get('transport') || 'grpc';
+    const allowHttpFallback = overrides.allowHttpFallback !== undefined
+      ? overrides.allowHttpFallback
+      : searchParams.get('allowHttpFallback') === 'true';
     return {
       protocol: 'liorandb',
       scheme: 'liorandb',
@@ -169,6 +176,8 @@ export function parseConnectionString(uri: string): any {
       username: parsed.username ? decodeURIComponent(parsed.username) : undefined,
       password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
       isLoopbackHost: parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost',
+      transport,
+      allowHttpFallback,
     };
   } catch {
     return {
@@ -180,6 +189,8 @@ export function parseConnectionString(uri: string): any {
       port: 443,
       database: 'lcs',
       isLoopbackHost: true,
+      transport: overrides.transport || 'grpc',
+      allowHttpFallback: overrides.allowHttpFallback ?? false,
     };
   }
 }

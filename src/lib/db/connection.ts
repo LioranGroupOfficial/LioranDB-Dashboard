@@ -110,8 +110,13 @@ export async function connectToDatabase(): Promise<{ client: LioranDBClient; db:
           parsed.port === 8443 ||
           (!parsed.isLoopbackHost && !uri.includes('127.0.0.1') && !uri.includes('localhost'));
 
+        const transport = (process.env.LIORANDB_TRANSPORT as 'grpc' | 'http' | 'auto') || 'grpc';
+        const allowHttpFallback = process.env.LIORANDB_ALLOW_HTTP_FALLBACK === 'true';
+
         const client = await LioranDBClient.connect(uri, {
           tls: isTls,
+          transport,
+          allowHttpFallback,
           timeoutMS: 15000,
           connectTimeoutMS: 10000,
           requestTimeoutMS: 15000,
