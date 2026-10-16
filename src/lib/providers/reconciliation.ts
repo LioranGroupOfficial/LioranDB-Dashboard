@@ -2,6 +2,7 @@ import { connectToDatabase, HostingNode, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient, logCleanupStage } from '@/lib/liorandb-admin/client';
 import { isLocalhost, resolveControlPlaneEndpoint } from '@/lib/liorandb-admin/url';
 import { getDockerManagementClient, extractDockerNodeId } from '@/lib/docker-management';
+import { recoverSingleNode } from './recovery';
 
 let activeReconciliationPromise: Promise<void> | null = null;
 let lastReconciliationCompletedAt = 0;
@@ -326,45 +327,56 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
         }
 
         // Handle QUARANTINED nodes:
-        // NEVER factory-reset automatically! Check physical health in read-only mode and preserve quarantine.
         if (node.status === 'QUARANTINED') {
-          const dockerNodeId = extractDockerNodeId(node);
-          const dockerClient = getDockerManagementClient();
-          let dockerRunning: boolean | undefined;
-          let dockerStatus: string | undefined;
+          // If storage is explicitly DIRTY, preserve quarantine strictly (fail closed)
+          if (node.cleanStatus === 'DIRTY') {
+            const dockerNodeId = extractDockerNodeId(node);
+            const dockerClient = getDockerManagementClient();
+            let dockerRunning: boolean | undefined;
+            let dockerStatus: string | undefined;
 
-          if (dockerNodeId && dockerClient.isConfigured()) {
-            try {
-              const dState = await dockerClient.getNodeState(dockerNodeId);
-              dockerRunning = dState.running;
-              dockerStatus = dState.status;
-            } catch {
-              // Read-only inspection notice
+            if (dockerNodeId && dockerClient.isConfigured()) {
+              try {
+                const dState = await dockerClient.getNodeState(dockerNodeId);
+                dockerRunning = dState.running;
+                dockerStatus = dState.status;
+              } catch {
+                // Read-only inspection notice
+              }
             }
+
+            try {
+              const client = LioranDBAdminClient.forNode(node);
+              const status = await client.getServerStatus();
+              const healthStatus = status.status === 'HEALTHY' ? 'HEALTHY' : 'DEGRADED';
+
+              await HostingNode.findByIdAndUpdate(node._id, {
+                $set: {
+                  healthStatus,
+                  serverIdentity: status.instanceId || node.serverIdentity,
+                  serverVersion: status.version || node.serverVersion,
+                  lastHealthCheckAt: new Date(),
+                  ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
+                },
+              });
+            } catch {
+              await HostingNode.findByIdAndUpdate(node._id, {
+                $set: {
+                  healthStatus: 'UNREACHABLE',
+                  lastHealthCheckAt: new Date(),
+                  ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
+                },
+              });
+            }
+            continue;
           }
 
+          // Node is NOT dirty (storage is verified clean or unassigned fresh node):
+          // Execute bounded automatic container startup & recovery probe (Requirement 2 & 7)
           try {
-            const client = LioranDBAdminClient.forNode(node);
-            const status = await client.getServerStatus();
-            const healthStatus = status.status === 'HEALTHY' ? 'HEALTHY' : 'DEGRADED';
-
-            await HostingNode.findByIdAndUpdate(node._id, {
-              $set: {
-                healthStatus,
-                serverIdentity: status.instanceId || node.serverIdentity,
-                serverVersion: status.version || node.serverVersion,
-                lastHealthCheckAt: new Date(),
-                ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
-              },
-            });
-          } catch {
-            await HostingNode.findByIdAndUpdate(node._id, {
-              $set: {
-                healthStatus: 'UNREACHABLE',
-                lastHealthCheckAt: new Date(),
-                ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
-              },
-            });
+            await recoverSingleNode(node);
+          } catch (recovErr) {
+            console.warn(`[Reconciliation] Automatic recovery notice for node ${node.name}:`, (recovErr as Error).message);
           }
           continue;
         }
@@ -406,6 +418,16 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
             }
           );
         } catch {
+          // If the container was stopped and node storage is clean, trigger automatic container startup
+          if (dockerRunning === false && node.cleanStatus !== 'DIRTY') {
+            try {
+              await recoverSingleNode(node);
+              continue;
+            } catch (startErr) {
+              console.warn(`[Reconciliation] Auto-start attempt failed for ${node.name}:`, (startErr as Error).message);
+            }
+          }
+
           await HostingNode.findOneAndUpdate(
             { _id: node._id, status: { $in: ['AVAILABLE', 'ACTIVE'] } },
             {

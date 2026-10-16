@@ -40,11 +40,14 @@ export async function GET(_req: NextRequest) {
 
         return {
           ...node,
+          _id: node._id.toString(),
           maxCapacity: 1,
           currentAssignedCount: assignedCount,
           assignedInstanceName: effectiveInstance?.name || undefined,
           assignedInstanceStatus: effectiveInstance?.status || undefined,
           assignedDatabaseId: effectiveInstance?._id?.toString() || undefined,
+          cleanStatus: (node as any).cleanStatus || 'NOT_VERIFIED',
+          volumeCleanVerified: Boolean((node as any).volumeCleanVerified),
         };
       })
     );

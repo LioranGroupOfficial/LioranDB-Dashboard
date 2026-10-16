@@ -22,6 +22,8 @@ import {
   Radio,
   Check,
   Activity,
+  Box,
+  HardDrive,
 } from 'lucide-react';
 
 export interface AdminHostingNodeItem {
@@ -51,6 +53,14 @@ export interface AdminHostingNodeItem {
   lastHealthCheckAt?: string;
   quarantineReason?: string;
   cleanupFailureReason?: string;
+  dockerNodeId?: string;
+  dockerContainerName?: string;
+  dockerVolumeName?: string;
+  dockerStatus?: string;
+  dockerRunning?: boolean;
+  dockerLastInspectedAt?: string;
+  cleanStatus?: 'CLEAN' | 'DIRTY' | 'NOT_VERIFIED' | 'PENDING_VERIFICATION' | 'UNKNOWN';
+  volumeCleanVerified?: boolean;
   lastResetAt?: string;
   lastCredentialRotationAt?: string;
   notes?: string;
@@ -74,8 +84,10 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   const [editingNode, setEditingNode] = useState<AdminHostingNodeItem | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Testing & Diagnostics
+  // Testing, Recovery & Diagnostics
   const [testingNodeId, setTestingNodeId] = useState<string | null>(null);
+  const [recoveringNodeId, setRecoveringNodeId] = useState<string | null>(null);
+  const [bulkRecovering, setBulkRecovering] = useState(false);
   const [purgingNodeId, setPurgingNodeId] = useState<string | null>(null);
   const [togglingNodeId, setTogglingNodeId] = useState<string | null>(null);
   const [testingForm, setTestingForm] = useState(false);
@@ -169,6 +181,68 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       setFeedbackMsg({ type: 'error', text: msg });
     } finally {
       setTestingNodeId(null);
+    }
+  }
+
+  // Automatic Node Recovery (Single Node)
+  async function handleRecoverNode(node: AdminHostingNodeItem) {
+    setRecoveringNodeId(node._id);
+    setLoading(true);
+    setFeedbackMsg(null);
+    try {
+      const res = await fetch(`/api/admin/hosting/${node._id}/recover`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFeedbackMsg({
+          type: 'success',
+          text: data.message || `Node "${node.name}" successfully recovered and returned to AVAILABLE.`,
+        });
+      } else {
+        setFeedbackMsg({
+          type: 'error',
+          text: data.error || `Recovery failed for "${node.name}".`,
+        });
+      }
+      await refreshNodes();
+    } catch (err: unknown) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Network error executing node recovery',
+      });
+    } finally {
+      setRecoveringNodeId(null);
+      setLoading(false);
+    }
+  }
+
+  // Bulk Automatic Node Recovery (All Clean Unassigned Nodes)
+  async function handleRecoverAll() {
+    setBulkRecovering(true);
+    setLoading(true);
+    setFeedbackMsg(null);
+    try {
+      const res = await fetch('/api/admin/hosting/recover', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFeedbackMsg({
+          type: 'success',
+          text: data.message || `Bulk recovery finished: ${data.recoveredCount} recovered, ${data.skippedCount} skipped, ${data.failedCount} failed.`,
+        });
+      } else {
+        setFeedbackMsg({
+          type: 'error',
+          text: data.error || 'Bulk recovery failed.',
+        });
+      }
+      await refreshNodes();
+    } catch (err: unknown) {
+      setFeedbackMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Network error during bulk recovery',
+      });
+    } finally {
+      setBulkRecovering(false);
+      setLoading(false);
     }
   }
 
@@ -492,9 +566,10 @@ export default function AdminHostingClient({ initialNodes }: Props) {
         n.currentAssignedCount === 0 &&
         !n.quarantineReason
     ).length;
+    const quarantinedNodes = nodes.filter((n) => n.status === 'QUARANTINED').length;
     const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0 || n.status === 'ASSIGNED').length;
 
-    return { totalNodes, healthyNodes, availableNodes, totalAssigned };
+    return { totalNodes, healthyNodes, availableNodes, quarantinedNodes, totalAssigned };
   }, [nodes]);
 
   return (
@@ -509,6 +584,17 @@ export default function AdminHostingClient({ initialNodes }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={loading || bulkRecovering}
+            onClick={handleRecoverAll}
+            title="Automatically recover unassigned clean stopped nodes to AVAILABLE"
+            className="btn-secondary py-2 px-3 text-xs inline-flex items-center gap-1.5"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${bulkRecovering ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{bulkRecovering ? 'Recovering...' : 'Recover All'}</span>
+          </button>
+
           <button
             type="button"
             disabled={loading}
@@ -552,7 +638,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="card p-4">
           <div className="flex items-center justify-between text-[var(--text-muted)]">
             <span className="text-xs font-mono uppercase tracking-wider">Total Hosting Nodes</span>
@@ -583,6 +669,19 @@ export default function AdminHostingClient({ initialNodes }: Props) {
           <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.availableNodes}</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
             Ready for instant dedicated provisioning
+          </p>
+        </div>
+
+        <div className="card p-4">
+          <div className="flex items-center justify-between text-[var(--text-muted)]">
+            <span className="text-xs font-mono uppercase tracking-wider">Quarantined</span>
+            <AlertCircle className={`w-4 h-4 ${stats.quarantinedNodes > 0 ? 'text-red-500' : 'opacity-70'}`} />
+          </div>
+          <p className={`text-2xl font-bold font-mono mt-2 ${stats.quarantinedNodes > 0 ? 'text-red-500' : 'text-[var(--text-strong)]'}`}>
+            {stats.quarantinedNodes}
+          </p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
+            {stats.quarantinedNodes > 0 ? 'Isolated: recovery available' : 'Zero quarantined nodes'}
           </p>
         </div>
 
@@ -626,6 +725,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
               <option value="ACTIVE" className="bg-[var(--surface)] text-[var(--text-primary)]">Active</option>
               <option value="RESERVED" className="bg-[var(--surface)] text-[var(--text-primary)]">Reserved</option>
               <option value="PROVISIONING" className="bg-[var(--surface)] text-[var(--text-primary)]">Provisioning</option>
+              <option value="QUARANTINED" className="bg-[var(--surface)] text-[var(--text-primary)]">Quarantined</option>
               <option value="DRAINING" className="bg-[var(--surface)] text-[var(--text-primary)]">Draining</option>
               <option value="RESETTING" className="bg-[var(--surface)] text-[var(--text-primary)]">Resetting</option>
               <option value="FAILED" className="bg-[var(--surface)] text-[var(--text-primary)]">Failed</option>
@@ -704,17 +804,54 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       </td>
 
                       <td className="px-4 py-3.5 text-xs">
-                        <div>
+                        {/* Control Plane */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-[var(--text-muted)] font-mono">Rust:</span>
                           <span
                             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] text-[9px] font-mono font-semibold uppercase tracking-wider ${
                               node.healthStatus === 'HEALTHY'
                                 ? 'bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)]'
+                                : node.healthStatus === 'DEGRADED'
+                                ? 'bg-[var(--surface-soft)] text-amber-500 border border-[var(--border)]'
                                 : 'bg-[var(--surface-soft)] text-[var(--text-muted)] border border-[var(--border)]'
                             }`}
                           >
                             {node.healthStatus || 'UNKNOWN'}
                           </span>
                         </div>
+
+                        {/* Docker Container State */}
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          <span className="text-[10px] text-[var(--text-muted)] font-mono">Docker:</span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] text-[9px] font-mono font-semibold uppercase tracking-wider ${
+                              node.dockerRunning || node.dockerStatus === 'running'
+                                ? 'bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)]'
+                                : 'bg-[var(--surface-soft)] text-[var(--text-muted)] border border-[var(--border)]'
+                            }`}
+                          >
+                            <Box className="w-2.5 h-2.5" />
+                            {node.dockerStatus ? node.dockerStatus.toUpperCase() : node.dockerRunning ? 'RUNNING' : 'STOPPED'}
+                          </span>
+                        </div>
+
+                        {/* Storage Cleanliness */}
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          <span className="text-[10px] text-[var(--text-muted)] font-mono">Storage:</span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] text-[9px] font-mono font-semibold uppercase tracking-wider ${
+                              node.cleanStatus === 'CLEAN'
+                                ? 'bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)]'
+                                : node.cleanStatus === 'DIRTY'
+                                ? 'bg-red-500/10 text-red-500 dark:text-red-400 border border-red-500/20'
+                                : 'bg-[var(--surface-soft)] text-[var(--text-muted)] border border-[var(--border)]'
+                            }`}
+                          >
+                            <HardDrive className="w-2.5 h-2.5" />
+                            {node.cleanStatus || 'NOT_VERIFIED'}
+                          </span>
+                        </div>
+
                         {node.lastHealthCheckAt && (
                           <div className="text-[10px] text-[var(--text-muted)] mt-1 font-mono">
                             Checked: {new Date(node.lastHealthCheckAt).toLocaleTimeString()}
@@ -730,7 +867,11 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                               QUARANTINED (0/1)
                             </span>
                             <div className="text-[10px] text-red-500 dark:text-red-400 font-sans truncate max-w-[140px]" title={node.quarantineReason || `${node.name} unavailable: reset required.`}>
-                              Reset Required
+                              {node.cleanStatus === 'DIRTY'
+                                ? 'Storage Dirty (Fail-Closed)'
+                                : node.cleanStatus === 'CLEAN'
+                                ? 'Stopped Clean (Recoverable)'
+                                : 'Reset Required'}
                             </div>
                           </div>
                         ) : node.status === 'RESETTING' ? (
@@ -807,7 +948,11 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                               className="text-[10px] text-red-500 dark:text-red-400 max-w-[200px] font-sans break-words mt-1"
                               title={node.quarantineReason || `${node.name} unavailable: reset required.`}
                             >
-                              {node.quarantineReason?.includes('unavailable') || node.quarantineReason?.includes('reset required')
+                              {node.cleanStatus === 'DIRTY'
+                                ? 'Storage Dirty (Fail-Closed)'
+                                : node.cleanStatus === 'CLEAN'
+                                ? 'Stopped Clean (Recoverable)'
+                                : node.quarantineReason?.includes('unavailable') || node.quarantineReason?.includes('reset required')
                                 ? node.quarantineReason
                                 : `${node.name} unavailable: reset required.`}
                             </div>
@@ -827,6 +972,24 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                             <Activity className={`w-3 h-3 ${testingNodeId === node._id ? 'animate-spin text-[var(--text-muted)]' : 'text-[var(--text-strong)]'}`} />
                             <span>{testingNodeId === node._id ? 'Testing...' : 'Test'}</span>
                           </button>
+                          {node.currentAssignedCount === 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRecoverNode(node)}
+                              disabled={recoveringNodeId === node._id || node.status === 'AVAILABLE'}
+                              title={
+                                node.status === 'AVAILABLE'
+                                  ? 'Node is already available'
+                                  : node.cleanStatus === 'DIRTY'
+                                  ? 'Node storage is dirty. Manual reset required.'
+                                  : 'Start stopped container and restore to AVAILABLE if storage is clean'
+                              }
+                              className="btn-secondary px-2 py-1 text-[11px] inline-flex items-center gap-1 text-[var(--text-strong)] disabled:opacity-40"
+                            >
+                              <RotateCw className={`w-3 h-3 ${recoveringNodeId === node._id ? 'animate-spin text-[var(--text-muted)]' : 'text-[var(--text-strong)]'}`} />
+                              <span>{recoveringNodeId === node._id ? 'Recovering...' : 'Recover'}</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => openEditModal(node)}
@@ -1284,6 +1447,24 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                     Target Endpoint: {diagnosticModal.data.endpoint}
                   </p>
                 )}
+                {diagnosticModal.data?.docker?.checked && (
+                  <div className="bg-[var(--surface-soft)] border border-[var(--border)] rounded-[7px] p-2.5 text-xs font-mono space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-muted)]">Docker State:</span>
+                      <span className="font-bold text-[var(--text-strong)]">
+                        {diagnosticModal.data.docker.status?.toUpperCase() || (diagnosticModal.data.docker.running ? 'RUNNING' : 'STOPPED')}
+                      </span>
+                    </div>
+                    {diagnosticModal.data?.cleanStatus && (
+                      <div className="flex justify-between">
+                        <span className="text-[var(--text-muted)]">Storage Sanitation:</span>
+                        <span className="font-bold text-[var(--text-strong)]">
+                          {diagnosticModal.data.cleanStatus}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-3">
@@ -1310,6 +1491,22 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                     <span className="text-[var(--text-muted)]">Health Status:</span>
                     <span className="text-[var(--text-strong)] font-bold">{diagnosticModal.data?.healthStatus || 'HEALTHY'}</span>
                   </div>
+                  {diagnosticModal.data?.docker?.checked && (
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-muted)]">Docker Container:</span>
+                      <span className="font-bold text-[var(--text-strong)]">
+                        {diagnosticModal.data.docker.status?.toUpperCase() || (diagnosticModal.data.docker.running ? 'RUNNING' : 'STOPPED')}
+                      </span>
+                    </div>
+                  )}
+                  {diagnosticModal.data?.cleanStatus && (
+                    <div className="flex justify-between">
+                      <span className="text-[var(--text-muted)]">Storage Sanitation:</span>
+                      <span className="font-bold text-[var(--text-strong)]">
+                        {diagnosticModal.data.cleanStatus}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-[var(--text-muted)]">Allocation Status:</span>
                     <span className="font-bold text-[var(--text-strong)]">{diagnosticModal.data?.status || 'AVAILABLE'}</span>
