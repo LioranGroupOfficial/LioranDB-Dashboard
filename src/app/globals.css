@@ -62,6 +62,9 @@
     --card-shadow: 2px 2px 0px rgba(0, 0, 0, 0.08);
     --sketch-shadow: 2px 2px 0px #111111;
     --sketch-shadow-sm: 1px 1px 0px #111111;
+
+    /* Serif Fallback */
+    --font-serif: 'Newsreader', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
   }
 
   .dark {
