@@ -5,6 +5,7 @@ import { createAuditLog } from '@/lib/audit';
 import { encrypt } from '@/lib/crypto';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin/client';
 import { parseAndNormalizeEndpoint } from '../route';
+import { extractDockerNodeId, resolveDockerVolumeName, getDockerManagementClient, type DockerContainerState, type DockerContainerStats } from '@/lib/docker-management';
 import type { HostingAllocationMode, HostingNodeHealthStatus } from '@/lib/db/models/HostingNode';
 
 export async function GET(
@@ -28,12 +29,43 @@ export async function GET(
       .select('name status customerId planId createdAt')
       .lean();
 
+    const dockerNodeId = extractDockerNodeId(node);
+    let dockerInfo: {
+      nodeId: string;
+      containerName: string;
+      volumeName: string;
+      state: DockerContainerState | null;
+      stats: DockerContainerStats | null;
+    } | null = null;
+
+    if (dockerNodeId) {
+      try {
+        const dockerClient = getDockerManagementClient();
+        if (dockerClient.isConfigured()) {
+          const [dState, dStats] = await Promise.allSettled([
+            dockerClient.getNodeState(dockerNodeId),
+            dockerClient.getNodeStats(dockerNodeId),
+          ]);
+          dockerInfo = {
+            nodeId: dockerNodeId,
+            containerName: `/liorandb-${dockerNodeId}`,
+            volumeName: resolveDockerVolumeName(dockerNodeId),
+            state: dState.status === 'fulfilled' ? dState.value : null,
+            stats: dStats.status === 'fulfilled' ? dStats.value : null,
+          };
+        }
+      } catch {
+        // Fall back gracefully if docker API is temporarily unreachable
+      }
+    }
+
     return NextResponse.json({
       success: true,
       node: {
         ...node,
         currentAssignedCount: assignedInstances.length,
         instances: assignedInstances,
+        docker: dockerInfo,
       },
     });
   } catch (error: unknown) {
@@ -93,6 +125,15 @@ export async function PUT(
     }
 
     if (body.defaultRootUsername !== undefined) node.defaultRootUsername = body.defaultRootUsername.trim();
+    if (body.volumeCleanVerified !== undefined) {
+      node.volumeCleanVerified = Boolean(body.volumeCleanVerified);
+      if (node.volumeCleanVerified) {
+        node.volumeCleanVerifiedAt = new Date();
+        node.cleanStatus = 'CLEAN';
+      } else {
+        node.cleanStatus = 'DIRTY';
+      }
+    }
     if (body.status !== undefined) {
       if (body.status === 'AVAILABLE') {
         const activeCount = await ManagedDatabase.countDocuments({
@@ -101,6 +142,11 @@ export async function PUT(
         });
         if (activeCount > 0 || node.currentAssignedCount > 0) {
           return NextResponse.json({ error: 'Cannot set node status to AVAILABLE while active databases are assigned.' }, { status: 400 });
+        }
+        if (node.cleanStatus === 'DIRTY' || node.volumeCleanVerified === false) {
+          return NextResponse.json({
+            error: 'Cannot set node status to AVAILABLE while storage state is DIRTY or unverified. Physical volume cleanup must be authoritatively completed before reusing the node.',
+          }, { status: 400 });
         }
       }
       node.status = body.status;
@@ -111,6 +157,26 @@ export async function PUT(
     node.maxCapacity = 1;
     if (body.notes !== undefined) node.notes = body.notes;
     if (body.isDefault !== undefined) node.isDefault = Boolean(body.isDefault);
+
+    // Detect and bind Docker node container identity if matches cx01..cx07
+    const detectedDockerNodeId = extractDockerNodeId(node);
+    if (detectedDockerNodeId) {
+      node.dockerNodeId = detectedDockerNodeId;
+      node.dockerContainerName = `/liorandb-${detectedDockerNodeId}`;
+      node.dockerVolumeName = resolveDockerVolumeName(detectedDockerNodeId);
+
+      try {
+        const dockerClient = getDockerManagementClient();
+        if (dockerClient.isConfigured()) {
+          const dState = await dockerClient.getNodeState(detectedDockerNodeId);
+          node.dockerStatus = dState.status;
+          node.dockerRunning = dState.running;
+          node.dockerLastInspectedAt = new Date();
+        }
+      } catch {
+        // Fall back gracefully if docker API is temporarily unreachable
+      }
+    }
 
     // Run live health check against Rust control plane
     try {

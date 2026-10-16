@@ -5,6 +5,7 @@ import { LioranDBAdminClient } from '@/lib/liorandb-admin';
 import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import { AppError } from '@/lib/errors';
 import { rateLimit } from '@/lib/rate-limit';
+import { extractDockerNodeId, getDockerManagementClient, type DockerContainerState, type DockerContainerStats } from '@/lib/docker-management';
 import type { IDatabaseUser } from '@/lib/db/models/ManagedDatabase';
 
 interface PopulatedActor {
@@ -48,8 +49,43 @@ export async function GET(
     }
 
     // Get live/cached server status via control plane client
-    const client = await LioranDBAdminClient.forInstanceAsync(instance as any);
-    const serverStatus = await client.getServerStatus();
+    let serverStatus: any = null;
+    try {
+      const client = await LioranDBAdminClient.forInstanceAsync(instance as any);
+      serverStatus = await client.getServerStatus();
+    } catch (statusErr) {
+      serverStatus = {
+        status: 'UNREACHABLE',
+        error: (statusErr as Error).message || 'Control plane unreachable',
+      };
+    }
+
+    // Inspect Docker container state & stats for the associated hosting node
+    const dockerNodeId = (instance as any).dockerNodeId || extractDockerNodeId(instance.hostingNodeId) || extractDockerNodeId(instance);
+    let dockerContainer: {
+      nodeId: string;
+      state: DockerContainerState | null;
+      stats: DockerContainerStats | null;
+    } | null = null;
+
+    if (dockerNodeId) {
+      try {
+        const dockerClient = getDockerManagementClient();
+        if (dockerClient.isConfigured()) {
+          const [dState, dStats] = await Promise.allSettled([
+            dockerClient.getNodeState(dockerNodeId),
+            dockerClient.getNodeStats(dockerNodeId),
+          ]);
+          dockerContainer = {
+            nodeId: dockerNodeId,
+            state: dState.status === 'fulfilled' ? dState.value : null,
+            stats: dStats.status === 'fulfilled' ? dStats.value : null,
+          };
+        }
+      } catch {
+        // Safe fallback if docker API is temporarily unreachable
+      }
+    }
 
     // Calculate current billing estimate
     const currentPeriod = getCurrentMonthPeriod();
@@ -126,6 +162,8 @@ export async function GET(
             }
           : null,
         databaseUsers: safeUsers,
+        dockerNodeId: (instance as any).dockerNodeId || dockerNodeId || null,
+        dockerContainer,
         serverStatus,
         estimate: {
           periodStart: currentPeriod.start.toISOString(),

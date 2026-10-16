@@ -124,3 +124,42 @@ export interface LioranProvisioningProvider {
 ### Telemetry Interface (`LioranTelemetryProvider`)
 Provides hooks for instance health status, IOPS, read/write ops, and document counts.
 
+---
+
+## 7. Dual Control Plane Architecture
+
+The hosting management infrastructure operates two strictly decoupled management layers:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Next.js Control Plane                             │
+│                  (https://app.liorandb.com / Admin & API)                    │
+└──────────────────────┬───────────────────────────────┬──────────────────────┘
+                       │                               │
+                       ▼                               ▼
+     ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+     │   Docker Management Control      │   │     Rust Database Control        │
+     │              Plane               │   │              Plane               │
+     │    (https://pan.liorandb.com)    │   │  (*.manage.db.liorandb.com)      │
+     ├──────────────────────────────────┤   ├──────────────────────────────────┤
+     │ Headers:                         │   │ Headers:                         │
+     │   X-Lioran-Gateway-Token         │   │   Authorization: Bearer <token>  │
+     │   X-Lioran-Panel-Key             │   │                                  │
+     │ Client:                          │   │ Client:                          │
+     │   LioranDBDockerManagementClient │   │   LioranDBAdminClient            │
+     │ Responsibilities:                │   │ Responsibilities:                │
+     │   • Container state & metrics    │   │   • Database engine readiness    │
+     │   • Start / Stop / Restart       │   │   • Root credential bootstrap    │
+     │   • Pause / Unpause              │   │   • Customer DB users/passwords  │
+     │   • Physical volume deletion*    │   │   • Logical engine resets        │
+     └──────────────────────────────────┘   └──────────────────────────────────┘
+```
+
+### Strict Separation & Security Invariants
+
+1. **Decoupled Roles:** The Rust admin client handles database tables and users; it never manages Docker processes. The Docker client manages container processes; it never provisions database users or writes database files.
+2. **Strict Allowlist:** All Docker node operations are validated against the immutable allowlist `['cx01', 'cx02', 'cx03', 'cx04', 'cx05', 'cx06', 'cx07']`. Out-of-bounds requests are rejected before network transmission.
+3. **Fail-Closed Storage Safety:** Deleting a customer database terminates billing and stops the Docker container immediately. Because physical volume deletion is not yet deployed on `pan.liorandb.com`, the node transitions to `QUARANTINED` with `cleanStatus = 'DIRTY'`. It cannot be assigned to another customer until physical volume sanitization is verified.
+4. **Credential Isolation:** Gateway tokens (`LIORANDB_MANAGEMENT_GATEWAY_TOKEN`) and panel keys (`LIORANDB_CONTROL_PLANE_KEY`) are kept server-side only and are never exposed to browser bundles or customer responses.
+
+

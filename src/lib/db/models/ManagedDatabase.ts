@@ -73,6 +73,8 @@ export interface IManagedDatabase extends Document {
   allocationToken?: string; // Fencing token matching HostingNode.currentAllocationId
   provisioningStage?: string; // Explicit sub-stage during provisioning
   lastProvisioningError?: string; // Stored error message on failure
+  dockerNodeId?: string;
+  lifecycleOperationId?: string;
   grpcUrl?: string;
   grpcPort?: number;
   createdAt: Date;
@@ -157,6 +159,8 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
     allocationToken: { type: String, index: true },
     provisioningStage: { type: String },
     lastProvisioningError: { type: String },
+    dockerNodeId: { type: String, trim: true },
+    lifecycleOperationId: { type: String, trim: true },
   },
   { timestamps: true }
 );

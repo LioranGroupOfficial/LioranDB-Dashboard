@@ -67,6 +67,16 @@ export interface IHostingNode extends Document {
   notes?: string;
   adminNotes?: string;
   isDefault: boolean;
+  // Docker Management Integration Fields
+  dockerNodeId?: string; // "cx01".."cx07"
+  dockerContainerName?: string; // "/liorandb-cx01"
+  dockerStatus?: string; // "running" | "exited" | "paused"
+  dockerRunning?: boolean;
+  dockerLastInspectedAt?: Date;
+  dockerVolumeName?: string; // "cx01-data"
+  volumeCleanVerified?: boolean;
+  volumeCleanVerifiedAt?: Date;
+  storageGeneration?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -137,6 +147,15 @@ const HostingNodeSchema = new Schema<IHostingNode>(
     notes: { type: String },
     adminNotes: { type: String },
     isDefault: { type: Boolean, default: false },
+    dockerNodeId: { type: String, trim: true },
+    dockerContainerName: { type: String, trim: true },
+    dockerStatus: { type: String, trim: true },
+    dockerRunning: { type: Boolean },
+    dockerLastInspectedAt: { type: Date },
+    dockerVolumeName: { type: String, trim: true },
+    volumeCleanVerified: { type: Boolean, default: false },
+    volumeCleanVerifiedAt: { type: Date },
+    storageGeneration: { type: String, trim: true },
   },
   { timestamps: true }
 );

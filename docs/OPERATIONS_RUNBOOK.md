@@ -86,3 +86,26 @@ Maintain accurate subscription statuses and record manual bank/UPI payments.
 - **Customer Visibility:** Public replies sent by staff are emailed to the customer and visible on their ticket thread.
 - **Internal Notes:** Check the **Post as internal note** box to document investigation findings. Internal notes are highlighted in gold/amber for staff and are never transmitted or exposed to customer sessions.
 
+---
+
+## 6. Hosting Node Physical Sanitization & Quarantine SOP
+
+### Trigger
+When a customer terminates an instance, the system executes fail-closed safety:
+1. Locks the hosting node (`RESETTING`).
+2. Stops the Docker container (`POST /v1/nodes/{cx}/stop` via `https://pan.liorandb.com`).
+3. Terminates the database record and stops usage billing immediately.
+4. Because automated physical volume deletion is not yet deployed on the Docker management panel, the system flags the node as `QUARANTINED` with `cleanStatus = 'DIRTY'` and `volumeCleanVerified = false`.
+
+### SRE Action Checklist
+1. **Container Isolation:** Verify the stopped container corresponds to the intended node (`cx01`..`cx07`). Verify the other 6 customer containers remain untouched and operational.
+2. **Physical Volume Reset:** On the Docker host server, remove and recreate the empty volume for that specific node:
+   - Volume naming convention: `cx01-data`, `cx02-data`, ..., `cx07-data`.
+   - Never run global pruning or touch volumes of active neighboring nodes.
+3. **Verify Empty State:** Confirm no residual customer files or database journals remain.
+4. **Release Quarantine:**
+   - In the Admin Panel (`/admin/hosting`) or via `PUT /api/admin/hosting/{id}`, set `volumeCleanVerified = true`.
+   - The system transitions `cleanStatus` to `CLEAN`.
+   - Update node status to `AVAILABLE` to return the node to the provisioning pool.
+
+

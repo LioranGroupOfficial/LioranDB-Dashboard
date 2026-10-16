@@ -60,6 +60,9 @@ function nodeConfig(index: number) {
     defaultRootUsername: 'admin',
     allocationMode: 'DEDICATED' as const,
     maxCapacity: 1,
+    dockerNodeId: id,
+    dockerContainerName: `/liorandb-${id}`,
+    dockerVolumeName: `${id}-data`,
   };
 }
 
@@ -154,6 +157,7 @@ async function run() {
       serverIdentity: result.serverIdentity,
       serverVersion: result.serverVersion || '2.4.1',
       cleanStatus: 'NOT_VERIFIED',
+      volumeCleanVerified: false,
       status: 'QUARANTINED',
       currentAssignedCount: 0,
       quarantineReason: result.error || 'New/recreated node requires authoritative server clean-state verification',
@@ -182,6 +186,9 @@ async function run() {
         controlPlaneEndpoint: cfg.controlPlaneEndpoint,
         defaultRootUsername: existing.defaultRootUsername || 'admin',
         maxCapacity: 1,
+        dockerNodeId: cfg.id,
+        dockerContainerName: `/liorandb-${cfg.id}`,
+        dockerVolumeName: `${cfg.id}-data`,
       };
       if (hasToken) patch.encryptedControlPlaneToken = encrypt(nodeToken);
       if (result.healthStatus !== 'HEALTHY' && existing.status === 'AVAILABLE') {

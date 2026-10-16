@@ -244,3 +244,29 @@ Posts staff reply or internal team note.
   }
   ```
 
+---
+
+## 7. Infrastructure Docker Management API (`https://pan.liorandb.com`)
+
+The internal Docker Management gateway communicates via authenticated headers:
+- `X-Lioran-Gateway-Token`: Required infrastructure token for reverse proxy admission.
+- `X-Lioran-Panel-Key`: Required authorization key for container operations.
+
+Supported Container Endpoints:
+| Method | Path | Action |
+|---|---|---|
+| `GET` | `/health` | Gateway health check |
+| `GET` | `/v1/nodes` | List managed containers |
+| `GET` | `/v1/nodes/{cx}/state` | Inspect container status & running flag |
+| `GET` | `/v1/nodes/{cx}/stats` | Retrieve CPU, memory, network & block I/O |
+| `POST` | `/v1/nodes/{cx}/start` | Start container process |
+| `POST` | `/v1/nodes/{cx}/stop` | Stop container process |
+| `POST` | `/v1/nodes/{cx}/restart` | Restart container process |
+| `POST` | `/v1/nodes/{cx}/pause` | Pause container process |
+| `POST` | `/v1/nodes/{cx}/unpause` | Resume container process |
+
+*Allowed Node IDs:* `cx01`, `cx02`, `cx03`, `cx04`, `cx05`, `cx06`, `cx07`.  
+*Volume Naming:* `cx01-data` .. `cx07-data`.  
+*Automated Volume Reset:* Not supported on the backend panel. The lifecycle fails closed into quarantine until safe physical cleanup is confirmed.
+
+

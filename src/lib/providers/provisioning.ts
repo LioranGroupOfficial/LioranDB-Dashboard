@@ -22,6 +22,12 @@ import { buildLioranDBConnectionUri } from '../liorandb-admin/uri';
 import { resolveControlPlaneEndpoint } from '../liorandb-admin/url';
 import { LioranDBAdminError, LioranDBUnreachableError } from '../liorandb-admin/errors';
 import { reconcileHostingNodes } from './reconciliation';
+import {
+  getDockerManagementClient,
+  extractDockerNodeId,
+  resolveDockerVolumeName,
+  type ResetAuthorization,
+} from '../docker-management';
 
 export interface DeploymentParams {
   customerId: string;
@@ -62,7 +68,7 @@ export interface LioranProvisioningProvider {
   resumeDeployment(providerDeploymentId: string): Promise<{ success: boolean; error?: string }>;
   rotateCredentials(instanceId: string): Promise<CredentialResult>;
   resetDeployment(instanceId: string, confirmation: string): Promise<{ success: boolean; error?: string }>;
-  terminateDeployment(instanceId: string): Promise<{ success: boolean; error?: string }>;
+  terminateDeployment(instanceId: string): Promise<{ success: boolean; error?: string; cleanupStatus?: string }>;
   getDeploymentStatus(instanceId: string): Promise<DeploymentStatusResult>;
 }
 
@@ -109,16 +115,80 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
       };
     }
 
+    // 0. Ensure Docker container is running if target is a managed Docker node
+    const dockerNodeId = extractDockerNodeId(node);
+    const dockerClient = getDockerManagementClient();
+
+    if (dockerNodeId && dockerClient.isConfigured()) {
+      try {
+        const dockerState = await dockerClient.getNodeState(dockerNodeId);
+        if (!dockerState.running) {
+          await dockerClient.startNode(dockerNodeId);
+          const runningState = await dockerClient.waitForRunning(dockerNodeId, 25000);
+          await HostingNode.findByIdAndUpdate(node._id, {
+            $set: {
+              dockerRunning: true,
+              dockerStatus: runningState.status || 'running',
+              dockerLastInspectedAt: new Date(),
+            },
+          });
+        } else if (dockerState.paused) {
+          await dockerClient.unpauseNode(dockerNodeId);
+          const runningState = await dockerClient.waitForRunning(dockerNodeId, 15000);
+          await HostingNode.findByIdAndUpdate(node._id, {
+            $set: {
+              dockerRunning: true,
+              dockerStatus: runningState.status || 'running',
+              dockerLastInspectedAt: new Date(),
+            },
+          });
+        } else {
+          await HostingNode.findByIdAndUpdate(node._id, {
+            $set: {
+              dockerRunning: true,
+              dockerStatus: dockerState.status || 'running',
+              dockerLastInspectedAt: new Date(),
+            },
+          });
+        }
+      } catch (dockerErr: unknown) {
+        const dMsg = dockerErr instanceof Error ? dockerErr.message : String(dockerErr);
+        console.error(`[Provisioning] Docker container start failed for node ${dockerNodeId}: ${dMsg}`);
+        return {
+          success: false,
+          error: `Target container for node '${node.name}' failed to start: ${dMsg}`,
+        };
+      }
+    }
+
     // Connect to the Rust server control plane
     const client = LioranDBAdminClient.forNode(node);
 
     try {
-      // 1. Live server health and identity check
-      const status = await client.getServerStatus();
-      if (status.status !== 'HEALTHY' && status.state !== 'Ready') {
+      // 1. Live server health and identity check with bounded readiness polling
+      let status: any = null;
+      let isServerReady = false;
+      const maxRetries = 10;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          status = await client.getServerStatus();
+          if (status.status === 'HEALTHY' || status.state === 'Ready') {
+            isServerReady = true;
+            break;
+          }
+        } catch (statusErr) {
+          if (attempt === maxRetries) throw statusErr;
+        }
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+
+      if (!status || (!isServerReady && status.status !== 'HEALTHY' && status.state !== 'Ready')) {
         return {
           success: false,
-          error: `Target hosting node '${node.name}' is not in Ready state (current state: ${status.state || status.status}).`,
+          error: `Target hosting node '${node.name}' is not in Ready state (current state: ${status?.state || status?.status || 'UNKNOWN'}).`,
         };
       }
 
@@ -230,7 +300,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
   async suspendDeployment(instanceId: string, reason?: string): Promise<{ success: boolean; error?: string }> {
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(instanceId);
+    const instance = await ManagedDatabase.findById(instanceId).populate('hostingNodeId');
     if (!instance) return { success: false, error: 'Instance not found' };
 
     const now = new Date();
@@ -244,12 +314,28 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
       { $set: { stoppedAt: now } }
     );
 
+    // Pause container via Docker management if configured
+    if (instance.hostingNodeId) {
+      const dockerNodeId = extractDockerNodeId(instance.hostingNodeId);
+      const dockerClient = getDockerManagementClient();
+      if (dockerNodeId && dockerClient.isConfigured()) {
+        try {
+          await dockerClient.pauseNode(dockerNodeId);
+          await HostingNode.findByIdAndUpdate(instance.hostingNodeId, {
+            $set: { dockerStatus: 'paused', dockerLastInspectedAt: now },
+          });
+        } catch (pauseErr) {
+          console.warn(`[Suspension] Docker pause notice for ${dockerNodeId}:`, (pauseErr as Error).message);
+        }
+      }
+    }
+
     return { success: true };
   }
 
   async resumeDeployment(instanceId: string): Promise<{ success: boolean; error?: string }> {
     await connectToDatabase();
-    const instance = await ManagedDatabase.findById(instanceId);
+    const instance = await ManagedDatabase.findById(instanceId).populate('hostingNodeId');
     if (!instance) return { success: false, error: 'Instance not found' };
 
     const now = new Date();
@@ -266,6 +352,28 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
       backupMonthlyPaise: instance.backupEnabled ? (instance.backupMonthlyPaise || 20000) : 0,
       planId: instance.planId || 'dedicated',
     });
+
+    // Unpause or start container via Docker management if configured
+    if (instance.hostingNodeId) {
+      const dockerNodeId = extractDockerNodeId(instance.hostingNodeId);
+      const dockerClient = getDockerManagementClient();
+      if (dockerNodeId && dockerClient.isConfigured()) {
+        try {
+          const state = await dockerClient.getNodeState(dockerNodeId);
+          if (state.paused) {
+            await dockerClient.unpauseNode(dockerNodeId);
+          } else if (!state.running) {
+            await dockerClient.startNode(dockerNodeId);
+            await dockerClient.waitForRunning(dockerNodeId, 20000);
+          }
+          await HostingNode.findByIdAndUpdate(instance.hostingNodeId, {
+            $set: { dockerRunning: true, dockerStatus: 'running', dockerLastInspectedAt: now },
+          });
+        } catch (unpauseErr) {
+          console.warn(`[Resumption] Docker unpause notice for ${dockerNodeId}:`, (unpauseErr as Error).message);
+        }
+      }
+    }
 
     return { success: true };
   }
@@ -308,7 +416,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     }
   }
 
-  async terminateDeployment(instanceId: string): Promise<{ success: boolean; error?: string }> {
+  async terminateDeployment(instanceId: string): Promise<{ success: boolean; error?: string; cleanupStatus?: string }> {
     await connectToDatabase();
     const now = new Date();
 
@@ -323,7 +431,11 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           status: 'DELETING',
           databaseUsers: [],
           billingStoppedAt: now,
-          ...( { backupStoppedAt: now } ),
+          backupStoppedAt: now,
+        },
+        $unset: {
+          encryptedConnectionUri: 1,
+          encryptedControlPlaneCredential: 1,
         },
       },
       { returnDocument: 'after' }
@@ -347,15 +459,14 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
       nodeId: instance.hostingNodeId?.toString(),
     });
 
-    // 2. Stop active billing intervals
+    // 2. Stop active billing intervals immediately
     await BillingInterval.updateMany(
       { instanceId: instance._id, endedAt: { $exists: false } },
       { $set: { endedAt: now, stoppedAt: now } }
     );
 
-    // 3. If assigned to a hosting node, atomically lock node to RESETTING and execute comprehensive purge
+    // 3. If assigned to a hosting node, lock node to RESETTING and execute infrastructure-level cleanup
     if (instance.hostingNodeId) {
-      // Concurrency protection: atomically claim and lock the node to RESETTING
       const node = await HostingNode.findOneAndUpdate(
         {
           _id: instance.hostingNodeId,
@@ -378,65 +489,75 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           endpoint: node.controlPlaneEndpoint || node.dbUrl,
         });
 
+        const dockerNodeId = extractDockerNodeId(node);
+        const dockerClient = getDockerManagementClient();
+
+        // 3a. Invalidate logical credentials on Rust control plane if server was reachable
         try {
           const client = LioranDBAdminClient.forNode(node);
-          // Pass the verified cloud instance identity (e.g. "cx01"), NOT the MongoDB ObjectID
-          const targetCloudInstanceId = node.serverIdentity || 'primary';
-          const purgeResult = await client.purgeAndResetTenant({
-            instanceId: targetCloudInstanceId,
-            expectedInstanceName: node.name,
-            nodeId: node._id.toString(),
-          });
+          await client.rotateRootCredential();
+        } catch {
+          // Rust server might already be stopped or unreachable; continue to Docker container management
+        }
 
-          if (!purgeResult.success) {
-            throw new Error(`Server reset failed on termination: ${purgeResult.error || 'Check failed'}`);
+        // 3b. Stop associated Docker container
+        let containerStopped = false;
+        if (dockerNodeId && dockerClient.isConfigured()) {
+          try {
+            await dockerClient.stopNode(dockerNodeId);
+            const state = await dockerClient.waitForStopped(dockerNodeId, 25000);
+            containerStopped = !state.running;
+            node.dockerRunning = false;
+            node.dockerStatus = state.status || 'exited';
+            node.dockerLastInspectedAt = now;
+          } catch (dockerStopErr: unknown) {
+            const stopErrMsg = dockerStopErr instanceof Error ? dockerStopErr.message : String(dockerStopErr);
+            console.error(`[Termination] Failed to stop Docker container for ${dockerNodeId}: ${stopErrMsg}`);
           }
+        }
 
-          // Successful cleanup: return node to AVAILABLE with verified clean state
-          node.status = 'AVAILABLE';
+        // 3c. Invoke physical storage cleanup through verified and authorized backend capability
+        // If unsupported or fails, fail closed: do NOT mark AVAILABLE, mark QUARANTINED.
+        let storageCleaned = false;
+        let storageCleanupError = '';
+
+        if (dockerNodeId && dockerClient.isConfigured()) {
+          try {
+            const auth: ResetAuthorization = {
+              confirmedTargetNode: dockerNodeId,
+              confirmedTargetVolume: resolveDockerVolumeName(dockerNodeId),
+              confirmationToken: generateSecureToken(16),
+              allocationId: node.currentAllocationId || undefined,
+            };
+            const resetRes = await dockerClient.resetNodeStorage(dockerNodeId, auth);
+            storageCleaned = resetRes.verifiedEmpty;
+          } catch (storageErr: unknown) {
+            storageCleanupError = storageErr instanceof Error ? storageErr.message : String(storageErr);
+            storageCleaned = false;
+          }
+        } else {
+          storageCleanupError = 'Docker management gateway is not configured or target node is not in cx01..cx07 allowlist';
+        }
+
+        if (!storageCleaned) {
+          // FAIL CLOSED: Quarantine the node
+          const quarantineReason = `${node.name} unavailable: physical storage reset required.`;
+          node.status = 'QUARANTINED';
+          node.cleanStatus = 'DIRTY';
+          node.healthStatus = 'DEGRADED';
           node.currentAssignedCount = 0;
-          node.healthStatus = 'HEALTHY';
-          node.cleanStatus = 'CLEAN';
-          node.quarantineReason = undefined;
-          node.quarantineCode = undefined;
-          node.cleanupFailureReason = undefined;
-          node.lastResetAt = now;
-          node.lastCleanCheckAt = now;
-          if (purgeResult.rotatedRootPassword) {
-            node.lastCredentialRotationAt = now;
-          }
-          node.adminNotes = `Purged and reset on ${now.toISOString()}. Pre-mem: ${purgeResult.preResetMemoryBytes || 'N/A'}, Post-mem: ${purgeResult.postResetMemoryBytes || 'N/A'}`;
+          node.assignedInstanceId = undefined;
+          node.currentAllocationId = undefined;
+          node.allocationExpiresAt = undefined;
+          node.quarantineCode = 'PHYSICAL_CLEANUP_REQUIRED';
+          node.quarantineReason = quarantineReason;
+          node.cleanupFailureReason = storageCleanupError;
+          node.adminNotes = `QUARANTINED on termination: Container ${containerStopped ? 'stopped' : 'stop unverified'}. Storage reset unsupported/failed: ${storageCleanupError}`;
           await node.save();
 
           instance.status = 'TERMINATED';
           instance.terminatedAt = now;
-          await instance.save();
-
-          logCleanupStage({
-            stage: 'NODE_RELEASE',
-            instanceId: targetCloudInstanceId,
-            nodeId: node._id.toString(),
-            endpoint: client.endpoint,
-            isClean: true,
-          });
-
-          return { success: true };
-        } catch (err: unknown) {
-          const errMsg = err instanceof Error ? err.message : 'Unknown termination error';
-          console.error(`[Provisioning] CRITICAL: Failed to clean and verify node ${node.name || node._id} on termination: ${errMsg}`);
-
-          // Quarantine dirty node to prevent other customers from receiving it
-          node.status = 'QUARANTINED';
-          node.healthStatus = 'DEGRADED';
-          node.cleanStatus = 'DIRTY';
-          node.cleanupFailureReason = errMsg;
-          node.quarantineReason = `${node.name} unavailable: reset required.`;
-          node.quarantineCode = 'RESET_FAILED';
-          node.adminNotes = `QUARANTINED: Cleanup failed during termination: ${errMsg}`;
-          await node.save();
-
-          instance.status = 'FAILED';
-          instance.adminNotes = `Cleanup failed during deletion: ${errMsg}. Node quarantined.`;
+          instance.adminNotes = `Terminated. Container ${containerStopped ? 'stopped' : 'stop unverified'}. Node quarantined pending physical storage reset.`;
           await instance.save();
 
           logCleanupStage({
@@ -444,14 +565,46 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
             instanceId: node.serverIdentity || instance._id.toString(),
             nodeId: node._id.toString(),
             isClean: false,
-            failureReason: errMsg,
+            failureReason: storageCleanupError,
           });
 
           return {
-            success: false,
-            error: `Failed to safely clean database engine on node ${node.name}. The node has been quarantined: ${errMsg}`,
+            success: true,
+            cleanupStatus: 'QUARANTINED_PENDING_PHYSICAL_CLEANUP',
+            error: `Container stopped. Physical storage deletion is not supported by the management service API; node ${node.name} has been quarantined.`,
           };
         }
+
+        // If verified physical storage cleanup succeeded (when backend capability is deployed):
+        node.status = 'AVAILABLE';
+        node.cleanStatus = 'CLEAN';
+        node.healthStatus = 'HEALTHY';
+        node.currentAssignedCount = 0;
+        node.assignedInstanceId = undefined;
+        node.currentAllocationId = undefined;
+        node.allocationExpiresAt = undefined;
+        node.quarantineReason = undefined;
+        node.quarantineCode = undefined;
+        node.cleanupFailureReason = undefined;
+        node.volumeCleanVerified = true;
+        node.volumeCleanVerifiedAt = now;
+        node.lastResetAt = now;
+        node.lastCleanCheckAt = now;
+        node.adminNotes = `Sanitized and reset on ${now.toISOString()}. Container stopped with fresh empty volume.`;
+        await node.save();
+
+        instance.status = 'TERMINATED';
+        instance.terminatedAt = now;
+        await instance.save();
+
+        logCleanupStage({
+          stage: 'NODE_RELEASE',
+          instanceId: node.serverIdentity || instance._id.toString(),
+          nodeId: node._id.toString(),
+          isClean: true,
+        });
+
+        return { success: true };
       }
     }
 
@@ -552,7 +705,7 @@ export class MockProvisioningProvider implements LioranProvisioningProvider {
     return { success: true };
   }
 
-  async terminateDeployment(instanceId: string): Promise<{ success: boolean; error?: string }> {
+  async terminateDeployment(instanceId: string): Promise<{ success: boolean; error?: string; cleanupStatus?: string }> {
     const inst = this.instances.get(instanceId);
     if (inst) {
       if (inst.isQuarantined) {
@@ -565,7 +718,7 @@ export class MockProvisioningProvider implements LioranProvisioningProvider {
       inst.userCount = 0;
       inst.memoryBytesUsed = 52428800; // Flushed memory baseline
     }
-    return { success: true };
+    return { success: true, cleanupStatus: 'MOCK_CLEANED' };
   }
 
   async getDeploymentStatus(instanceId: string): Promise<DeploymentStatusResult> {
@@ -665,6 +818,7 @@ export async function allocateAndProvisionInstance(
   const allocatableFilter: any = {
     status: { $in: ['AVAILABLE', 'ACTIVE'] },
     healthStatus: 'HEALTHY',
+    cleanStatus: { $ne: 'DIRTY' },
     currentAssignedCount: 0,
     $or: [
       { currentAllocationId: { $exists: false } },
@@ -689,6 +843,9 @@ export async function allocateAndProvisionInstance(
     }
     if (explicitTarget.status === 'DISABLED') {
       throw new Error(`${explicitTarget.name} is disabled.`);
+    }
+    if (explicitTarget.cleanStatus === 'DIRTY') {
+      throw new Error(`${explicitTarget.name} unavailable: physical storage reset required.`);
     }
     if (occupiedNodeIds.includes(params.nodeId.toString()) || explicitTarget.currentAssignedCount > 0) {
       throw new Error(`Requested hosting node '${explicitTarget.name}' is currently assigned to an active customer.`);
@@ -747,6 +904,7 @@ export async function allocateAndProvisionInstance(
   const controlPlaneEndpoint = resolveControlPlaneEndpoint(reservedNode);
   const hourlyRatePaise = plan.hourlyRatePaise || (params.planId === 'shared' ? 100 : 800);
   const backupMonthlyPaise = params.backupEnabled ? BACKUP_MONTHLY_PAISE : 0;
+  const dockerNodeId = extractDockerNodeId(reservedNode);
 
   let instance: IManagedDatabase;
   try {
@@ -754,6 +912,8 @@ export async function allocateAndProvisionInstance(
       customerId: params.customerId,
       userId: params.customerId,
       hostingNodeId: reservedNode._id,
+      dockerNodeId: dockerNodeId || undefined,
+      lifecycleOperationId: allocationToken,
       name: cleanName,
       planId: plan.id,
       planName: plan.name,
@@ -808,15 +968,96 @@ export async function allocateAndProvisionInstance(
     throw dbErr;
   }
 
+  // Step 2.5: Physical Docker Container Lifecycle Integration (Phase C)
+  const dockerClient = getDockerManagementClient();
+
+  if (dockerNodeId && dockerClient.isConfigured()) {
+    try {
+      const dockerState = await dockerClient.getNodeState(dockerNodeId);
+      if (!dockerState.running) {
+        await dockerClient.startNode(dockerNodeId);
+        const startedState = await dockerClient.waitForRunning(dockerNodeId, 25000);
+        await HostingNode.findByIdAndUpdate(reservedNode._id, {
+          $set: {
+            dockerRunning: true,
+            dockerStatus: startedState.status || 'running',
+            dockerLastInspectedAt: new Date(),
+          },
+        });
+      } else if (dockerState.paused) {
+        await dockerClient.unpauseNode(dockerNodeId);
+        const resumedState = await dockerClient.waitForRunning(dockerNodeId, 15000);
+        await HostingNode.findByIdAndUpdate(reservedNode._id, {
+          $set: {
+            dockerRunning: true,
+            dockerStatus: resumedState.status || 'running',
+            dockerLastInspectedAt: new Date(),
+          },
+        });
+      } else {
+        await HostingNode.findByIdAndUpdate(reservedNode._id, {
+          $set: {
+            dockerRunning: true,
+            dockerStatus: dockerState.status || 'running',
+            dockerLastInspectedAt: new Date(),
+          },
+        });
+      }
+    } catch (dockerStartErr: unknown) {
+      const dMsg = dockerStartErr instanceof Error ? dockerStartErr.message : String(dockerStartErr);
+      console.error(`[Provisioning] Failed to start Docker container for ${dockerNodeId}: ${dMsg}`);
+
+      await HostingNode.findOneAndUpdate(
+        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        {
+          $set: {
+            status: 'AVAILABLE',
+            healthStatus: 'DEGRADED',
+            currentAssignedCount: 0,
+          },
+          $unset: {
+            currentAllocationId: 1,
+            allocationExpiresAt: 1,
+            assignedInstanceId: 1,
+          },
+        }
+      );
+
+      instance.status = 'FAILED';
+      instance.provisioningStage = 'CONTAINER_START_FAILED';
+      instance.lastProvisioningError = `Docker container failed to start: ${dMsg}`;
+      instance.hostingNodeId = undefined;
+      await instance.save();
+
+      throw new Error(`Failed to start container for node '${reservedNode.name}': ${dMsg}`);
+    }
+  }
+
   // Step 3: Pre-allocation health and readiness probe (strictly BEFORE any customer mutations begin)
   const client = LioranDBAdminClient.forNode(reservedNode);
   const targetInstanceId = reservedNode.serverIdentity || 'primary';
-  let serverStatus;
+  let serverStatus: any = null;
 
   try {
-    serverStatus = await client.getServerStatus();
-    if (serverStatus.status !== 'HEALTHY' && serverStatus.state !== 'Ready') {
-      const statusFailReason = `${reservedNode.name} unavailable: server is not in Ready state (current state: ${serverStatus.state || serverStatus.status})`;
+    let ready = false;
+    const maxRetries = 10;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        serverStatus = await client.getServerStatus();
+        if (serverStatus.status === 'HEALTHY' || serverStatus.state === 'Ready') {
+          ready = true;
+          break;
+        }
+      } catch (checkErr) {
+        if (attempt === maxRetries) throw checkErr;
+      }
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+
+    if (!ready || (serverStatus.status !== 'HEALTHY' && serverStatus.state !== 'Ready')) {
+      const statusFailReason = `${reservedNode.name} unavailable: server is not in Ready state (current state: ${serverStatus?.state || serverStatus?.status || 'UNKNOWN'})`;
 
       await HostingNode.findOneAndUpdate(
         { _id: reservedNode._id, currentAllocationId: allocationToken },
@@ -1229,6 +1470,9 @@ export async function provisionInstance(
     if (existingNode.status === 'DISABLED') {
       throw new Error(`Target hosting node '${existingNode.name}' is disabled.`);
     }
+    if (existingNode.cleanStatus === 'DIRTY') {
+      throw new Error(`Target hosting node '${existingNode.name}' unavailable: physical storage reset required.`);
+    }
     if (existingNode.healthStatus !== 'HEALTHY') {
       throw new Error(`Target hosting node '${existingNode.name}' health status is '${existingNode.healthStatus}', ineligible for allocation.`);
     }
@@ -1256,6 +1500,7 @@ export async function provisionInstance(
         ...(occupiedNodeIds.length > 0 ? { _id: { $nin: occupiedNodeIds } } : {}),
         status: { $in: ['AVAILABLE', 'ACTIVE'] },
         healthStatus: 'HEALTHY',
+        cleanStatus: { $ne: 'DIRTY' },
         currentAssignedCount: 0,
       },
       {
@@ -1436,6 +1681,7 @@ export async function provisionInstance(
   await instance.save();
 
   // 4. Update hosting node status to ASSIGNED
+  const provisionDockerNodeId = extractDockerNodeId(node);
   await HostingNode.findByIdAndUpdate(node._id, {
     $set: {
       status: 'ASSIGNED',
@@ -1444,6 +1690,10 @@ export async function provisionInstance(
       healthStatus: 'HEALTHY',
       lastCredentialRotationAt: now,
       assignedInstanceId: instance._id,
+      dockerNodeId: provisionDockerNodeId || undefined,
+      dockerRunning: true,
+      dockerStatus: 'running',
+      dockerVolumeName: provisionDockerNodeId ? resolveDockerVolumeName(provisionDockerNodeId) : undefined,
     },
     $unset: { currentAllocationId: 1, allocationExpiresAt: 1 },
   });

@@ -1,6 +1,7 @@
 import { connectToDatabase, HostingNode, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient, logCleanupStage } from '@/lib/liorandb-admin/client';
 import { isLocalhost, resolveControlPlaneEndpoint } from '@/lib/liorandb-admin/url';
+import { getDockerManagementClient, extractDockerNodeId } from '@/lib/docker-management';
 
 let activeReconciliationPromise: Promise<void> | null = null;
 let lastReconciliationCompletedAt = 0;
@@ -208,11 +209,28 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
             });
           }
 
+          // Inspect Docker container state if configured
+          const dockerNodeId = extractDockerNodeId(node);
+          const dockerClient = getDockerManagementClient();
+          let dockerRunning: boolean | undefined;
+          let dockerStatus: string | undefined;
+
+          if (dockerNodeId && dockerClient.isConfigured()) {
+            try {
+              const dState = await dockerClient.getNodeState(dockerNodeId);
+              dockerRunning = dState.running;
+              dockerStatus = dState.status;
+            } catch {
+              // Docker inspection failed or timed out
+            }
+          }
+
           // Perform lightweight read-only physical health check ONLY
           try {
             const client = LioranDBAdminClient.forNode(node);
             const status = await client.getServerStatus();
-            const healthStatus = status.status === 'HEALTHY' ? 'HEALTHY' : 'DEGRADED';
+            const rustHealthy = status.status === 'HEALTHY';
+            const healthStatus = rustHealthy && (dockerRunning !== false) ? 'HEALTHY' : 'DEGRADED';
 
             await HostingNode.findByIdAndUpdate(node._id, {
               $set: {
@@ -220,6 +238,7 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
                 serverIdentity: status.instanceId || node.serverIdentity,
                 serverVersion: status.version || node.serverVersion,
                 lastHealthCheckAt: new Date(),
+                ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
               },
             });
           } catch {
@@ -227,6 +246,7 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
               $set: {
                 healthStatus: 'UNREACHABLE',
                 lastHealthCheckAt: new Date(),
+                ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
               },
             });
           }
@@ -308,6 +328,21 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
         // Handle QUARANTINED nodes:
         // NEVER factory-reset automatically! Check physical health in read-only mode and preserve quarantine.
         if (node.status === 'QUARANTINED') {
+          const dockerNodeId = extractDockerNodeId(node);
+          const dockerClient = getDockerManagementClient();
+          let dockerRunning: boolean | undefined;
+          let dockerStatus: string | undefined;
+
+          if (dockerNodeId && dockerClient.isConfigured()) {
+            try {
+              const dState = await dockerClient.getNodeState(dockerNodeId);
+              dockerRunning = dState.running;
+              dockerStatus = dState.status;
+            } catch {
+              // Read-only inspection notice
+            }
+          }
+
           try {
             const client = LioranDBAdminClient.forNode(node);
             const status = await client.getServerStatus();
@@ -319,6 +354,7 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
                 serverIdentity: status.instanceId || node.serverIdentity,
                 serverVersion: status.version || node.serverVersion,
                 lastHealthCheckAt: new Date(),
+                ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
               },
             });
           } catch {
@@ -326,6 +362,7 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
               $set: {
                 healthStatus: 'UNREACHABLE',
                 lastHealthCheckAt: new Date(),
+                ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
               },
             });
           }
@@ -333,8 +370,24 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
         }
 
         // Unassigned node in AVAILABLE status:
-        // Perform read-only control plane health check ONLY.
+        // Perform read-only control plane and Docker health check ONLY.
         // Never clean-check or quarantine healthy nodes during reconciliation sweeps!
+        // Never infer that a node is clean simply because it is stopped or has no active ManagedDatabase.
+        const dockerNodeId = extractDockerNodeId(node);
+        const dockerClient = getDockerManagementClient();
+        let dockerRunning: boolean | undefined;
+        let dockerStatus: string | undefined;
+
+        if (dockerNodeId && dockerClient.isConfigured()) {
+          try {
+            const dState = await dockerClient.getNodeState(dockerNodeId);
+            dockerRunning = dState.running;
+            dockerStatus = dState.status;
+          } catch {
+            // Read-only inspection notice
+          }
+        }
+
         try {
           const client = LioranDBAdminClient.forNode(node);
           const status = await client.getServerStatus();
@@ -348,6 +401,7 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
                 serverIdentity: status.instanceId || node.serverIdentity,
                 serverVersion: status.version || node.serverVersion,
                 lastHealthCheckAt: new Date(),
+                ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
               },
             }
           );
@@ -358,6 +412,7 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
               $set: {
                 healthStatus: 'UNREACHABLE',
                 lastHealthCheckAt: new Date(),
+                ...(dockerRunning !== undefined ? { dockerRunning, dockerStatus, dockerLastInspectedAt: new Date() } : {}),
               },
             }
           );

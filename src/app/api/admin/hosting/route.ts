@@ -5,6 +5,7 @@ import { createAuditLog } from '@/lib/audit';
 import { encrypt } from '@/lib/crypto';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin/client';
 import { reconcileHostingNodes } from '@/lib/providers/reconciliation';
+import { extractDockerNodeId, resolveDockerVolumeName, getDockerManagementClient } from '@/lib/docker-management';
 import type { HostingAllocationMode, HostingNodeHealthStatus, HostingNodeStatus } from '@/lib/db/models/HostingNode';
 
 export async function GET(_req: NextRequest) {
@@ -177,6 +178,29 @@ export async function POST(req: NextRequest) {
       await HostingNode.updateMany({}, { isDefault: false });
     }
 
+    // Detect and bind Docker node container identity if matches cx01..cx07
+    const detectedDockerNodeId = extractDockerNodeId({ slug: nodeSlug, name, dbUrl: dbEndpoint.host });
+    const detectedContainerName = detectedDockerNodeId ? `/liorandb-${detectedDockerNodeId}` : undefined;
+    const detectedVolumeName = detectedDockerNodeId ? resolveDockerVolumeName(detectedDockerNodeId) : undefined;
+
+    let dockerStatus: string | undefined;
+    let dockerRunning: boolean | undefined;
+    let dockerLastInspectedAt: Date | undefined;
+
+    if (detectedDockerNodeId) {
+      try {
+        const dockerClient = getDockerManagementClient();
+        if (dockerClient.isConfigured()) {
+          const dState = await dockerClient.getNodeState(detectedDockerNodeId);
+          dockerStatus = dState.status;
+          dockerRunning = dState.running;
+          dockerLastInspectedAt = new Date();
+        }
+      } catch (dockerErr) {
+        console.warn(`[Admin Hosting] Docker state check for ${detectedDockerNodeId} warning:`, (dockerErr as Error).message);
+      }
+    }
+
     const node = await HostingNode.create({
       name: name.trim(),
       slug: nodeSlug,
@@ -202,6 +226,13 @@ export async function POST(req: NextRequest) {
       defaultRootUsername: (defaultRootUsername || 'admin').trim(),
       notes: notes || '',
       isDefault: Boolean(isDefault),
+      dockerNodeId: detectedDockerNodeId || undefined,
+      dockerContainerName: detectedContainerName,
+      dockerVolumeName: detectedVolumeName,
+      dockerStatus,
+      dockerRunning,
+      dockerLastInspectedAt,
+      volumeCleanVerified: false,
     });
 
     await createAuditLog({
@@ -215,6 +246,8 @@ export async function POST(req: NextRequest) {
         grpcUrl: node.grpcUrl,
         healthStatus: node.healthStatus,
         serverIdentity: node.serverIdentity,
+        dockerNodeId: node.dockerNodeId,
+        dockerStatus: node.dockerStatus,
       },
     });
 

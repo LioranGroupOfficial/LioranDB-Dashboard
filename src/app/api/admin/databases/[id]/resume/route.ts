@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin';
+import { provisioningProvider } from '@/lib/providers/provisioning';
 import { createAuditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 
@@ -19,8 +20,14 @@ export async function POST(
       return NextResponse.json({ error: 'Database instance not found' }, { status: 404 });
     }
 
-    const client = await LioranDBAdminClient.forInstanceAsync(instance);
-    await client.resume();
+    try {
+      const client = await LioranDBAdminClient.forInstanceAsync(instance);
+      await client.resume();
+    } catch (clientErr) {
+      console.warn(`[Admin Resume] Rust client resume notice for instance ${id}:`, (clientErr as Error).message);
+    }
+
+    await provisioningProvider.resumeDeployment(instance._id.toString());
 
     await createAuditLog({
       actorId: admin.userId,
