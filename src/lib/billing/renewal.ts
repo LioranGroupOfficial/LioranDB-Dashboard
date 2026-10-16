@@ -8,7 +8,7 @@ import {
   BillingPeriod,
 } from './index';
 import { createNotification } from '../notifications';
-import { sendEmail } from '../email';
+import { sendEmail, invoiceGeneratedTemplate } from '../email';
 import { formatPaiseToRupees } from '../plans';
 
 export interface BillingCycleOptions {
@@ -130,14 +130,12 @@ export async function processMonthlyBillingInvoices(
           await sendEmail({
             to: customer.email,
             subject: `LioranDB Usage Invoice: ${invoice.invoiceNumber}`,
-            html: `<div style="font-family: sans-serif; padding: 20px;">
-              <h2>LioranDB Usage Invoice</h2>
-              <p>Hello ${invoice.customerName},</p>
-              <p>Your usage invoice <strong>${invoice.invoiceNumber}</strong> has been generated.</p>
-              <p><strong>Total Amount:</strong> ${formatPaiseToRupees(invoice.totalPaise)}</p>
-              <p><strong>Due Date:</strong> ${new Date(invoice.dueDate).toLocaleDateString('en-IN')}</p>
-              <p><a href="${process.env.APP_URL || 'https://app.liorandb.com'}/billing" style="display:inline-block;padding:10px 20px;background:#18181b;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">View & Pay Invoice</a></p>
-            </div>`,
+            html: invoiceGeneratedTemplate({
+              customerName: invoice.customerName,
+              invoiceNumber: invoice.invoiceNumber,
+              amountFormatted: formatPaiseToRupees(invoice.totalPaise),
+              dueDateFormatted: new Date(invoice.dueDate).toLocaleDateString('en-IN'),
+            }),
           });
         } catch {
           // Email dispatch is best-effort

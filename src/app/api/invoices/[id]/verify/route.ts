@@ -4,7 +4,7 @@ import { connectToDatabase, Invoice, Payment } from '@/lib/db';
 import { verifyRazorpaySignature } from '@/lib/razorpay';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
-import { sendEmail } from '@/lib/email';
+import { sendEmail, paymentReceiptTemplate } from '@/lib/email';
 import { formatPaiseToRupees } from '@/lib/plans';
 import { createApiError } from '@/lib/errors';
 
@@ -95,13 +95,12 @@ export async function POST(
       await sendEmail({
         to: invoice.customerEmail,
         subject: `Payment Receipt: ${invoice.invoiceNumber}`,
-        html: `<div style="font-family: sans-serif; padding: 20px;">
-          <h2>Payment Receipt</h2>
-          <p>Thank you! Your payment for invoice <strong>${invoice.invoiceNumber}</strong> has been processed successfully.</p>
-          <p><strong>Amount Paid:</strong> ${formatPaiseToRupees(invoice.totalPaise)}</p>
-          <p><strong>Transaction Ref:</strong> ${razorpay_payment_id}</p>
-          <p><strong>Date:</strong> ${new Date().toLocaleDateString('en-IN')}</p>
-        </div>`,
+        html: paymentReceiptTemplate({
+          invoiceNumber: invoice.invoiceNumber,
+          amountFormatted: formatPaiseToRupees(invoice.totalPaise),
+          transactionRef: razorpay_payment_id,
+          dateFormatted: new Date().toLocaleDateString('en-IN'),
+        }),
       });
     }
 
