@@ -17,7 +17,7 @@ import OpenStudioButton from '@/components/database/OpenStudioButton';
 import DatabaseUsersManager from '@/components/database/DatabaseUsersManager';
 import CancelInstanceModal from '@/components/database/CancelInstanceModal';
 import { decrypt } from '@/lib/crypto';
-import { getFullConnectionUri } from '@/lib/database-connection';
+import { getRootConnectionUri } from '@/lib/database-connection';
 import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 
@@ -53,17 +53,17 @@ export default async function InstanceDetailsPage({
   const couponDiscountPercentage = instance.couponDiscountPercentage || 0;
   const effectiveHourlyRatePaise = Math.round(hourlyRatePaise * (1 - couponDiscountPercentage / 100));
 
-  // Decrypt connection string server-side safely
+  // Decrypt and format the authorized root URI shared by details and both Studio buttons.
   let connectionUri: string | null = null;
   if (instance.encryptedConnectionUri) {
     try {
-      connectionUri = getFullConnectionUri(decrypt(instance.encryptedConnectionUri));
+      connectionUri = getRootConnectionUri(decrypt(instance.encryptedConnectionUri), instance.port);
     } catch {
       connectionUri = null;
     }
   }
 
-  // The stored URI is authoritative. Never guess credentials, paths, schemes, or options.
+  // Saved credentials are unchanged; the UI receives only liorandb://user:password@host:port/.
 
   // Calculate current month usage estimate for this instance
   const currentPeriod = getCurrentMonthPeriod();
