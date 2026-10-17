@@ -12,7 +12,7 @@ interface Props {
 
 export default function CustomerHeader({ email, onMenuToggle }: Props) {
   return (
-    <header className="h-14 shrink-0 border-b border-[var(--border)] bg-[var(--header-bg)] flex items-center justify-between px-3 sm:px-6 z-10 transition-colors duration-150">
+    <header className="sticky top-0 z-30 flex h-14 min-w-0 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--header-bg)] px-3 transition-colors duration-150 sm:px-6">
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         {onMenuToggle && (
           <button

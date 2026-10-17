@@ -77,7 +77,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
     <>
       {/* Desktop Sticky Sidebar */}
       <aside
-        className={`hidden md:flex h-screen sticky top-0 shrink-0 border-r border-[var(--border)] bg-[var(--sidebar-bg)] flex-col z-20 transition-all duration-200 select-none ${
+        className={`sticky top-0 z-40 hidden h-dvh min-h-0 shrink-0 flex-col self-start overflow-hidden border-r border-[var(--border)] bg-[var(--sidebar-bg)] transition-[width] duration-200 select-none md:flex ${
           collapsed ? 'w-16' : 'w-60'
         }`}
       >
@@ -112,7 +112,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
         </div>
 
         {collapsed && (
-          <div className="py-2 flex justify-center border-b border-[var(--border)]">
+          <div className="flex shrink-0 justify-center border-b border-[var(--border)] py-2">
             <button
               type="button"
               onClick={toggleCollapsed}
@@ -125,7 +125,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
         )}
 
         {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-x-hidden overflow-y-auto overscroll-y-contain p-2">
           {NAV_ITEMS.map((item) => {
             const active =
               item.href === '/dashboard'
@@ -157,7 +157,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
 
         {/* Current Month Estimated Usage Pill */}
         {!collapsed && estimatedPaise !== null && (
-          <div className="p-3 mx-2 mb-2 rounded-[7px] bg-[var(--surface)] border border-[var(--border)] shadow-xs">
+          <div className="mx-2 mb-2 shrink-0 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] p-3 shadow-xs">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1">
                 <Activity className="w-3 h-3 text-[var(--primary)]" />
@@ -174,7 +174,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
         )}
 
         {/* Sticky Bottom Actions */}
-        <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
+        <div className="mt-auto shrink-0 border-t border-[var(--border)] bg-[var(--sidebar-bg)] p-3">
           <button
             onClick={handleLogout}
             title={collapsed ? 'Sign out' : undefined}
@@ -190,14 +190,14 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
 
       {/* Mobile Drawer */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex">
+        <div className="fixed inset-0 z-50 flex h-dvh overflow-hidden overscroll-y-none md:hidden">
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 touch-none bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={onMobileClose}
             aria-hidden="true"
           />
 
-          <aside className="relative w-64 max-w-[80vw] bg-[var(--sidebar-bg)] border-r border-[var(--border)] flex flex-col h-full z-50 select-none shadow-2xl">
+          <aside className="relative z-50 flex h-full min-h-0 w-64 max-w-[80vw] flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--sidebar-bg)] shadow-2xl select-none">
             <div className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-[var(--border)]">
               <Link
                 href="/dashboard"
@@ -221,7 +221,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
               </button>
             </div>
 
-            <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+            <nav className="min-h-0 flex-1 space-y-1 overflow-x-hidden overflow-y-auto overscroll-y-contain p-2">
               {NAV_ITEMS.map((item) => {
                 const active =
                   item.href === '/dashboard'
@@ -248,7 +248,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
             </nav>
 
             {estimatedPaise !== null && (
-              <div className="p-3 mx-3 mb-2 rounded-xl bg-[var(--surface-card)] border border-[var(--border)]">
+              <div className="mx-3 mb-2 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-card)] p-3">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted)] flex items-center gap-1">
                     <Activity className="w-3 h-3 text-[var(--primary)]" />
@@ -264,7 +264,7 @@ export default function CustomerSidebar({ mobileOpen, onMobileClose }: Props) {
               </div>
             )}
 
-            <div className="p-3 border-t border-[var(--border)] mt-auto bg-[var(--sidebar-bg)]">
+            <div className="mt-auto shrink-0 border-t border-[var(--border)] bg-[var(--sidebar-bg)] p-3">
               <button
                 onClick={handleLogout}
                 className="sidebar-link w-full text-left text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] px-3.5 rounded-[7px] cursor-pointer"

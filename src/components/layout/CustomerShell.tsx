@@ -17,21 +17,23 @@ export default function CustomerShell({ children, email, userId, stage, role }: 
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="h-screen h-[100dvh] w-screen overflow-hidden flex flex-row bg-[var(--background)]">
+    <div className="flex h-dvh min-h-0 w-full min-w-0 overflow-hidden bg-[var(--background)]">
       <CustomerSidebar
         stage={stage}
         role={role}
         mobileOpen={mobileOpen}
         onMobileClose={() => setMobileOpen(false)}
       />
-      <div className="flex-1 flex flex-col h-screen h-[100dvh] min-w-0 overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <CustomerHeader
           email={email}
           userId={userId}
           onMenuToggle={() => setMobileOpen((prev) => !prev)}
         />
-        <main className="flex-1 overflow-y-auto p-3.5 sm:p-6 max-w-6xl mx-auto w-full min-w-0">
-          {children}
+        <main className={`min-h-0 min-w-0 flex-1 overflow-x-hidden overscroll-y-contain [scrollbar-gutter:stable] ${mobileOpen ? 'overflow-y-hidden md:overflow-y-auto' : 'overflow-y-auto'}`}>
+          <div className="mx-auto w-full min-w-0 max-w-6xl p-3.5 sm:p-6">
+            {children}
+          </div>
         </main>
       </div>
     </div>

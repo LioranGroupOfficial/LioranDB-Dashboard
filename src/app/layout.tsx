@@ -118,7 +118,7 @@ export default function RootLayout({
       </head>
       <body
         suppressHydrationWarning
-        className="min-h-screen bg-[var(--background)] text-[var(--text-primary)] font-sans antialiased transition-colors duration-150"
+        className="min-h-dvh bg-[var(--background)] text-[var(--text-primary)] font-sans antialiased transition-colors duration-150"
       >
         <ThemeProvider>
           {children}

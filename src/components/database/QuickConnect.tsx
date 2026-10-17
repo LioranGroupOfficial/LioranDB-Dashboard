@@ -77,7 +77,13 @@ export default function QuickConnect({ connectionUri, databaseName, unavailableR
   const [language, setLanguage] = useState<Language>('javascript');
   const [showCredentials, setShowCredentials] = useState(false);
   const id = useId();
-  const code = connectionExample(language, databaseName);
+  const examples = {
+    javascript: connectionExample('javascript', databaseName),
+    typescript: connectionExample('typescript', databaseName),
+  };
+  const code = examples[language];
+  // Reserve the taller example's natural height without creating a nested Y scroller.
+  const codeHeight = Math.max(...Object.values(examples).map((example) => example.split('\n').length)) * 1.25 + 2;
   const env = connectionUri ? environmentExample(connectionUri) : null;
   const visibleEnv = connectionUri
     ? showCredentials ? env : `LIORANDB_URI="${maskConnectionUri(connectionUri)}"`
@@ -156,7 +162,7 @@ export default function QuickConnect({ connectionUri, databaseName, unavailableR
             tabIndex={0}
             className="focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--primary)]"
           >
-            <pre className="h-[36rem] overflow-auto p-4 font-mono text-xs leading-5 text-[var(--text-primary)]"><code><HighlightedCode code={connectionExample(option, databaseName)} /></code></pre>
+            <pre style={{ minHeight: `${codeHeight}rem` }} className="overflow-x-auto p-4 font-mono text-xs leading-5 text-[var(--text-primary)]"><code><HighlightedCode code={examples[option]} /></code></pre>
           </div>
         ))}
       </div>
