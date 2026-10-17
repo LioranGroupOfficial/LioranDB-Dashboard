@@ -57,14 +57,15 @@ function environmentExample(uri: string): string | null {
 }
 
 // Small tokenizer for these fixed snippets. React escapes all text, including strings.
+// Use DESIGN.md ink tokens and weight for syntax hierarchy in either app theme.
 function HighlightedCode({ code }: { code: string }) {
   const tokens = code.split(/("(?:[^"\\]|\\.)*"|\/\/[^\n]*|\b(?:import|from|const|let|try|if|throw|new|await|catch|finally|undefined|string|LioranDBClient|Error)\b|\b\d+\b)/g);
   return tokens.map((token, index) => {
-    const className = token.startsWith('//') ? 'text-[var(--muted)] italic'
-      : token.startsWith('"') ? 'text-emerald-700 dark:text-emerald-300'
-        : /^(?:string|undefined|LioranDBClient|Error)$/.test(token) ? 'text-sky-700 dark:text-sky-300'
-          : /^(?:import|from|const|let|try|if|throw|new|await|catch|finally)$/.test(token) ? 'text-violet-700 dark:text-violet-300'
-            : /^\d+$/.test(token) ? 'text-amber-700 dark:text-amber-300' : undefined;
+    const className = token.startsWith('//') ? 'text-[var(--text-muted)] italic'
+      : token.startsWith('"') ? 'text-[var(--text-secondary)]'
+        : /^(?:string|undefined|LioranDBClient|Error)$/.test(token) ? 'text-[var(--text-primary)] font-medium'
+          : /^(?:import|from|const|let|try|if|throw|new|await|catch|finally)$/.test(token) ? 'text-[var(--text-strong)] font-semibold'
+            : /^\d+$/.test(token) ? 'text-[var(--text-secondary)] tabular-nums' : undefined;
     return <span key={index} className={className}>{token}</span>;
   });
 }
@@ -162,7 +163,7 @@ export default function QuickConnect({ connectionUri, databaseName, unavailableR
             tabIndex={0}
             className="focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--primary)]"
           >
-            <pre style={{ minHeight: `${codeHeight}rem` }} className="overflow-x-auto p-4 font-mono text-xs leading-5 text-[var(--text-primary)]"><code><HighlightedCode code={examples[option]} /></code></pre>
+            <pre style={{ minHeight: `${codeHeight}rem` }} className="overflow-x-auto p-4 font-mono text-[13px] leading-5 text-[var(--text-primary)]"><code><HighlightedCode code={examples[option]} /></code></pre>
           </div>
         ))}
       </div>

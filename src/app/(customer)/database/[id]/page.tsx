@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Activity,
   ArrowLeft,
+  BookOpen,
   CreditCard,
   Clock,
   Tag,
@@ -150,7 +151,19 @@ export default async function InstanceDetailsPage({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="https://docs.liorandb.com/docs/driver/overview"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Get started with LioranDB drivers and learn more (opens a new tab)"
+              aria-label="Developer Docs (opens a new tab)"
+              className="btn-secondary py-1.5 px-3.5 min-h-[38px] text-xs inline-flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+            >
+              <BookOpen aria-hidden="true" className="w-3.5 h-3.5" />
+              <span>Developer Docs</span>
+            </a>
+
             <OpenStudioButton
               db={dbData}
               className="btn-secondary py-1.5 px-3.5 min-h-[38px] text-xs inline-flex items-center gap-1.5"
