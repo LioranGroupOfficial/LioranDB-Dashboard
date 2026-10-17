@@ -8,19 +8,14 @@ import {
 } from '@liorandb/driver';
 
 declare global {
-  // eslint-disable-next-line no-var
   var __liorandbClient: LioranDBClient | null;
-  // eslint-disable-next-line no-var
   var __liorandbPromise: Promise<LioranDBClient> | null;
-  // eslint-disable-next-line no-var
   var __liorandbDb: Db | null;
 }
 
-if (!global.__liorandbClient) {
-  global.__liorandbClient = null;
-  global.__liorandbPromise = null;
-  global.__liorandbDb = null;
-}
+global.__liorandbClient ??= null;
+global.__liorandbPromise ??= null;
+global.__liorandbDb ??= null;
 
 /**
  * Safely redacts credentials from a database connection URI for logging.
@@ -82,105 +77,122 @@ export function resolveLioranDBUri(): string {
 
 /**
  * Establishes or reuses a singleton connection to the hosted LioranDB database.
- * Throws on connection failure; never returns null or silently falls back.
+ * Failed attempts are discarded so the next request can reconnect.
+ * Callers still receive an error when no real connection is available.
  */
 export async function connectToDatabase(): Promise<{ client: LioranDBClient; db: Db }> {
   if (global.__liorandbClient && global.__liorandbClient.isConnected() && global.__liorandbDb) {
     return { client: global.__liorandbClient, db: global.__liorandbDb };
   }
 
-  // If a previously cached client is no longer connected, clean it up
-  if (global.__liorandbClient && !global.__liorandbClient.isConnected()) {
+  if (!global.__liorandbPromise) {
+    const previousClient = global.__liorandbClient;
     global.__liorandbClient = null;
     global.__liorandbDb = null;
-    global.__liorandbPromise = null;
+    global.__liorandbPromise = createDatabaseConnection(previousClient);
   }
 
-  const uri = resolveLioranDBUri();
-  const parsed = parseConnectionString(uri);
-  const targetDbName = parsed.database || 'lcs';
-
-  if (!global.__liorandbPromise) {
-    global.__liorandbPromise = (async () => {
-      try {
-        const isTls =
-          parsed.scheme === 'liorandb+https' ||
-          parsed.scheme === 'https' ||
-          parsed.port === 443 ||
-          parsed.port === 8443 ||
-          (!parsed.isLoopbackHost && !uri.includes('127.0.0.1') && !uri.includes('localhost'));
-
-        const transport = (process.env.LIORANDB_TRANSPORT as 'grpc' | 'http' | 'auto') || 'grpc';
-        const allowHttpFallback = process.env.LIORANDB_ALLOW_HTTP_FALLBACK === 'true';
-
-        const client = await LioranDBClient.connect(uri, {
-          tls: isTls,
-          transport,
-          allowHttpFallback,
-          timeoutMS: 15000,
-          connectTimeoutMS: 10000,
-          requestTimeoutMS: 15000,
-          maxRetries: 2,
-        });
-
-        if (!client.isConnected()) {
-          throw new ConnectionError('LioranDBClient.connect() completed but client is not marked connected.');
-        }
-
-        // Idempotently ensure the target application logical database exists on the instance
-        try {
-          await client.createDatabase(targetDbName);
-        } catch (dbErr: unknown) {
-          const errMsg = String((dbErr as Error)?.message || '').toLowerCase();
-          const dbErrObj = dbErr as { code?: string; name?: string } | null;
-          const isConflict =
-            dbErrObj?.code === DRIVER_ERROR_CODES.CONFLICT ||
-            dbErrObj?.name === 'ConflictError' ||
-            errMsg.includes('already exists') ||
-            errMsg.includes('conflict');
-          if (!isConflict) {
-            // Log notice if creation returned an unexpected code, but proceed since db might exist
-            console.warn(`[DB] Notice verifying logical database '${targetDbName}':`, (dbErr as Error)?.message || dbErr);
-          }
-        }
-
-        const db = client.db(targetDbName);
-        global.__liorandbClient = client;
-        global.__liorandbDb = db;
-
-        // Auto-initialize Connexus collections and declared indexes in the background
-        if (targetDbName === 'lcs') {
-          (async () => {
-            try {
-              const { initConnexusCollectionsAndIndexes } = await import('./index');
-              await initConnexusCollectionsAndIndexes(db);
-            } catch (initErr) {
-              console.warn('[DB] Notice initializing Connexus collections and indexes:', (initErr as Error)?.message || initErr);
-            }
-          })();
-        }
-
-        return client;
-      } catch (err) {
-        global.__liorandbPromise = null;
-        global.__liorandbClient = null;
-        global.__liorandbDb = null;
-        console.error(`[DB] Connection to LioranDB failed at ${redactUri(uri)}:`, (err as Error).message);
-        throw err;
-      }
-    })();
-  }
-
+  // Every concurrent caller waits on the same attempt. An older caller must
+  // never clear a newer attempt that started after its own connection failed.
+  const attempt = global.__liorandbPromise;
   try {
-    const client = await global.__liorandbPromise;
-    if (!client || !client.isConnected() || !global.__liorandbDb) {
-      global.__liorandbPromise = null;
-      throw new ConnectionError(`Failed to establish an active LioranDB database session at ${redactUri(uri)}.`);
+    const client = await attempt;
+    if (!client.isConnected() || !global.__liorandbDb) {
+      throw new ConnectionError('Database service is temporarily unavailable. Please try again.');
     }
     return { client, db: global.__liorandbDb };
-  } catch (err) {
-    global.__liorandbPromise = null;
-    throw err;
+  } finally {
+    if (global.__liorandbPromise === attempt) {
+      global.__liorandbPromise = null;
+    }
+  }
+}
+
+async function createDatabaseConnection(previousClient: LioranDBClient | null): Promise<LioranDBClient> {
+  let client: LioranDBClient | null = null;
+  try {
+    if (previousClient) {
+      try {
+        await previousClient.close();
+      } catch {
+        // A stale client must not prevent the next connection attempt.
+      }
+    }
+
+    const uri = resolveLioranDBUri();
+    const parsed = parseConnectionString(uri);
+    const targetDbName = parsed.database || 'lcs';
+    const isTls =
+      parsed.scheme === 'liorandb+https' ||
+      parsed.scheme === 'https' ||
+      parsed.port === 443 ||
+      parsed.port === 8443 ||
+      (!parsed.isLoopbackHost && !uri.includes('127.0.0.1') && !uri.includes('localhost'));
+
+    const transport = (process.env.LIORANDB_TRANSPORT as 'grpc' | 'http' | 'auto') || 'grpc';
+    const allowHttpFallback = process.env.LIORANDB_ALLOW_HTTP_FALLBACK === 'true';
+
+    // Retain the client even if connect() fails, so its resources can close.
+    client = new LioranDBClient(uri, {
+      tls: isTls,
+      transport,
+      allowHttpFallback,
+      timeoutMS: 15000,
+      connectTimeoutMS: 10000,
+      requestTimeoutMS: 15000,
+      maxRetries: 2,
+    });
+    await client.connect();
+
+    if (!client.isConnected()) {
+      throw new ConnectionError('LioranDBClient.connect() completed but client is not marked connected.');
+    }
+
+    // Idempotently ensure the target application logical database exists on the instance
+    try {
+      await client.createDatabase(targetDbName);
+    } catch (dbErr: unknown) {
+      const errMsg = String((dbErr as Error)?.message || '').toLowerCase();
+      const dbErrObj = dbErr as { code?: string; name?: string } | null;
+      const isConflict =
+        dbErrObj?.code === DRIVER_ERROR_CODES.CONFLICT ||
+        dbErrObj?.name === 'ConflictError' ||
+        errMsg.includes('already exists') ||
+        errMsg.includes('conflict');
+      if (!isConflict) {
+        // Log notice if creation returned an unexpected code, but proceed since db might exist
+        console.warn('[DB] Could not verify the application database; continuing with the connected client.');
+      }
+    }
+
+    const db = client.db(targetDbName);
+    global.__liorandbClient = client;
+    global.__liorandbDb = db;
+
+    // Auto-initialize Connexus collections and declared indexes in the background
+    if (targetDbName === 'lcs') {
+      (async () => {
+        try {
+          const { initConnexusCollectionsAndIndexes } = await import('./index');
+          await initConnexusCollectionsAndIndexes(db);
+        } catch {
+          console.warn('[DB] Could not initialize application collections and indexes.');
+        }
+      })();
+    }
+
+    return client;
+  } catch {
+    if (client) {
+      try {
+        await client.close();
+      } catch {
+        // Closing a failed client must not replace the recoverable connection error.
+      }
+    }
+    // Do not log URIs or driver errors, which may carry credentials or config.
+    console.warn('[DB] Database connection failed. The next request will retry.');
+    throw new ConnectionError('Database service is temporarily unavailable. Please try again.');
   }
 }
 
