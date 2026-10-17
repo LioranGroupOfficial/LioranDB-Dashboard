@@ -17,7 +17,7 @@ export default function CustomerShell({ children, email, userId, stage, role }: 
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-dvh min-h-0 w-full min-w-0 overflow-hidden bg-[var(--background)]">
+    <div data-customer-shell="" className="fixed inset-0 flex h-dvh min-h-0 w-full min-w-0 overflow-hidden bg-[var(--background)]">
       <CustomerSidebar
         stage={stage}
         role={role}

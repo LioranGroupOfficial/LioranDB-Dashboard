@@ -151,6 +151,14 @@
     min-height: 100dvh;
   }
 
+  /* The customer dashboard owns its scroll area; the document must not scroll too. */
+  html:has([data-customer-shell]),
+  body:has([data-customer-shell]) {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   code, kbd, samp, pre {
     font-family: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
   }
