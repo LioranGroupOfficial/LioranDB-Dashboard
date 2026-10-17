@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { ShieldCheck, Eye, EyeOff } from 'lucide-react';
-import { getFullConnectionUri, maskConnectionUri, studioUnavailableReason, type DatabaseConnection } from '@/lib/database-connection';
+import { getRootConnectionUri, maskConnectionUri, studioUnavailableReason, type DatabaseConnection } from '@/lib/database-connection';
 import CopyButton from './CopyButton';
 import OpenStudioButton from './OpenStudioButton';
 import QuickConnect from './QuickConnect';
@@ -19,7 +19,7 @@ interface DbData extends DatabaseConnection {
 export default function DatabaseCredentials({ db }: { db: DbData }) {
   const [showUri, setShowUri] = useState(false);
   const uriId = useId();
-  const connectionUri = getFullConnectionUri(db.connectionUri);
+  const connectionUri = getRootConnectionUri(db.connectionUri, db.port);
   const unavailableReason = studioUnavailableReason(db);
   const displayedUri = connectionUri
     ? showUri ? connectionUri : maskConnectionUri(connectionUri)
@@ -79,7 +79,7 @@ export default function DatabaseCredentials({ db }: { db: DbData }) {
               ? 'The complete URI or password is unavailable. No placeholder connection will be used.'
               : showUri
                 ? 'This connection string contains your live database password. Keep it private.'
-                : 'Password and URI options hidden. Copy URI includes the complete connection string.'}
+                : 'Password hidden. Copy URI includes the real password.'}
           </p>
         </div>
         <p className="text-[11px] text-[var(--muted)]">

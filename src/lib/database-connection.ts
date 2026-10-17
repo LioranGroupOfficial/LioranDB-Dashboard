@@ -24,6 +24,25 @@ export function getFullConnectionUri(uri: string | null): string | null {
   }
 }
 
+/** Format the customer-facing root URI without changing the stored credentials. */
+export function getRootConnectionUri(uri: string | null, port: number): string | null {
+  const fullUri = getFullConnectionUri(uri);
+  if (!fullUri) return null;
+
+  try {
+    const parsed = new URL(fullUri);
+    // URL parsing removes default HTTPS ports; use this instance's actual port.
+    const connectionPort = parsed.port || String(port);
+    if (!Number.isInteger(Number(connectionPort)) || Number(connectionPort) < 1 || Number(connectionPort) > 65535) {
+      return null;
+    }
+    // username/password are already percent-encoded. Preserve them without encoding again.
+    return `liorandb://${parsed.username}:${parsed.password}@${parsed.hostname}:${connectionPort}/`;
+  } catch {
+    return null;
+  }
+}
+
 export function maskConnectionUri(uri: string): string {
   try {
     const parsed = new URL(uri);
