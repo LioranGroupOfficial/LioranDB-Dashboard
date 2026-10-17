@@ -15,6 +15,7 @@ import {
 import { getPlan, formatPaiseToRupees } from '@/lib/plans';
 import DatabaseCredentials from '@/components/database/DatabaseCredentials';
 import OpenStudioButton from '@/components/database/OpenStudioButton';
+import DatabaseMigration from '@/components/database/DatabaseMigration';
 import DatabaseUsersManager from '@/components/database/DatabaseUsersManager';
 import CancelInstanceModal from '@/components/database/CancelInstanceModal';
 import { decrypt } from '@/lib/crypto';
@@ -243,6 +244,8 @@ export default async function InstanceDetailsPage({
 
       {/* Connection Details Section */}
       <DatabaseCredentials key={dbData.id} db={dbData} />
+
+      <DatabaseMigration />
 
       {/* Database Users & Access Manager */}
       <DatabaseUsersManager
