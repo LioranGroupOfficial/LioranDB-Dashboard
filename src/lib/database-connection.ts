@@ -59,6 +59,7 @@ export function maskConnectionUri(uri: string): string {
 
 export interface DatabaseConnection {
   connectionUri: string | null;
+  port: number;
   status: string;
   provisionedAt?: string;
   serverHealth?: string;
@@ -74,7 +75,7 @@ export function studioUnavailableReason(db: DatabaseConnection): string | null {
   if (db.serverHealth && db.serverHealth !== 'HEALTHY') {
     return 'Studio is unavailable while this database is not healthy.';
   }
-  if (!getFullConnectionUri(db.connectionUri)) {
+  if (!getRootConnectionUri(db.connectionUri, db.port)) {
     return 'The complete connection URI is unavailable. Contact support if this persists.';
   }
   return null;

@@ -1,16 +1,17 @@
 'use client';
 
 import { ExternalLink } from 'lucide-react';
-import { getFullConnectionUri, studioUnavailableReason, type DatabaseConnection } from '@/lib/database-connection';
+import { getRootConnectionUri, studioUnavailableReason, type DatabaseConnection } from '@/lib/database-connection';
 
 export default function OpenStudioButton({ db, className = '' }: { db: DatabaseConnection; className?: string }) {
   const unavailableReason = studioUnavailableReason(db);
 
   function openStudio() {
-    const connectionUri = getFullConnectionUri(db.connectionUri);
+    const connectionUri = getRootConnectionUri(db.connectionUri, db.port);
     if (studioUnavailableReason(db) || !connectionUri) return;
 
-    // Encode the exact stored URI once. Never render or log this credential-bearing URL.
+    // Encode the same unmasked root URI used by Copy URI exactly once.
+    // Never render or log this credential-bearing Studio URL.
     // Replace with a single-use handoff token when Studio supports token redemption.
     window.open(
       `https://studio.liorandb.com/?connection=${encodeURIComponent(connectionUri)}`,
