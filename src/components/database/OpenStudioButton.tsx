@@ -10,10 +10,10 @@ export default function OpenStudioButton({ db, className = '' }: { db: DatabaseC
     const connectionUri = getRootConnectionUri(db.connectionUri, db.port);
     if (studioUnavailableReason(db) || !connectionUri) return;
 
-    // Encode the same unmasked root URI used by Copy URI exactly once.
+    // Keep username/password percent-encoded inside the URI (passwords can contain @/#).
+    // Encode the same unmasked root URI used by Copy URI exactly once for the query value.
     // Never render or log this credential-bearing Studio URL.
     // Replace with a single-use handoff token when Studio supports token redemption.
-    console.log('Opening Studio with connection URI:', connectionUri);
     window.open(
       `https://studio.liorandb.com/?connection=${encodeURIComponent(connectionUri)}`,
       '_blank',
