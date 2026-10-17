@@ -14,7 +14,6 @@ export default function OpenStudioButton({ db, className = '' }: { db: DatabaseC
     // Encode the same unmasked root URI used by Copy URI exactly once for the query value.
     // Never render or log this credential-bearing Studio URL.
     // Replace with a single-use handoff token when Studio supports token redemption.
-    console.log(`https://studio.liorandb.com/?connection=${encodeURIComponent(connectionUri)}`);
     window.open(
       `https://studio.liorandb.com/?connection=${encodeURIComponent(connectionUri)}`,
       '_blank',
