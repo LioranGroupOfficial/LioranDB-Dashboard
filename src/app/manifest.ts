@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'High-Performance Managed Cloud Database Platform & Customer Dashboard',
     start_url: '/',
     display: 'standalone',
-    background_color: '#001e2b',
-    theme_color: '#001e2b',
+    background_color: '#0a0a0a',
+    theme_color: '#0a0a0a',
     icons: [
       {
         src: '/favicon.ico',
