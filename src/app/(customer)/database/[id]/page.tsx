@@ -6,7 +6,6 @@ import Link from 'next/link';
 import {
   ShieldCheck,
   Activity,
-  ExternalLink,
   ArrowLeft,
   CreditCard,
   Clock,
@@ -14,10 +13,11 @@ import {
 } from 'lucide-react';
 import { getPlan, formatPaiseToRupees } from '@/lib/plans';
 import DatabaseCredentials from '@/components/database/DatabaseCredentials';
+import OpenStudioButton from '@/components/database/OpenStudioButton';
 import DatabaseUsersManager from '@/components/database/DatabaseUsersManager';
 import CancelInstanceModal from '@/components/database/CancelInstanceModal';
 import { decrypt } from '@/lib/crypto';
-import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
+import { getFullConnectionUri } from '@/lib/database-connection';
 import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 
@@ -57,32 +57,13 @@ export default async function InstanceDetailsPage({
   let connectionUri: string | null = null;
   if (instance.encryptedConnectionUri) {
     try {
-      connectionUri = decrypt(instance.encryptedConnectionUri);
+      connectionUri = getFullConnectionUri(decrypt(instance.encryptedConnectionUri));
     } catch {
       connectionUri = null;
     }
   }
 
-  // Fallback: If connectionUri has placeholder or missing password, decrypt master password
-  if ((!connectionUri || connectionUri.includes('<password>')) && instance.encryptedControlPlaneCredential) {
-    try {
-      const password = decrypt(instance.encryptedControlPlaneCredential);
-      if (password) {
-        connectionUri = buildLioranDBConnectionUri({
-          username: instance.username || 'admin',
-          password,
-          host: instance.host,
-          port: instance.port || 27018,
-          database: instance.databaseName || 'default',
-          scheme: instance.port === 443 || instance.port === 8443 ? 'liorandb+https' : 'liorandb',
-          tls: instance.port === 443 || instance.port === 8443,
-          transport: 'grpc',
-        });
-      }
-    } catch {
-      // ignore
-    }
-  }
+  // The stored URI is authoritative. Never guess credentials, paths, schemes, or options.
 
   // Calculate current month usage estimate for this instance
   const currentPeriod = getCurrentMonthPeriod();
@@ -95,6 +76,7 @@ export default async function InstanceDetailsPage({
     id: instance._id.toString(),
     name: instance.name,
     status: instance.status,
+    serverHealth: instance.serverHealth,
     host: instance.host,
     port: instance.port,
     databaseName: instance.databaseName,
@@ -169,15 +151,10 @@ export default async function InstanceDetailsPage({
           </div>
 
           <div className="flex items-center gap-2">
-            <a
-              href="https://studio.liorandb.com"
-              target="_blank"
-              rel="noopener noreferrer"
+            <OpenStudioButton
+              db={dbData}
               className="btn-secondary py-1.5 px-3.5 min-h-[38px] text-xs inline-flex items-center gap-1.5"
-            >
-              <span>Open Studio</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            />
 
             <Link
               href="/billing"
@@ -252,7 +229,7 @@ export default async function InstanceDetailsPage({
       )}
 
       {/* Connection Details Section */}
-      <DatabaseCredentials db={dbData} />
+      <DatabaseCredentials key={dbData.id} db={dbData} />
 
       {/* Database Users & Access Manager */}
       <DatabaseUsersManager
