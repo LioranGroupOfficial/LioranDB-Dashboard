@@ -57,15 +57,15 @@ function environmentExample(uri: string): string | null {
 }
 
 // Small tokenizer for these fixed snippets. React escapes all text, including strings.
-// Use DESIGN.md ink tokens and weight for syntax hierarchy in either app theme.
+// Syntax colors follow the app theme, independently of the OS color preference.
 function HighlightedCode({ code }: { code: string }) {
   const tokens = code.split(/("(?:[^"\\]|\\.)*"|\/\/[^\n]*|\b(?:import|from|const|let|try|if|throw|new|await|catch|finally|undefined|string|LioranDBClient|Error)\b|\b\d+\b)/g);
   return tokens.map((token, index) => {
     const className = token.startsWith('//') ? 'text-[var(--text-muted)] italic'
-      : token.startsWith('"') ? 'text-[var(--text-secondary)]'
-        : /^(?:string|undefined|LioranDBClient|Error)$/.test(token) ? 'text-[var(--text-primary)] font-medium'
-          : /^(?:import|from|const|let|try|if|throw|new|await|catch|finally)$/.test(token) ? 'text-[var(--text-strong)] font-semibold'
-            : /^\d+$/.test(token) ? 'text-[var(--text-secondary)] tabular-nums' : undefined;
+      : token.startsWith('"') ? 'text-[var(--code-string)]'
+        : /^(?:string|undefined|LioranDBClient|Error)$/.test(token) ? 'text-[var(--code-type)] font-medium'
+          : /^(?:import|from|const|let|try|if|throw|new|await|catch|finally)$/.test(token) ? 'text-[var(--code-keyword)] font-semibold'
+            : /^\d+$/.test(token) ? 'text-[var(--code-number)] tabular-nums' : undefined;
     return <span key={index} className={className}>{token}</span>;
   });
 }

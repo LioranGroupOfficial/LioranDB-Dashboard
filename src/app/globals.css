@@ -47,6 +47,12 @@
     --on-dark: #ffffff;
     --on-dark-soft: #999999;
 
+    /* Code syntax: dark colors retain contrast on the light code surface. */
+    --code-string: #047857;
+    --code-type: #0369a1;
+    --code-keyword: #6d28d9;
+    --code-number: #b45309;
+
     /* Semantic Monochromatic Status - Light Mode */
     --accent: #111111;
     --accent-dark: #000000;
@@ -108,6 +114,12 @@
     --muted-soft: #666666;
     --on-dark: #ffffff;
     --on-dark-soft: #999999;
+
+    /* Follow the app's explicit dark theme rather than OS preference. */
+    --code-string: #6ee7b7;
+    --code-type: #7dd3fc;
+    --code-keyword: #c4b5fd;
+    --code-number: #fcd34d;
 
     /* Semantic Monochromatic Status - Dark Mode */
     --accent: #ffffff;
