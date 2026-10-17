@@ -17,8 +17,8 @@ export function getFullConnectionUri(uri: string | null): string | null {
       return null;
     }
 
-    return uri;
     console.log(uri);
+    return uri;
   } catch {
     // URL parsing errors can contain credentials; never log or forward them.
     return null;
