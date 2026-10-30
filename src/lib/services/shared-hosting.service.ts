@@ -23,6 +23,7 @@ import type {
 } from '@/lib/liorandb-admin/tenant-types';
 import {
   finalizeHostingNodeSlot,
+  ensureHostingNodeAllocationReservations,
   releaseHostingNodeAssignment,
   releaseHostingNodeReservation,
   reserveHostingNodeSlot,
@@ -183,7 +184,7 @@ export async function provisionFreeSharedTenant(params: {
         }
       : await getSharedHostingContext();
     const tenant = await context.client.getSharedTenant(existingRecord.providerDeploymentId);
-    const pendingReservation = (context.node.allocationReservations || []).find(
+    const pendingReservation = (await ensureHostingNodeAllocationReservations(context.node)).find(
       (item) => item.token === existingRecord.allocationToken && item.state === 'PENDING'
     );
     if (pendingReservation) {
@@ -216,7 +217,7 @@ export async function provisionFreeSharedTenant(params: {
       const existing = tenants.find((tenant) => tenant.external_owner_id === params.ownerId && tenant.status !== 'DELETING');
       if (existing) {
         const record = await upsertManagedDatabaseForTenant(context.node, { tenant: existing }, params.ownerId);
-        const pendingReservation = (context.node.allocationReservations || []).find((item) => item.idempotencyKey === requestKey && item.state === 'PENDING');
+        const pendingReservation = (await ensureHostingNodeAllocationReservations(context.node)).find((item) => item.idempotencyKey === requestKey && item.state === 'PENDING');
         if (pendingReservation) {
           await finalizeHostingNodeSlot({ nodeId: String(context.node._id), token: pendingReservation.token, instanceId: record._id.toString() });
         }

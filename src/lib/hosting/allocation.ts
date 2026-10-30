@@ -11,6 +11,74 @@ export const DEFAULT_SHARED_NODE_CAPACITY = 10;
 export const DEFAULT_HOSTING_NODE_CAPACITY_UPPER_BOUND = 1000;
 export const HOSTING_RESERVATION_LEASE_MS = 120_000;
 
+type HostingNodeWithRawReservations = {
+  _id: unknown;
+  allocationReservations?: unknown;
+};
+
+function isAllocationReservation(value: unknown): value is IHostingAllocationReservation {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const reservation = value as Record<string, unknown>;
+  return (
+    typeof reservation.token === 'string' &&
+    (reservation.state === 'PENDING' || reservation.state === 'ACTIVE')
+  );
+}
+
+/**
+ * Reads the reservation field defensively because remote documents are not
+ * hydrated through a schema validator by the custom LioranDB adapter.
+ *
+ * Older/incorrectly serialized documents can contain a single reservation or
+ * an object keyed by array indexes. Both are safe to canonicalize. Unknown
+ * shapes are rejected so allocation cannot silently overbook a node.
+ */
+export function getHostingNodeAllocationReservations(node: HostingNodeWithRawReservations): IHostingAllocationReservation[] {
+  const raw = node.allocationReservations;
+  if (raw === undefined || raw === null) return [];
+
+  if (Array.isArray(raw)) {
+    const reservations = raw.filter(isAllocationReservation);
+    if (reservations.length === raw.length) return reservations;
+    throw new Error(`HOSTING_NODE_ALLOCATION_DATA_INVALID: node ${String(node._id)} contains an invalid allocationReservations item.`);
+  }
+
+  if (isAllocationReservation(raw)) return [raw];
+
+  if (typeof raw === 'object') {
+    const values = Object.values(raw as Record<string, unknown>);
+    if (values.length === 0) return [];
+    const reservations = values.filter(isAllocationReservation);
+    if (reservations.length === values.length) return reservations;
+  }
+
+  throw new Error(`HOSTING_NODE_ALLOCATION_DATA_INVALID: node ${String(node._id)} allocationReservations is not an array.`);
+}
+
+export async function ensureHostingNodeAllocationReservations(
+  node: HostingNodeWithRawReservations,
+  repairAttempt = 0
+): Promise<IHostingAllocationReservation[]> {
+  const reservations = getHostingNodeAllocationReservations(node);
+  const raw = node.allocationReservations;
+  if (Array.isArray(raw) || raw === undefined) return reservations;
+
+  const repaired = await HostingNode.updateOne(
+    { _id: node._id, allocationReservations: raw },
+    { $set: { allocationReservations: reservations } }
+  );
+  if (repaired.matchedCount === 1) return reservations;
+
+  // Another request changed the node while the malformed value was being
+  // repaired. Re-read it so we never overwrite a newer reservation snapshot.
+  const latest = await HostingNode.findById(node._id).lean<IHostingNode>();
+  if (!latest) return [];
+  if (repairAttempt >= 2) {
+    throw new Error(`HOSTING_NODE_ALLOCATION_REPAIR_CONFLICT: node ${String(node._id)} changed during reservation repair.`);
+  }
+  return ensureHostingNodeAllocationReservations(latest, repairAttempt + 1);
+}
+
 export function getHostingNodeCapacityUpperBound(): number {
   const configured = Number(process.env.HOSTING_NODE_MAX_CAPACITY || DEFAULT_HOSTING_NODE_CAPACITY_UPPER_BOUND);
   return Number.isInteger(configured) && configured > 0 ? Math.min(configured, 100_000) : DEFAULT_HOSTING_NODE_CAPACITY_UPPER_BOUND;
@@ -83,7 +151,7 @@ export async function getHostingNodeAllocationSnapshot(
   let pendingReservations = 0;
   const now = Date.now();
 
-  for (const reservation of node.allocationReservations || []) {
+  for (const reservation of getHostingNodeAllocationReservations(node)) {
     if (reservationIsExpired(reservation, now)) continue;
     if (reservation.state === 'PENDING') pendingReservations++;
     const hasMatchingInstance = Boolean(
@@ -109,7 +177,7 @@ export async function reconcileHostingNodeAllocation(nodeId: string): Promise<Ho
 
   const snapshot = await getHostingNodeAllocationSnapshot(node);
   // Do not overwrite a live reservation's counter. Atomic reservations own the counter while pending.
-  if ((node.pendingReservations || 0) === 0 && (node.allocationReservations || []).every((item) => item.state === 'ACTIVE')) {
+  if ((node.pendingReservations || 0) === 0 && getHostingNodeAllocationReservations(node).every((item) => item.state === 'ACTIVE')) {
     await HostingNode.updateOne(
       { _id: node._id, $or: [{ allocationRevision: node.allocationRevision || 0 }, { allocationRevision: { $exists: false } }] },
       {
@@ -147,7 +215,8 @@ export async function reserveHostingNodeSlot(params: {
   }).sort({ isDefault: -1, createdAt: 1 }).lean<IHostingNode[]>();
 
   for (const candidate of candidates) {
-    const existing = (candidate.allocationReservations || []).find(
+    const reservations = await ensureHostingNodeAllocationReservations(candidate);
+    const existing = reservations.find(
       (reservation) => reservation.idempotencyKey === params.idempotencyKey && !reservationIsExpired(reservation)
     );
     if (existing) return { node: candidate, reservation: existing, reused: true };
@@ -157,7 +226,7 @@ export async function reserveHostingNodeSlot(params: {
       const legacyCapacity = Math.max(0, getNodeMaxCapacity(candidate) - (candidate.currentAssignedCount || 0));
       await HostingNode.updateOne(
         { _id: candidate._id, capacityRemaining: { $exists: false } },
-        { $set: { capacityRemaining: legacyCapacity, pendingReservations: candidate.pendingReservations || 0, allocationReservations: candidate.allocationReservations || [] } }
+        { $set: { capacityRemaining: legacyCapacity, pendingReservations: candidate.pendingReservations || 0, allocationReservations: reservations } }
       );
     }
 
@@ -209,7 +278,9 @@ export async function reserveHostingNodeSlot(params: {
 
 export async function bindHostingReservationToInstance(nodeId: string, token: string, instanceId: string): Promise<void> {
   const node = await HostingNode.findById(nodeId).lean<IHostingNode>();
-  const reservation = node?.allocationReservations?.find((item) => item.token === token);
+  if (!node) return;
+  const reservations = await ensureHostingNodeAllocationReservations(node);
+  const reservation = reservations.find((item) => item.token === token);
   if (!reservation) return;
   await HostingNode.updateOne(
     { _id: nodeId, 'allocationReservations.token': token },
@@ -225,7 +296,8 @@ export async function finalizeHostingNodeSlot(params: {
 }): Promise<void> {
   const node = await HostingNode.findById(params.nodeId).lean<IHostingNode>();
   if (!node) return;
-  const pending = node.allocationReservations?.find((item) => item.token === params.token);
+  const reservations = await ensureHostingNodeAllocationReservations(node);
+  const pending = reservations.find((item) => item.token === params.token);
   if (!pending) return;
   const set: Record<string, unknown> = {
     'allocationReservations.$.instanceId': params.instanceId,
@@ -245,7 +317,8 @@ export async function finalizeHostingNodeSlot(params: {
 export async function releaseHostingNodeReservation(nodeId: string, token: string): Promise<boolean> {
   const node = await HostingNode.findById(nodeId).lean<IHostingNode>();
   if (!node) return false;
-  const reservation = node.allocationReservations?.find((item) => item.token === token && item.state === 'PENDING');
+  const reservations = await ensureHostingNodeAllocationReservations(node);
+  const reservation = reservations.find((item) => item.token === token && item.state === 'PENDING');
   if (!reservation) return false;
   const set: Record<string, unknown> = {};
   if (node.allocationMode === 'DEDICATED') set.status = 'AVAILABLE';
@@ -264,7 +337,8 @@ export async function releaseHostingNodeReservation(nodeId: string, token: strin
 export async function releaseHostingNodeAssignment(nodeId: string, instanceId: string): Promise<boolean> {
   const node = await HostingNode.findById(nodeId).lean<IHostingNode>();
   if (!node) return false;
-  const reservation = node.allocationReservations?.find(
+  const reservations = await ensureHostingNodeAllocationReservations(node);
+  const reservation = reservations.find(
     (item) => item.state === 'ACTIVE' && item.instanceId === instanceId
   );
   if (!reservation) return false;
@@ -304,7 +378,7 @@ export async function clearHostingNodeAssignment(nodeId: string, instanceId: str
 export async function clearExpiredHostingReservations(nodeId: string): Promise<void> {
   const node = await HostingNode.findById(nodeId).lean<IHostingNode>();
   if (!node) return;
-  for (const reservation of node.allocationReservations || []) {
+  for (const reservation of await ensureHostingNodeAllocationReservations(node)) {
     if (reservationIsExpired(reservation)) {
       const linkedInstance = reservation.instanceId
         ? await ManagedDatabase.findById(reservation.instanceId).select('status').lean()
