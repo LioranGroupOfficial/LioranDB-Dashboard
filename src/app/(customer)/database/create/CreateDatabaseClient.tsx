@@ -54,6 +54,7 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
   }, []);
 
   const selectedPlan = PLANS[selectedPlanId];
+  const canSelectFree = !freeTier.loading && freeTier.enabled && !freeTier.hasAllocation && (freeTier.availableSlots ?? 0) > 0;
 
   // Validate coupon
   async function handleApplyCoupon() {
@@ -194,36 +195,55 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="@container/plan-grid grid grid-cols-1 gap-4 @lg/plan-grid:grid-cols-2 @2xl/plan-grid:grid-cols-3">
             {/* Free shared plan — provisioned by the Rust shared-hosting control plane */}
             <div
-              onClick={() => { if (!freeTier.loading && freeTier.enabled && !freeTier.hasAllocation && (freeTier.availableSlots ?? 0) > 0) { setSelectedPlanId('free'); setBackupEnabled(false); } }}
-              className={`p-4 rounded-[7px] border-2 transition-all ${selectedPlanId === 'free' ? 'border-[var(--border-strong)] bg-[var(--surface-soft)] shadow-xs' : 'border-[var(--border)] bg-[var(--surface)]'} ${freeTier.loading || freeTier.hasAllocation || freeTier.availableSlots === 0 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-[var(--border-strong)]'}`}
+              onClick={() => { if (canSelectFree) { setSelectedPlanId('free'); setBackupEnabled(false); } }}
+              onKeyDown={(event) => { if (canSelectFree && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSelectedPlanId('free'); setBackupEnabled(false); } }}
+              role="button"
+              tabIndex={canSelectFree ? 0 : -1}
+              aria-disabled={!canSelectFree}
+              aria-pressed={selectedPlanId === 'free'}
+              className={`flex h-full min-w-0 flex-col rounded-[7px] border-2 p-4 transition-all sm:p-5 ${selectedPlanId === 'free' ? 'border-[var(--border-strong)] bg-[var(--surface-soft)] shadow-xs' : 'border-[var(--border)] bg-[var(--surface)]'} ${freeTier.loading || freeTier.hasAllocation || freeTier.availableSlots === 0 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-[var(--border-strong)]'}`}
             >
-              <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><span className="font-bold text-sm text-[var(--text-strong)]">Free Shared</span><span className="badge badge-default text-[10px] py-0 px-1">FREE</span></div><span className="text-xs font-mono font-bold">₹0</span></div>
-              <p className="text-xs text-[var(--text-secondary)] mb-3">One isolated logical database in the shared free-tier pool.</p>
-              <div className="space-y-1 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]"><div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--text-strong)]" /><span>512 MiB storage quota</span></div><div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--text-strong)]" /><span>Shared pool: 2 vCPU / 512 MiB</span></div><div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--text-strong)]" /><span>{freeTier.loading ? 'Checking capacity…' : freeTier.hasAllocation ? 'Already allocated to this account' : freeTier.availableSlots === null ? 'Capacity unavailable' : `${freeTier.availableSlots} of 10 slots available`}</span></div></div>
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="min-w-0 text-sm font-bold text-[var(--text-strong)]">Free Shared</span>
+                  <span className="badge badge-default whitespace-nowrap px-1.5 py-0.5 text-[10px]">FREE</span>
+                </div>
+                <div className="mt-3 flex items-baseline justify-end gap-3 text-right">
+                  <span className="text-xs font-mono font-bold text-[var(--text-strong)]">₹0</span>
+                </div>
+              </div>
+              <p className="mt-3 min-w-0 text-xs leading-5 text-[var(--text-secondary)]">One isolated logical database in the shared free-tier pool.</p>
+              <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4 text-xs leading-5 text-[var(--text-muted)]">
+                <div className="flex min-w-0 items-start gap-1.5"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-strong)]" /><span className="min-w-0">512 MiB storage quota</span></div>
+                <div className="flex min-w-0 items-start gap-1.5"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-strong)]" /><span className="min-w-0">Shared pool: 2 vCPU / 512 MiB</span></div>
+                <div className="flex min-w-0 items-start gap-1.5"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-strong)]" /><span className="min-w-0">{freeTier.loading ? 'Checking capacity…' : freeTier.hasAllocation ? 'Already allocated to this account' : freeTier.availableSlots === null ? 'Capacity unavailable' : `${freeTier.availableSlots} of 10 slots available`}</span></div>
+              </div>
             </div>
             {/* Shared Plan - Self Service */}
             <div
               onClick={() => setSelectedPlanId('shared')}
-              className={`p-4 rounded-[7px] border-2 cursor-pointer transition-all ${
+              onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedPlanId('shared'); } }}
+              role="button"
+              tabIndex={0}
+              aria-pressed={selectedPlanId === 'shared'}
+              className={`flex h-full min-w-0 flex-col rounded-[7px] border-2 p-4 cursor-pointer transition-all sm:p-5 ${
                 selectedPlanId === 'shared'
                   ? 'border-[var(--border-strong)] bg-[var(--surface-soft)] shadow-xs'
                   : 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-strong)]'
               }`}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-[var(--text-strong)]">Shared</span>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-[4px] text-[10px] font-mono uppercase tracking-wider bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border)]">
-                    SELF-SERVICE
-                  </span>
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="min-w-0 text-sm font-bold text-[var(--text-strong)]">Shared</span>
+                  <span className="badge badge-default whitespace-nowrap px-1.5 py-0.5 text-[10px]">SELF-SERVICE</span>
                 </div>
-                <div className="text-right">
+                <div className="mt-3 flex min-w-0 flex-wrap items-baseline justify-end gap-x-3 gap-y-1 text-right">
                   {appliedCoupon ? (
-                    <div>
-                      <span className="text-xs line-through text-[var(--text-muted)] mr-1.5 font-mono">
+                    <div className="min-w-0">
+                      <span className="mr-1.5 text-xs font-mono text-[var(--text-muted)] line-through">
                         {formatPaiseToRupees(PLANS.shared.hourlyRatePaise)}/hr
                       </span>
                       <span className="text-xs font-mono font-bold text-[var(--text-strong)]">
@@ -242,40 +262,38 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
                   )}
                 </div>
               </div>
-              <p className="text-xs text-[var(--text-secondary)] mb-3">
+              <p className="mt-3 min-w-0 text-xs leading-5 text-[var(--text-secondary)]">
                 Developers, MVPs, prototypes, small applications, and testing.
               </p>
-              <div className="space-y-1 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]">
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-[var(--text-strong)] shrink-0" />
-                  <span>Up to 1,000 documents</span>
+              <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4 text-xs leading-5 text-[var(--text-muted)]">
+                <div className="flex min-w-0 items-start gap-1.5">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-strong)]" />
+                  <span className="min-w-0">Up to 1,000 documents</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-[var(--text-strong)] shrink-0" />
-                  <span>Up to 3,000 ops/sec max limit</span>
+                <div className="flex min-w-0 items-start gap-1.5">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-strong)]" />
+                  <span className="min-w-0">Up to 3,000 ops/sec max limit</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-[var(--text-strong)] shrink-0" />
-                  <span>Shared cloud infrastructure</span>
+                <div className="flex min-w-0 items-start gap-1.5">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-strong)]" />
+                  <span className="min-w-0">Shared cloud infrastructure</span>
                 </div>
               </div>
             </div>
 
             {/* Dedicated Plan - Contact via email */}
             <div
-              className="p-4 rounded-[7px] border-2 border-dashed border-[var(--border)] bg-[var(--surface-soft)] opacity-80 cursor-not-allowed select-none relative"
+              className="flex h-full min-w-0 flex-col rounded-[7px] border-2 border-dashed border-[var(--border)] bg-[var(--surface-soft)] p-4 opacity-80 cursor-not-allowed select-none sm:p-5"
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-[var(--text-strong)]">Dedicated</span>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-[4px] text-[10px] font-mono uppercase tracking-wider bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)]">
-                    ON-DEMAND
-                  </span>
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="min-w-0 text-sm font-bold text-[var(--text-strong)]">Dedicated</span>
+                  <span className="badge badge-default whitespace-nowrap px-1.5 py-0.5 text-[10px]">ON-DEMAND</span>
                 </div>
-                <div className="text-right">
+                <div className="mt-3 flex min-w-0 flex-wrap items-baseline justify-end gap-x-3 gap-y-1 text-right">
                   {appliedCoupon ? (
-                    <div>
-                      <span className="text-xs line-through text-[var(--text-muted)] mr-1.5 font-mono">
+                    <div className="min-w-0">
+                      <span className="mr-1.5 text-xs font-mono text-[var(--text-muted)] line-through">
                         {formatPaiseToRupees(PLANS.dedicated.hourlyRatePaise)}/hr
                       </span>
                       <span className="text-xs font-mono font-bold text-[var(--text-strong)]">
@@ -294,20 +312,20 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
                   )}
                 </div>
               </div>
-              <p className="text-xs text-[var(--text-secondary)] mb-3">
+              <p className="mt-3 min-w-0 text-xs leading-5 text-[var(--text-secondary)]">
                 Production workloads requiring dedicated managed compute.
               </p>
-              <div className="p-3 rounded-[5px] bg-[var(--surface)] border border-[var(--border)] mb-3 text-xs space-y-2">
-                <p className="text-[11px] text-[var(--text-secondary)]">
+              <div className="mt-4 flex min-w-0 flex-1 flex-col gap-3 rounded-[5px] border border-[var(--border)] bg-[var(--surface)] p-3 text-xs">
+                <p className="min-w-0 text-[11px] leading-5 text-[var(--text-secondary)]">
                   Dedicated instances are provisioned on demand. Please contact our team via email for dedicated deployment.
                 </p>
                 <a
                   href={`mailto:${SUPPORT_CONTACT_EMAIL}?subject=Dedicated%20Instance%20Provisioning%20Inquiry`}
-                  className="btn-secondary text-xs py-1 px-2.5 inline-flex items-center gap-1.5 font-semibold"
+                  className="btn-secondary mt-auto min-w-0 w-full justify-start px-2.5 py-1 text-left text-xs font-semibold leading-4 whitespace-normal break-words"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Mail className="w-3.5 h-3.5" />
-                  <span>Contact: {SUPPORT_CONTACT_EMAIL}</span>
+                  <Mail className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 break-words">Contact: {SUPPORT_CONTACT_EMAIL}</span>
                 </a>
               </div>
             </div>
