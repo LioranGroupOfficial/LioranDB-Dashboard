@@ -59,9 +59,19 @@ export async function ensureHostingNodeAllocationReservations(
   node: HostingNodeWithRawReservations,
   repairAttempt = 0
 ): Promise<IHostingAllocationReservation[]> {
-  const reservations = getHostingNodeAllocationReservations(node);
   const raw = node.allocationReservations;
-  if (Array.isArray(raw) || raw === undefined) return reservations;
+  let reservations: IHostingAllocationReservation[];
+  let needsRepair = raw !== undefined && !Array.isArray(raw);
+
+  try {
+    reservations = getHostingNodeAllocationReservations(node);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.startsWith('HOSTING_NODE_ALLOCATION_DATA_INVALID:')) throw error;
+    reservations = await rebuildHostingNodeAllocationReservations(node._id);
+    needsRepair = true;
+  }
+
+  if (!needsRepair) return reservations;
 
   const repaired = await HostingNode.updateOne(
     { _id: node._id, allocationReservations: raw },
@@ -77,6 +87,25 @@ export async function ensureHostingNodeAllocationReservations(
     throw new Error(`HOSTING_NODE_ALLOCATION_REPAIR_CONFLICT: node ${String(node._id)} changed during reservation repair.`);
   }
   return ensureHostingNodeAllocationReservations(latest, repairAttempt + 1);
+}
+
+async function rebuildHostingNodeAllocationReservations(nodeId: unknown): Promise<IHostingAllocationReservation[]> {
+  const occupiedStatuses = ['PENDING', 'PROVISIONING', 'ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED', 'RESETTING', 'DELETING'];
+  const records = await ManagedDatabase.find({
+    hostingNodeId: nodeId,
+    status: { $in: occupiedStatuses },
+  }).select('_id customerId allocationToken status createdAt').lean();
+
+  return records.flatMap((record) => {
+    if (typeof record.allocationToken !== 'string' || !record.allocationToken) return [];
+    return [{
+      token: record.allocationToken,
+      customerId: record.customerId ? String(record.customerId) : undefined,
+      instanceId: String(record._id),
+      state: ['PENDING', 'PROVISIONING', 'RESETTING', 'DELETING'].includes(record.status) ? 'PENDING' as const : 'ACTIVE' as const,
+      createdAt: record.createdAt ? new Date(record.createdAt) : new Date(),
+    }];
+  });
 }
 
 export function getHostingNodeCapacityUpperBound(): number {
@@ -140,6 +169,7 @@ export async function getHostingNodeAllocationSnapshot(
   if (!node) {
     return { currentAssignedCount: 0, pendingReservations: 0, availableCapacity: 0, occupiedInstanceIds: [] };
   }
+  const reservations = await ensureHostingNodeAllocationReservations(node);
 
   const instances = await ManagedDatabase.find({
     hostingNodeId: node._id,
@@ -151,7 +181,7 @@ export async function getHostingNodeAllocationSnapshot(
   let pendingReservations = 0;
   const now = Date.now();
 
-  for (const reservation of getHostingNodeAllocationReservations(node)) {
+  for (const reservation of reservations) {
     if (reservationIsExpired(reservation, now)) continue;
     if (reservation.state === 'PENDING') pendingReservations++;
     const hasMatchingInstance = Boolean(
@@ -175,9 +205,10 @@ export async function reconcileHostingNodeAllocation(nodeId: string): Promise<Ho
   const node = await HostingNode.findById(nodeId).lean();
   if (!node) return { currentAssignedCount: 0, pendingReservations: 0, availableCapacity: 0, occupiedInstanceIds: [] };
 
-  const snapshot = await getHostingNodeAllocationSnapshot(node);
+  const reservations = await ensureHostingNodeAllocationReservations(node);
+  const snapshot = await getHostingNodeAllocationSnapshot({ ...node, allocationReservations: reservations });
   // Do not overwrite a live reservation's counter. Atomic reservations own the counter while pending.
-  if ((node.pendingReservations || 0) === 0 && getHostingNodeAllocationReservations(node).every((item) => item.state === 'ACTIVE')) {
+  if ((node.pendingReservations || 0) === 0 && reservations.every((item) => item.state === 'ACTIVE')) {
     await HostingNode.updateOne(
       { _id: node._id, $or: [{ allocationRevision: node.allocationRevision || 0 }, { allocationRevision: { $exists: false } }] },
       {

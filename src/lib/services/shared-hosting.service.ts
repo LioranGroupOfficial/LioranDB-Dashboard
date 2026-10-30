@@ -131,7 +131,7 @@ export async function listOwnedSharedTenants(ownerId: string, includeUsage = fal
 
   const records = await ManagedDatabase.find({
     providerDeploymentId: { $in: tenantContexts.map(({ tenant }) => tenant.tenant_id) },
-    customerId: ownerId,
+    $or: [{ customerId: ownerId }, { userId: ownerId }],
   }).lean();
   const recordByTenant = new Map(records.map((record) => [record.providerDeploymentId, record]));
 
@@ -146,7 +146,7 @@ export async function listOwnedSharedTenants(ownerId: string, includeUsage = fal
 
 export async function getOwnedSharedTenant(ownerId: string, tenantId: string, includeUsage = true): Promise<OwnedSharedTenant> {
   await connectToDatabase();
-  const record = await ManagedDatabase.findOne({ providerDeploymentId: tenantId, customerId: ownerId }).lean();
+  const record = await ManagedDatabase.findOne({ providerDeploymentId: tenantId, $or: [{ customerId: ownerId }, { userId: ownerId }] }).lean();
   const existingNode = record?.hostingNodeId ? await HostingNode.findById(record.hostingNodeId).lean() : null;
   const context = existingNode
     ? {
@@ -169,11 +169,12 @@ export async function provisionFreeSharedTenant(params: {
   await connectToDatabase();
   const requestKey = params.idempotencyKey || `cloud-${params.ownerId}-${generateSecureToken(18)}`;
   const existingRecord = await ManagedDatabase.findOne({
-    customerId: params.ownerId,
+    $or: [{ customerId: params.ownerId }, { userId: params.ownerId }],
     planId: FREE_SHARED_PLAN_ID,
     status: { $nin: ['TERMINATED', 'DELETED', 'FAILED'] },
   }).lean();
-  if (existingRecord?.providerDeploymentId) {
+  if (existingRecord) {
+    if (!existingRecord.providerDeploymentId) throw new Error('FREE_TIER_ALREADY_ALLOCATED');
     const existingNode = existingRecord.hostingNodeId
       ? await HostingNode.findById(existingRecord.hostingNodeId).lean()
       : null;
@@ -286,7 +287,7 @@ export async function rotateOwnedSharedTenantCredentials(ownerId: string, tenant
   const rotated = await context.client.rotateSharedTenantCredentials(tenantId);
 
   await connectToDatabase();
-  const record = await ManagedDatabase.findOne({ providerDeploymentId: tenantId, customerId: ownerId });
+  const record = await ManagedDatabase.findOne({ providerDeploymentId: tenantId, $or: [{ customerId: ownerId }, { userId: ownerId }] });
   if (record) {
     const connectionUri = buildSharedConnectionUri(
       rotated.credentials.username,
@@ -415,7 +416,7 @@ async function upsertManagedDatabaseForTenant(
       : [],
   };
 
-  const existing = await ManagedDatabase.findOne({ providerDeploymentId: tenant.tenant_id, customerId });
+  const existing = await ManagedDatabase.findOne({ providerDeploymentId: tenant.tenant_id, $or: [{ customerId }, { userId: customerId }] });
   if (existing) {
     Object.assign(existing, sharedFields);
     await existing.save();
