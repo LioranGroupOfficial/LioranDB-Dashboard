@@ -215,6 +215,21 @@
 }
 
 @layer components {
+  .skeleton-ink {
+    background: var(--surface-strong);
+    border-radius: 5px;
+    animation: skeleton-ink-shimmer 1.6s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-ink-shimmer {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 0.95; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton-ink { animation: none; }
+  }
+
   /* Buttons from DESIGN.md (7px sketch radius, 2px solid border, tactile press) */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[7px] text-sm font-semibold transition-all duration-150 cursor-pointer select-none min-h-[42px] border-2;

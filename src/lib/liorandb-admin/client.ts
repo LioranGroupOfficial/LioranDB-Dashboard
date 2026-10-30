@@ -42,6 +42,23 @@ import {
   LioranDBUnreachableError,
 } from './errors';
 import { normalizeControlPlaneUrl, resolveControlPlaneEndpoint, resolveControlPlaneToken } from './url';
+import {
+  parseSharedHostingStatus,
+  parseSharedHostingStorage,
+  parseTenant,
+  parseTenantUsage,
+} from './shared-hosting';
+import type {
+  CreateTenantInput,
+  CreateTenantResult,
+  PatchTenantInput,
+  RustSharedHostingStatus,
+  RustSharedHostingStorage,
+  RustTenant,
+  RustTenantUsage,
+  TenantActionResult,
+  TenantCredentialRotation,
+} from './tenant-types';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 import type { IHostingNode } from '@/lib/db/models/HostingNode';
 
@@ -460,6 +477,135 @@ export class LioranDBAdminClient {
   // ==========================================
   // Public Authoritative Control Plane Operations
   // ==========================================
+
+  /** Shared-hosting control-plane status. Path: GET /v1/control/shared-hosting */
+  public async getSharedHostingStatus(): Promise<RustSharedHostingStatus> {
+    const payload = await this.dispatch<unknown>({
+      path: '/v1/control/shared-hosting',
+      method: 'GET',
+    });
+    return parseSharedHostingStatus(payload);
+  }
+
+  /** Shared-hosting storage accounting. Path: GET /v1/control/shared-hosting/storage */
+  public async getSharedHostingStorage(): Promise<RustSharedHostingStorage> {
+    const payload = await this.dispatch<unknown>({
+      path: '/v1/control/shared-hosting/storage',
+      method: 'GET',
+    });
+    return parseSharedHostingStorage(payload);
+  }
+
+  /** Durable shared tenant registry. Path: GET /v1/control/tenants */
+  public async listSharedTenants(): Promise<RustTenant[]> {
+    const payload = await this.dispatch<unknown>({
+      path: '/v1/control/tenants',
+      method: 'GET',
+    });
+    if (!Array.isArray(payload)) {
+      throw new LioranDBAdminError('Control plane returned an invalid tenant list response.', {
+        code: 'INVALID_CONTROL_PLANE_RESPONSE',
+        statusCode: 502,
+      });
+    }
+    return payload.map((tenant) => parseTenant(tenant));
+  }
+
+  /** Provision a tenant. Retries are only enabled when an idempotency key is supplied. */
+  public async createSharedTenant(input: CreateTenantInput, idempotencyKey: string): Promise<CreateTenantResult> {
+    const payload = await this.dispatch<unknown>({
+      path: '/v1/control/tenants',
+      method: 'POST',
+      body: input,
+      idempotencyKey,
+      timeoutMs: 30000,
+    });
+    const raw = (payload as { tenant?: unknown })?.tenant ?? payload;
+    return {
+      tenant: parseTenant(raw),
+      credentials: (payload as { credentials?: { username: string; password: string } })?.credentials,
+      instance: (payload as { instance?: { type: string; memory_limit_bytes: number; cpu_limit_cores: number } })?.instance,
+    };
+  }
+
+  public async getSharedTenant(tenantId: string): Promise<RustTenant> {
+    const payload = await this.dispatch<unknown>({
+      path: `/v1/control/tenants/${encodeURIComponent(tenantId)}`,
+      method: 'GET',
+    });
+    return parseTenant(payload);
+  }
+
+  public async updateSharedTenant(tenantId: string, input: PatchTenantInput): Promise<RustTenant> {
+    const payload = await this.dispatch<unknown>({
+      path: `/v1/control/tenants/${encodeURIComponent(tenantId)}`,
+      method: 'PATCH',
+      body: input,
+    });
+    return parseTenant(payload);
+  }
+
+  public async deleteSharedTenant(tenantId: string): Promise<TenantActionResult> {
+    return this.dispatch<TenantActionResult>({
+      path: `/v1/control/tenants/${encodeURIComponent(tenantId)}`,
+      method: 'DELETE',
+    });
+  }
+
+  public async suspendSharedTenant(tenantId: string): Promise<RustTenant> {
+    const payload = await this.dispatch<{ tenant?: unknown }>({
+      path: `/v1/control/tenants/${encodeURIComponent(tenantId)}/suspend`,
+      method: 'POST',
+    });
+    return parseTenant(payload.tenant ?? payload);
+  }
+
+  public async resumeSharedTenant(tenantId: string): Promise<RustTenant> {
+    const payload = await this.dispatch<{ tenant?: unknown }>({
+      path: `/v1/control/tenants/${encodeURIComponent(tenantId)}/resume`,
+      method: 'POST',
+    });
+    return parseTenant(payload.tenant ?? payload);
+  }
+
+  public async resetSharedTenant(tenantId: string): Promise<RustTenant> {
+    const payload = await this.dispatch<{ tenant?: unknown }>({
+      path: `/v1/control/tenants/${encodeURIComponent(tenantId)}/reset`,
+      method: 'POST',
+      timeoutMs: 30000,
+    });
+    return parseTenant(payload.tenant ?? payload);
+  }
+
+  public async rotateSharedTenantCredentials(tenantId: string): Promise<TenantCredentialRotation> {
+    const payload = await this.dispatch<TenantCredentialRotation>({
+      path: `/v1/control/tenants/${encodeURIComponent(tenantId)}/credentials/rotate`,
+      method: 'POST',
+    });
+    if (!payload?.credentials?.username || !payload.credentials.password) {
+      throw new LioranDBAdminError('Control plane did not return rotated tenant credentials.', {
+        code: 'INVALID_CONTROL_PLANE_RESPONSE',
+        statusCode: 502,
+      });
+    }
+    return payload;
+  }
+
+  public async getSharedTenantUsage(tenantId: string): Promise<RustTenantUsage> {
+    const payload = await this.dispatch<unknown>({
+      path: `/v1/control/tenants/${encodeURIComponent(tenantId)}/usage`,
+      method: 'GET',
+    });
+    return parseTenantUsage(payload);
+  }
+
+  public async getSharedTenantMetrics(tenantId: string): Promise<RustTenantUsage> {
+    const payload = await this.dispatch<unknown>({
+      path: `/v1/control/tenants/${encodeURIComponent(tenantId)}/metrics`,
+      method: 'GET',
+    });
+    return parseTenantUsage(payload);
+  }
 
   /**
    * Fetches real, unsimulated server health, version, uptime, storage, and statistics.

@@ -11,6 +11,7 @@ import { CreateInstanceSchema, getZodErrorMessage } from '@/lib/validation/schem
 import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import { createApiError } from '@/lib/errors';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
+import { provisionFreeSharedTenant } from '@/lib/services/shared-hosting.service';
 
 export async function GET() {
   try {
@@ -121,6 +122,74 @@ export async function POST(req: NextRequest) {
         { error: `You already have an active database instance named "${name}". Please choose another name.` },
         { status: 409 }
       );
+    }
+
+    // Free Shared is provisioned by the Rust shared-hosting control plane. The
+    // control plane is authoritative for the one-tenant-per-owner rule,
+    // capacity, quota, credential generation, and successful completion.
+    if (planId === 'free') {
+      try {
+        const freeTenant = await provisionFreeSharedTenant({
+          ownerId: user._id.toString(),
+          ownerEmail: user.email,
+          databaseName: name.trim().toLowerCase(),
+          idempotencyKey: req.headers.get('idempotency-key') || undefined,
+        });
+
+        const database = freeTenant.database;
+        if (!database) {
+          return NextResponse.json(
+            { error: 'The shared database was provisioned, but its dashboard record is still synchronizing. Refresh shortly.', code: 'DASHBOARD_RECORD_SYNC_PENDING' },
+            { status: 202 }
+          );
+        }
+
+        await createNotification({
+          userId: user._id.toString(),
+          type: 'PROVISIONING_COMPLETE',
+          title: 'Free shared database active',
+          body: `Your free shared database "${database.name}" is ready to use.`,
+          link: `/database/${database.id}`,
+        });
+
+        return NextResponse.json({
+          success: true,
+          instance: {
+            id: database.id,
+            name: database.name,
+            planId: 'free',
+            planName: 'Free Shared',
+            status: database.status,
+            host: database.host,
+            port: database.port,
+            databaseName: database.name,
+            username: freeTenant.credentials?.username,
+            password: freeTenant.credentials?.password,
+            hourlyRatePaise: 0,
+            backupEnabled: false,
+            billingStartedAt: null,
+          },
+        });
+      } catch (freeErr: unknown) {
+        const message = freeErr instanceof Error ? freeErr.message : 'Free shared database provisioning failed.';
+        if (message === 'FREE_TIER_ALREADY_ALLOCATED') {
+          return NextResponse.json(
+            { error: 'Your account already has a free shared database. Existing free databases remain available even when new capacity is full.', code: 'FREE_TIER_ALREADY_ALLOCATED' },
+            { status: 409 }
+          );
+        }
+        if (message === 'SHARED_HOSTING_CAPACITY_EXHAUSTED') {
+          return NextResponse.json(
+            { error: 'No free shared database slots are currently available. Please try again later.', code: 'SHARED_HOSTING_CAPACITY_EXHAUSTED' },
+            { status: 409 }
+          );
+        }
+        console.error('[Free Shared Provisioning Error]', freeErr);
+        return NextResponse.json(
+          { error: 'The shared hosting control plane could not confirm provisioning. No successful allocation was reported.', code: 'SHARED_PROVISIONING_FAILED' },
+          { status: 502 }
+        );
+      }
     }
 
     // Validate coupon if provided

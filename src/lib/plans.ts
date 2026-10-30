@@ -32,6 +32,29 @@ export const BACKUP_MONTHLY_PAISE = 20000;
 export const SUPPORT_CONTACT_EMAIL = 'support@liorandb.com';
 
 export const PLANS: Record<string, PlanConfig> = {
+  free: {
+    id: 'free',
+    name: 'Free Shared',
+    hourlyRateRupees: 0,
+    hourlyRatePaise: 0,
+    priceRupees: 0,
+    pricePaise: 0,
+    type: 'shared',
+    purpose: 'A durable shared database for learning, prototypes, and lightweight applications.',
+    resourceModel: 'Shared free-tier pool (2 vCPU / 512 MiB for the pool)',
+    documentGuideline: 'One database per customer, 512 MiB logical storage quota',
+    opsLimitGuideline: '10 sustained requests/sec with a shared pool backstop',
+    opsPerSecondLimit: 10,
+    maxOpsPerSec: 10,
+    backupIncluded: false,
+    optionalBackupAllowed: false,
+    backupPriceMonthlyRupees: 0,
+    backupPriceMonthlyPaise: 0,
+    isSelfService: true,
+    selfService: true,
+    badge: 'Free tier',
+    description: 'One isolated logical database in the LioranDB shared free-tier pool.',
+  },
   shared: {
     id: 'shared',
     name: 'Shared',

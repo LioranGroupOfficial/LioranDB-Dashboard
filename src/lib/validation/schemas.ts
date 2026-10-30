@@ -56,7 +56,7 @@ export const CreateInstanceSchema = z.object({
     .min(3, 'Instance name must be at least 3 characters')
     .max(32, 'Instance name cannot exceed 32 characters')
     .regex(/^[a-z0-9-]+$/, 'Instance name can only contain lowercase letters, numbers, and hyphens'),
-  planId: z.enum(['shared', 'dedicated']),
+  planId: z.enum(['free', 'shared', 'dedicated']),
   backupEnabled: z.boolean().default(false),
   couponCode: z.string().optional(),
 });

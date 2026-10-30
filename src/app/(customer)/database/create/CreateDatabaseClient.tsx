@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -27,7 +27,7 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
 
   // Form states
   const [instanceName, setInstanceName] = useState('');
-  const [selectedPlanId, setSelectedPlanId] = useState<'shared' | 'dedicated'>('shared');
+  const [selectedPlanId, setSelectedPlanId] = useState<'free' | 'shared' | 'dedicated'>('free');
   const [backupEnabled, setBackupEnabled] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{
@@ -39,6 +39,19 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [freeTier, setFreeTier] = useState<{ loading: boolean; enabled: boolean; availableSlots: number | null; hasAllocation: boolean }>({ loading: true, enabled: false, availableSlots: null, hasAllocation: false });
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/customer/free-tier')
+      .then((response) => response.json())
+      .then((data) => {
+        if (!active) return;
+        setFreeTier({ loading: false, enabled: Boolean(data.enabled), availableSlots: typeof data.availableSlots === 'number' ? data.availableSlots : null, hasAllocation: Boolean(data.hasAllocation) });
+      })
+      .catch(() => active && setFreeTier((current) => ({ ...current, loading: false })));
+    return () => { active = false; };
+  }, []);
 
   const selectedPlan = PLANS[selectedPlanId];
 
@@ -181,7 +194,16 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Free shared plan — provisioned by the Rust shared-hosting control plane */}
+            <div
+              onClick={() => { if (!freeTier.loading && freeTier.enabled && !freeTier.hasAllocation && (freeTier.availableSlots ?? 0) > 0) { setSelectedPlanId('free'); setBackupEnabled(false); } }}
+              className={`p-4 rounded-[7px] border-2 transition-all ${selectedPlanId === 'free' ? 'border-[var(--border-strong)] bg-[var(--surface-soft)] shadow-xs' : 'border-[var(--border)] bg-[var(--surface)]'} ${freeTier.loading || freeTier.hasAllocation || freeTier.availableSlots === 0 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-[var(--border-strong)]'}`}
+            >
+              <div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><span className="font-bold text-sm text-[var(--text-strong)]">Free Shared</span><span className="badge badge-default text-[10px] py-0 px-1">FREE</span></div><span className="text-xs font-mono font-bold">₹0</span></div>
+              <p className="text-xs text-[var(--text-secondary)] mb-3">One isolated logical database in the shared free-tier pool.</p>
+              <div className="space-y-1 text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border)]"><div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--text-strong)]" /><span>512 MiB storage quota</span></div><div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--text-strong)]" /><span>Shared pool: 2 vCPU / 512 MiB</span></div><div className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[var(--text-strong)]" /><span>{freeTier.loading ? 'Checking capacity…' : freeTier.hasAllocation ? 'Already allocated to this account' : freeTier.availableSlots === null ? 'Capacity unavailable' : `${freeTier.availableSlots} of 10 slots available`}</span></div></div>
+            </div>
             {/* Shared Plan - Self Service */}
             <div
               onClick={() => setSelectedPlanId('shared')}
