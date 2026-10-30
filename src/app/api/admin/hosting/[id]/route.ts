@@ -5,7 +5,8 @@ import { createAuditLog } from '@/lib/audit';
 import { encrypt } from '@/lib/crypto';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin/client';
 import { parseAndNormalizeEndpoint } from '../route';
-import type { HostingAllocationMode, HostingNodeHealthStatus } from '@/lib/db/models/HostingNode';
+import { getHostingNodeAllocationSnapshot, getNodeMaxCapacity, normalizeHostingAllocationConfig } from '@/lib/hosting/allocation';
+import type { HostingNodeHealthStatus } from '@/lib/db/models/HostingNode';
 
 export async function GET(
   _req: NextRequest,
@@ -23,16 +24,20 @@ export async function GET(
 
     const assignedInstances = await ManagedDatabase.find({
       hostingNodeId: node._id,
-      status: { $nin: ['TERMINATED', 'DELETED'] },
+      status: { $in: ['PENDING', 'PROVISIONING', 'ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED', 'RESETTING', 'DELETING'] },
     })
       .select('name status customerId planId createdAt')
       .lean();
+    const snapshot = await getHostingNodeAllocationSnapshot(node as any);
 
     return NextResponse.json({
       success: true,
       node: {
         ...node,
-        currentAssignedCount: assignedInstances.length,
+        maxCapacity: getNodeMaxCapacity(node as any),
+        currentAssignedCount: snapshot.currentAssignedCount,
+        pendingReservations: snapshot.pendingReservations,
+        availableCapacity: snapshot.availableCapacity,
         instances: assignedInstances,
       },
     });
@@ -57,6 +62,25 @@ export async function PUT(
     if (!node) {
       return NextResponse.json({ error: 'Hosting node not found' }, { status: 404 });
     }
+    const allocationRevision = Number(node.allocationRevision || 0);
+    const currentMode = node.allocationMode || 'DEDICATED';
+    const allocationSnapshot = await getHostingNodeAllocationSnapshot(node as any);
+    let allocationConfig: ReturnType<typeof normalizeHostingAllocationConfig>;
+    try {
+      allocationConfig = normalizeHostingAllocationConfig(
+        body.allocationMode,
+        body.maxCapacity,
+        { existingMode: currentMode }
+      );
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid hosting allocation configuration.' }, { status: 400 });
+    }
+    if (allocationConfig.allocationMode !== currentMode && (allocationSnapshot.currentAssignedCount > 0 || allocationSnapshot.pendingReservations > 0)) {
+      return NextResponse.json({ error: 'Cannot change allocation mode while occupied or pending allocations exist. Drain the node first.' }, { status: 409 });
+    }
+    if (allocationConfig.maxCapacity < allocationSnapshot.currentAssignedCount) {
+      return NextResponse.json({ error: `Maximum capacity cannot be reduced below the ${allocationSnapshot.currentAssignedCount} occupied allocation(s) and pending reservations.` }, { status: 409 });
+    }
 
     if (body.isDefault && !node.isDefault) {
       await HostingNode.updateMany({ _id: { $ne: node._id } }, { isDefault: false });
@@ -64,7 +88,7 @@ export async function PUT(
 
     if (body.name !== undefined) node.name = body.name.trim();
     if (body.region !== undefined) node.region = body.region.trim();
-    if (body.allocationMode !== undefined) node.allocationMode = (body.allocationMode as HostingAllocationMode) || 'DEDICATED';
+    node.allocationMode = allocationConfig.allocationMode;
 
     if (body.dbUrl !== undefined) {
       const dbEndpoint = parseAndNormalizeEndpoint(body.dbUrl, body.port ? Number(body.port) : node.port);
@@ -99,7 +123,7 @@ export async function PUT(
           hostingNodeId: node._id,
           status: { $nin: ['TERMINATED', 'DELETED'] },
         });
-        if (activeCount > 0 || node.currentAssignedCount > 0) {
+        if (activeCount > 0 || allocationSnapshot.currentAssignedCount > 0) {
           return NextResponse.json({ error: 'Cannot set node status to AVAILABLE while active databases are assigned.' }, { status: 400 });
         }
       }
@@ -108,7 +132,7 @@ export async function PUT(
         node.quarantineReason = undefined;
       }
     }
-    node.maxCapacity = 1;
+    node.maxCapacity = allocationConfig.maxCapacity;
     if (body.notes !== undefined) node.notes = body.notes;
     if (body.isDefault !== undefined) node.isDefault = Boolean(body.isDefault);
 
@@ -129,7 +153,40 @@ export async function PUT(
       }
     }
 
-    await node.save();
+    const updateFields: Record<string, unknown> = {
+      name: node.name,
+      region: node.region,
+      dbUrl: node.dbUrl,
+      port: node.port,
+      protocol: node.protocol,
+      httpPort: node.httpPort,
+      grpcUrl: node.grpcUrl,
+      grpcPort: node.grpcPort,
+      controlPlaneEndpoint: node.controlPlaneEndpoint,
+      encryptedControlPlaneToken: node.encryptedControlPlaneToken,
+      defaultRootUsername: node.defaultRootUsername,
+      notes: node.notes,
+      isDefault: node.isDefault,
+      status: node.status,
+      healthStatus: node.healthStatus,
+      serverIdentity: node.serverIdentity,
+      serverVersion: node.serverVersion,
+      lastHealthCheckAt: node.lastHealthCheckAt,
+      quarantineReason: node.quarantineReason,
+      allocationMode: allocationConfig.allocationMode,
+      maxCapacity: allocationConfig.maxCapacity,
+      ...(body.allocationMode !== undefined || body.maxCapacity !== undefined || node.capacityRemaining === undefined
+        ? { capacityRemaining: Math.max(0, allocationConfig.maxCapacity - allocationSnapshot.currentAssignedCount) }
+        : {}),
+    };
+    const updateResult = await HostingNode.updateOne(
+      { _id: node._id, $or: [{ allocationRevision }, { allocationRevision: { $exists: false } }] },
+      { $set: updateFields, $inc: { allocationRevision: 1 } }
+    );
+    if (updateResult.matchedCount !== 1) {
+      return NextResponse.json({ error: 'Hosting node changed while it was being updated. Refresh and retry.' }, { status: 409 });
+    }
+    const savedNode = await HostingNode.findById(node._id).lean();
 
     await createAuditLog({
       userId: admin.userId,
@@ -139,7 +196,7 @@ export async function PUT(
       metadata: { name: node.name, status: node.status, healthStatus: node.healthStatus },
     });
 
-    return NextResponse.json({ success: true, node });
+    return NextResponse.json({ success: true, node: savedNode });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to update hosting node';
     const status = message.includes('Unauthorized') || message.includes('Forbidden') || message.includes('Authentication') ? 403 : 500;
@@ -163,13 +220,14 @@ export async function DELETE(
 
     const assignedCount = await ManagedDatabase.countDocuments({
       hostingNodeId: node._id,
-      status: { $nin: ['TERMINATED', 'DELETED'] },
+      status: { $in: ['PENDING', 'PROVISIONING', 'ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED', 'RESETTING', 'DELETING'] },
     });
+    const allocationSnapshot = await getHostingNodeAllocationSnapshot(node as any);
 
-    if (assignedCount > 0) {
+    if (assignedCount > 0 || allocationSnapshot.pendingReservations > 0 || allocationSnapshot.currentAssignedCount > 0) {
       return NextResponse.json(
         {
-          error: `Cannot delete hosting node: ${assignedCount} active database instance(s) are currently running on this node. Drain or migrate instances first.`,
+          error: `Cannot delete hosting node: ${allocationSnapshot.currentAssignedCount} occupied or pending allocation(s) remain. Drain or migrate tenants first.`,
         },
         { status: 400 }
       );

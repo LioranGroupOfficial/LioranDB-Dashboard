@@ -5,6 +5,7 @@ import { LioranDBAdminClient } from '@/lib/liorandb-admin';
 import { createAuditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { rateLimit } from '@/lib/rate-limit';
+import { adminSharedTenantAction } from '@/lib/services/shared-hosting.service';
 
 export async function POST(
   _req: NextRequest,
@@ -23,6 +24,14 @@ export async function POST(
     const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Database instance not found' }, { status: 404 });
+    }
+
+    const hostingNode = instance.hostingNodeId as any;
+    if (hostingNode?.allocationMode === 'SHARED') {
+      if (!instance.providerDeploymentId) return NextResponse.json({ error: 'Shared tenant identity is missing.' }, { status: 409 });
+      const rotated = await adminSharedTenantAction(admin.userId, instance.providerDeploymentId, 'rotate');
+      if (!('credentials' in rotated) || !rotated.credentials) return NextResponse.json({ error: 'Shared control plane did not return tenant credentials.' }, { status: 502 });
+      return NextResponse.json({ success: true, username: rotated.credentials.username, newGeneratedPassword: rotated.credentials.password, rotatedAt: new Date().toISOString() });
     }
 
     const decodedUsername = decodeURIComponent(username);

@@ -25,6 +25,8 @@ export interface PlanConfig {
   contactEmail?: string;
   badge?: string;
   description?: string;
+  storageQuotaBytes?: number;
+  maxDatabasesPerCustomer?: number;
 }
 
 export const BACKUP_MONTHLY_RUPEES = 200;
@@ -46,6 +48,8 @@ export const PLANS: Record<string, PlanConfig> = {
     opsLimitGuideline: '10 sustained requests/sec with a shared pool backstop',
     opsPerSecondLimit: 10,
     maxOpsPerSec: 10,
+    storageQuotaBytes: 512 * 1024 * 1024,
+    maxDatabasesPerCustomer: 1,
     backupIncluded: false,
     optionalBackupAllowed: false,
     backupPriceMonthlyRupees: 0,

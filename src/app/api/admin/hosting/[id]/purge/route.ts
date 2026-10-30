@@ -21,6 +21,9 @@ export async function POST(
     if (!node) {
       return NextResponse.json({ error: 'Hosting node not found' }, { status: 404 });
     }
+    if (node.allocationMode === 'SHARED') {
+      return NextResponse.json({ error: 'Whole-node purge is disabled for shared hosting pools. Delete or drain tenants individually first.' }, { status: 409 });
+    }
 
     // Safety check 1: Never purge a node with genuinely active customer databases
     const activeDatabases = await ManagedDatabase.countDocuments({

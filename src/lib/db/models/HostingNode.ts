@@ -30,6 +30,16 @@ export type HostingNodeCleanStatus =
 export type HostingAllocationMode = 'DEDICATED' | 'SHARED';
 export type HostingProtocol = 'http' | 'https';
 
+export interface IHostingAllocationReservation {
+  token: string;
+  idempotencyKey?: string;
+  customerId?: string;
+  instanceId?: string;
+  state: 'PENDING' | 'ACTIVE';
+  createdAt: Date;
+  expiresAt?: Date;
+}
+
 export interface IHostingNode extends Document {
   _id: Types.ObjectId;
   name: string;
@@ -49,8 +59,12 @@ export interface IHostingNode extends Document {
   cleanStatus: HostingNodeCleanStatus;
   allocationMode: HostingAllocationMode;
   status: HostingNodeStatus;
-  maxCapacity?: number; // 1 server per user/database (DEDICATED model)
+  maxCapacity?: number; // 1 for DEDICATED; administrator-configured positive integer for SHARED
   currentAssignedCount: number;
+  pendingReservations: number;
+  capacityRemaining: number;
+  allocationRevision: number;
+  allocationReservations: IHostingAllocationReservation[];
   currentAllocationId?: string; // Atomic reservation ID / fencing token
   allocationExpiresAt?: Date; // Expiration timestamp for pending reservation lease
   assignedInstanceId?: Types.ObjectId; // Reference to assigned or provisioning ManagedDatabase
@@ -121,6 +135,24 @@ const HostingNodeSchema = new Schema<IHostingNode>(
     },
     maxCapacity: { type: Number, default: 1 },
     currentAssignedCount: { type: Number, default: 0 },
+    pendingReservations: { type: Number, default: 0 },
+    capacityRemaining: { type: Number, default: 1 },
+    allocationRevision: { type: Number, default: 0 },
+    allocationReservations: {
+      type: [
+        {
+          _id: false,
+          token: { type: String, required: true },
+          idempotencyKey: { type: String },
+          customerId: { type: String },
+          instanceId: { type: String },
+          state: { type: String, enum: ['PENDING', 'ACTIVE'], default: 'PENDING' },
+          createdAt: { type: Date, required: true },
+          expiresAt: { type: Date },
+        },
+      ],
+      default: [],
+    },
     currentAllocationId: { type: String, index: true },
     allocationExpiresAt: { type: Date, index: true },
     assignedInstanceId: { type: Schema.Types.ObjectId, ref: 'ManagedDatabase' },
@@ -161,7 +193,10 @@ export function isNodeAllocatable(node: Partial<IHostingNode> | null | undefined
   if (!node) return false;
   const isAvailableStatus = node.status === 'AVAILABLE' || node.status === 'ACTIVE';
   const isHealthy = node.healthStatus === 'HEALTHY';
-  const hasCapacity = (node.currentAssignedCount || 0) < (node.maxCapacity || 1);
+  const hasCapacity =
+    typeof node.capacityRemaining === 'number'
+      ? node.capacityRemaining > 0
+      : (node.currentAssignedCount || 0) < (node.maxCapacity || 1);
   const hasHost = Boolean(node.dbUrl && node.dbUrl.trim());
   const isNotLocked =
     !node.currentAllocationId ||

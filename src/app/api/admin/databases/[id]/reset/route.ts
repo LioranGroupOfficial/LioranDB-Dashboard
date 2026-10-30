@@ -7,6 +7,7 @@ import { encrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { rateLimit } from '@/lib/rate-limit';
+import { adminSharedTenantAction } from '@/lib/services/shared-hosting.service';
 
 export async function POST(
   req: NextRequest,
@@ -39,6 +40,13 @@ export async function POST(
         { error: `Confirmation text must match instance name '${instance.name}'` },
         { status: 400 }
       );
+    }
+
+    const hostingNode = instance.hostingNodeId as any;
+    if (hostingNode?.allocationMode === 'SHARED') {
+      if (!instance.providerDeploymentId) return NextResponse.json({ error: 'Shared tenant identity is missing; refusing a whole-server reset.' }, { status: 409 });
+      const result = await adminSharedTenantAction(admin.userId, instance.providerDeploymentId, 'reset');
+      return NextResponse.json({ success: true, result, message: 'Only the shared tenant was reset; the Rust server and other tenants were left untouched.' });
     }
 
     await createAuditLog({

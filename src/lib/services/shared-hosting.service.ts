@@ -1,4 +1,4 @@
-import { connectToDatabase, HostingNode, ManagedDatabase } from '@/lib/db';
+import { connectToDatabase, HostingNode, ManagedDatabase, User } from '@/lib/db';
 import type { IHostingNode } from '@/lib/db/models/HostingNode';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 import { encrypt, decrypt, generateSecureToken } from '@/lib/crypto';
@@ -21,6 +21,12 @@ import type {
   TenantActionResult,
   TenantCredentialRotation,
 } from '@/lib/liorandb-admin/tenant-types';
+import {
+  finalizeHostingNodeSlot,
+  releaseHostingNodeAssignment,
+  releaseHostingNodeReservation,
+  reserveHostingNodeSlot,
+} from '@/lib/hosting/allocation';
 
 export interface SharedHostingContext {
   node: Partial<IHostingNode> & { _id: unknown };
@@ -38,6 +44,8 @@ export interface OwnedSharedTenant {
     port: number;
     region?: string;
     connectionUri?: string;
+    storageQuotaBytes?: number;
+    storageUsedBytes?: number;
   };
 }
 
@@ -73,6 +81,19 @@ export async function getSharedHostingContext(): Promise<SharedHostingContext> {
   };
 }
 
+async function getSharedHostingContexts(): Promise<SharedHostingContext[]> {
+  await connectToDatabase();
+  const nodes = await HostingNode.find({
+    allocationMode: 'SHARED',
+    status: { $nin: ['DISABLED', 'FAILED', 'QUARANTINED', 'MAINTENANCE'] },
+    healthStatus: 'HEALTHY',
+  }).sort({ isDefault: -1, createdAt: 1 }).lean();
+  return nodes.map((node) => ({
+    node: node as Partial<IHostingNode> & { _id: unknown },
+    client: createSharedHostingClient(node as Partial<IHostingNode> & { _id: unknown }),
+  }));
+}
+
 export async function getSharedHostingSnapshot(): Promise<SharedHostingSnapshot> {
   const context = await getSharedHostingContext();
   const [status, storage, serverStatus] = await Promise.all([
@@ -101,18 +122,20 @@ export async function listSharedTenants(): Promise<RustTenant[]> {
 }
 
 export async function listOwnedSharedTenants(ownerId: string, includeUsage = false): Promise<OwnedSharedTenant[]> {
-  const context = await getSharedHostingContext();
-  const tenants = (await context.client.listSharedTenants()).filter((tenant) => tenant.external_owner_id === ownerId);
+  const contexts = await getSharedHostingContexts();
+  const tenantContexts = (await Promise.all(contexts.map(async (context) => ({ context, tenants: await context.client.listSharedTenants() })))).flatMap(({ context, tenants }) =>
+    tenants.filter((tenant) => tenant.external_owner_id === ownerId).map((tenant) => ({ context, tenant }))
+  );
   await connectToDatabase();
 
   const records = await ManagedDatabase.find({
-    providerDeploymentId: { $in: tenants.map((tenant) => tenant.tenant_id) },
+    providerDeploymentId: { $in: tenantContexts.map(({ tenant }) => tenant.tenant_id) },
     customerId: ownerId,
   }).lean();
   const recordByTenant = new Map(records.map((record) => [record.providerDeploymentId, record]));
 
   return Promise.all(
-    tenants.map(async (tenant) => {
+    tenantContexts.map(async ({ tenant, context }) => {
       const record = recordByTenant.get(tenant.tenant_id);
       const usage = includeUsage ? await context.client.getSharedTenantUsage(tenant.tenant_id) : undefined;
       return { tenant, usage, database: record ? databaseView(record) : undefined };
@@ -121,11 +144,17 @@ export async function listOwnedSharedTenants(ownerId: string, includeUsage = fal
 }
 
 export async function getOwnedSharedTenant(ownerId: string, tenantId: string, includeUsage = true): Promise<OwnedSharedTenant> {
-  const context = await getSharedHostingContext();
-  const tenant = await context.client.getSharedTenant(tenantId);
-  assertTenantOwner(tenant, ownerId);
   await connectToDatabase();
   const record = await ManagedDatabase.findOne({ providerDeploymentId: tenantId, customerId: ownerId }).lean();
+  const existingNode = record?.hostingNodeId ? await HostingNode.findById(record.hostingNodeId).lean() : null;
+  const context = existingNode
+    ? {
+        node: existingNode as Partial<IHostingNode> & { _id: unknown },
+        client: createSharedHostingClient(existingNode as Partial<IHostingNode> & { _id: unknown }),
+      }
+    : await getSharedHostingContext();
+  const tenant = await context.client.getSharedTenant(tenantId);
+  assertTenantOwner(tenant, ownerId);
   const usage = includeUsage ? await context.client.getSharedTenantUsage(tenantId) : undefined;
   return { tenant, usage, database: record ? databaseView(record) : undefined };
 }
@@ -136,51 +165,117 @@ export async function provisionFreeSharedTenant(params: {
   databaseName: string;
   idempotencyKey?: string;
 }): Promise<OwnedSharedTenant & { credentials?: { username: string; password: string } }> {
-  const context = await getSharedHostingContext();
-  const existing = (await context.client.listSharedTenants()).find(
-    (tenant) => tenant.external_owner_id === params.ownerId && tenant.status !== 'DELETING'
-  );
-  if (existing) {
-    await connectToDatabase();
-    const record = await ManagedDatabase.findOne({ providerDeploymentId: existing.tenant_id, customerId: params.ownerId }).lean();
-    return { tenant: existing, database: record ? databaseView(record) : undefined };
+  await connectToDatabase();
+  const requestKey = params.idempotencyKey || `cloud-${params.ownerId}-${generateSecureToken(18)}`;
+  const existingRecord = await ManagedDatabase.findOne({
+    customerId: params.ownerId,
+    planId: FREE_SHARED_PLAN_ID,
+    status: { $nin: ['TERMINATED', 'DELETED', 'FAILED'] },
+  }).lean();
+  if (existingRecord?.providerDeploymentId) {
+    const existingNode = existingRecord.hostingNodeId
+      ? await HostingNode.findById(existingRecord.hostingNodeId).lean()
+      : null;
+    const context = existingNode
+      ? {
+          node: existingNode as Partial<IHostingNode> & { _id: unknown },
+          client: createSharedHostingClient(existingNode as Partial<IHostingNode> & { _id: unknown }),
+        }
+      : await getSharedHostingContext();
+    const tenant = await context.client.getSharedTenant(existingRecord.providerDeploymentId);
+    const pendingReservation = (context.node.allocationReservations || []).find(
+      (item) => item.token === existingRecord.allocationToken && item.state === 'PENDING'
+    );
+    if (pendingReservation) {
+      await finalizeHostingNodeSlot({ nodeId: String(context.node._id), token: pendingReservation.token, instanceId: existingRecord._id.toString() });
+    }
+    return { tenant, database: databaseView(existingRecord) };
   }
 
-  const status = await context.client.getSharedHostingStatus();
-  if (!status.enabled || status.available_slots < 1) {
-    throw new Error('SHARED_HOSTING_CAPACITY_EXHAUSTED');
-  }
+  const contexts = await getSharedHostingContexts();
+  if (contexts.length === 0) throw new LioranDBNotFoundError('No healthy shared hosting node is configured.', { requestId: 'shared-hosting-node' });
 
-  const result: CreateTenantResult = await context.client.createSharedTenant(
+  // An atomic per-customer claim prevents two distinct requests from creating
+  // two free databases for the same customer while the Rust call is in flight.
+  const lockClaim = await User.updateOne(
     {
-      external_owner_id: params.ownerId,
-      plan: FREE_SHARED_PLAN_ID,
-      database_name: params.databaseName,
-      storage_quota_bytes: FREE_SHARED_STORAGE_BYTES,
+      _id: params.ownerId,
+      $or: [
+        { freeSharedProvisioningKey: { $exists: false } },
+        { freeSharedProvisioningKey: null },
+        { freeSharedProvisioningKey: requestKey },
+      ],
     },
-    params.idempotencyKey || `cloud-${params.ownerId}-${generateSecureToken(18)}`
+    { $set: { freeSharedProvisioningKey: requestKey } }
   );
+  if (lockClaim.matchedCount !== 1) throw new Error('FREE_TIER_ALREADY_ALLOCATED');
 
-  const record = await upsertManagedDatabaseForTenant(context.node, result, params.ownerId);
-  await createAuditLog({
-    actorId: params.ownerId,
-    actorRole: 'customer',
-    action: 'DATABASE_PROVISIONED',
-    entityType: 'SharedTenant',
-    entityId: result.tenant.tenant_id,
-    metadata: {
-      planId: FREE_SHARED_PLAN_ID,
-      databaseName: result.tenant.database_name,
-      storageQuota: formatBytes(result.tenant.storage_quota_bytes),
-      ownerEmail: params.ownerEmail,
-    },
-  });
+  try {
+    for (const context of contexts) {
+      const tenants = await context.client.listSharedTenants();
+      const existing = tenants.find((tenant) => tenant.external_owner_id === params.ownerId && tenant.status !== 'DELETING');
+      if (existing) {
+        const record = await upsertManagedDatabaseForTenant(context.node, { tenant: existing }, params.ownerId);
+        const pendingReservation = (context.node.allocationReservations || []).find((item) => item.idempotencyKey === requestKey && item.state === 'PENDING');
+        if (pendingReservation) {
+          await finalizeHostingNodeSlot({ nodeId: String(context.node._id), token: pendingReservation.token, instanceId: record._id.toString() });
+        }
+        await User.updateOne({ _id: params.ownerId, freeSharedProvisioningKey: requestKey }, { $set: { freeSharedTenantId: existing.tenant_id }, $unset: { freeSharedProvisioningKey: 1 } });
+        return { tenant: existing, database: databaseView(record) };
+      }
 
-  return {
-    tenant: result.tenant,
-    database: databaseView(record),
-    credentials: result.credentials,
-  };
+      const status = await context.client.getSharedHostingStatus();
+      if (!status.enabled || status.available_slots < 1) continue;
+      const reservation = await reserveHostingNodeSlot({
+        nodeId: String(context.node._id),
+        allocationMode: 'SHARED',
+        customerId: params.ownerId,
+        idempotencyKey: requestKey,
+      });
+      if (!reservation) continue;
+
+      try {
+        const result: CreateTenantResult = await context.client.createSharedTenant(
+          {
+            external_owner_id: params.ownerId,
+            plan: FREE_SHARED_PLAN_ID,
+            database_name: params.databaseName,
+            storage_quota_bytes: FREE_SHARED_STORAGE_BYTES,
+          },
+          requestKey
+        );
+        const record = await upsertManagedDatabaseForTenant(context.node, result, params.ownerId, reservation.reservation.token);
+        await finalizeHostingNodeSlot({
+          nodeId: String(context.node._id),
+          token: reservation.reservation.token,
+          instanceId: record._id.toString(),
+          serverVersion: context.node.serverVersion,
+        });
+        await User.updateOne({ _id: params.ownerId, freeSharedProvisioningKey: requestKey }, { $set: { freeSharedTenantId: result.tenant.tenant_id }, $unset: { freeSharedProvisioningKey: 1 } });
+        await createAuditLog({
+          actorId: params.ownerId,
+          actorRole: 'customer',
+          action: 'DATABASE_PROVISIONED',
+          entityType: 'SharedTenant',
+          entityId: result.tenant.tenant_id,
+          metadata: {
+            planId: FREE_SHARED_PLAN_ID,
+            databaseName: result.tenant.database_name,
+            storageQuota: formatBytes(result.tenant.storage_quota_bytes),
+            ownerEmail: params.ownerEmail,
+          },
+        });
+        return { tenant: result.tenant, database: databaseView(record), credentials: result.credentials };
+      } catch (error) {
+        await releaseHostingNodeReservation(String(context.node._id), reservation.reservation.token);
+        throw error;
+      }
+    }
+    throw new Error('SHARED_HOSTING_CAPACITY_EXHAUSTED');
+  } catch (error) {
+    await User.updateOne({ _id: params.ownerId, freeSharedProvisioningKey: requestKey }, { $unset: { freeSharedProvisioningKey: 1 } });
+    throw error;
+  }
 }
 
 export async function rotateOwnedSharedTenantCredentials(ownerId: string, tenantId: string): Promise<TenantCredentialRotation> {
@@ -231,7 +326,17 @@ export async function adminSharedTenantAction(
   action: 'suspend' | 'resume' | 'reset' | 'delete' | 'rotate' | 'quota',
   quotaBytes?: number
 ): Promise<RustTenant | TenantActionResult | TenantCredentialRotation> {
-  const context = await getSharedHostingContext();
+  await connectToDatabase();
+  const existingRecord = await ManagedDatabase.findOne({ providerDeploymentId: tenantId }).lean();
+  const existingNode = existingRecord?.hostingNodeId
+    ? await HostingNode.findById(existingRecord.hostingNodeId).lean()
+    : null;
+  const context = existingNode
+    ? {
+        node: existingNode as Partial<IHostingNode> & { _id: unknown },
+        client: createSharedHostingClient(existingNode as Partial<IHostingNode> & { _id: unknown }),
+      }
+    : await getSharedHostingContext();
   let result: RustTenant | TenantActionResult | TenantCredentialRotation;
   if (action === 'suspend') result = await context.client.suspendSharedTenant(tenantId);
   else if (action === 'resume') result = await context.client.resumeSharedTenant(tenantId);
@@ -244,6 +349,9 @@ export async function adminSharedTenantAction(
   }
 
   await syncManagedDatabaseRecord(tenantId, result);
+  if (action === 'delete' && existingRecord?.hostingNodeId) {
+    await releaseHostingNodeAssignment(existingRecord.hostingNodeId.toString(), existingRecord._id.toString());
+  }
   await createAuditLog({
     actorId,
     actorRole: 'admin',
@@ -264,7 +372,8 @@ function assertTenantOwner(tenant: RustTenant, ownerId: string): void {
 async function upsertManagedDatabaseForTenant(
   node: Partial<IHostingNode> & { _id: unknown },
   result: CreateTenantResult,
-  customerId: string
+  customerId: string,
+  allocationToken?: string
 ): Promise<IManagedDatabase> {
   await connectToDatabase();
   const tenant = result.tenant;
@@ -293,6 +402,9 @@ async function upsertManagedDatabaseForTenant(
     cpu: `Shared pool (${FREE_SHARED_CPU_CORES} vCPU / ${FREE_SHARED_MEMORY_BYTES / (1024 * 1024)} MiB)`,
     region: node.region || undefined,
     providerDeploymentId: tenant.tenant_id,
+    allocationToken,
+    storageQuotaBytes: tenant.storage_quota_bytes,
+    storageUsedBytes: tenant.storage_used_bytes,
     provisionedAt: tenant.created_at ? new Date(tenant.created_at) : new Date(),
     encryptedConnectionUri: connectionUri ? encrypt(connectionUri) : undefined,
     encryptedControlPlaneCredential: password ? encrypt(password) : undefined,
@@ -335,7 +447,11 @@ async function syncManagedDatabaseRecord(tenantId: string, result: RustTenant | 
     }];
   }
   if ('status' in result && result.status) record.status = mapTenantStatus(result.status);
-  if ('tenant' in result && result.tenant?.status) record.status = mapTenantStatus(result.tenant.status);
+  if ('tenant' in result && result.tenant?.status) {
+    record.status = mapTenantStatus(result.tenant.status);
+    record.storageQuotaBytes = result.tenant.storage_quota_bytes;
+    record.storageUsedBytes = result.tenant.storage_used_bytes;
+  }
   await record.save();
 }
 
@@ -356,6 +472,8 @@ function databaseView(record: IManagedDatabase): OwnedSharedTenant['database'] {
     port: record.port,
     region: record.region,
     connectionUri,
+    storageQuotaBytes: record.storageQuotaBytes,
+    storageUsedBytes: record.storageUsedBytes,
   };
 }
 

@@ -39,12 +39,14 @@ export interface AdminHostingNodeItem {
   healthStatus?: 'HEALTHY' | 'DEGRADED' | 'UNREACHABLE' | 'AUTHENTICATION_FAILED' | 'UNKNOWN';
   serverIdentity?: string;
   serverVersion?: string;
-  allocationMode?: string;
+  allocationMode: 'DEDICATED' | 'SHARED';
   defaultRootUsername: string;
   defaultRootPassword?: string;
   status: 'AVAILABLE' | 'ACTIVE' | 'RESERVED' | 'PROVISIONING' | 'ASSIGNED' | 'DRAINING' | 'RESETTING' | 'FAILED' | 'QUARANTINED' | 'MAINTENANCE' | 'DISABLED';
-  maxCapacity?: number;
+  maxCapacity: number;
   currentAssignedCount: number;
+  pendingReservations?: number;
+  availableCapacity?: number;
   assignedInstanceName?: string;
   assignedInstanceStatus?: string;
   assignedDatabaseId?: string;
@@ -104,6 +106,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
   const [formStatus, setFormStatus] = useState<AdminHostingNodeItem['status']>('AVAILABLE');
   const [formNotes, setFormNotes] = useState('');
   const [formIsDefault, setFormIsDefault] = useState(false);
+  const [formAllocationMode, setFormAllocationMode] = useState<'DEDICATED' | 'SHARED'>('DEDICATED');
+  const [formMaxCapacity, setFormMaxCapacity] = useState(1);
 
   // Refresh
   async function refreshNodes() {
@@ -339,6 +343,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     setFormRootUser('admin');
     setFormStatus('AVAILABLE');
     setFormNotes('Localhost dedicated development database cluster on 127.0.0.1');
+    setFormAllocationMode('DEDICATED');
+    setFormMaxCapacity(1);
     if (nodes.length === 0) setFormIsDefault(true);
   }
 
@@ -359,6 +365,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     setFormStatus('AVAILABLE');
     setFormNotes('');
     setFormIsDefault(nodes.length === 0);
+    setFormAllocationMode('DEDICATED');
+    setFormMaxCapacity(1);
     setAddModalOpen(true);
   }
 
@@ -380,6 +388,9 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     setFormStatus(node.status);
     setFormNotes(node.notes || '');
     setFormIsDefault(node.isDefault);
+    const mode = node.allocationMode || 'DEDICATED';
+    setFormAllocationMode(mode);
+    setFormMaxCapacity(mode === 'DEDICATED' ? 1 : node.maxCapacity || 10);
   }
 
   // Save Node (Create or Update)
@@ -402,7 +413,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
       grpcPort: Number(formGrpcPort),
       defaultRootUsername: formRootUser.trim() || 'admin',
       status: formStatus,
-      maxCapacity: 1,
+      allocationMode: formAllocationMode,
+      maxCapacity: formAllocationMode === 'DEDICATED' ? 1 : Number(formMaxCapacity),
       notes: formNotes.trim(),
       isDefault: formIsDefault,
     };
@@ -489,7 +501,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
     const availableNodes = nodes.filter(
       (n) =>
         (n.status === 'AVAILABLE' || n.status === 'ACTIVE') &&
-        n.currentAssignedCount === 0 &&
+        (n.availableCapacity === undefined ? n.currentAssignedCount === 0 : n.availableCapacity > 0) &&
         !n.quarantineReason
     ).length;
     const totalAssigned = nodes.filter((n) => n.currentAssignedCount > 0 || n.status === 'ASSIGNED').length;
@@ -504,7 +516,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-strong)] tracking-tight">Database Hosting Nodes</h1>
           <p className="text-xs text-[var(--text-muted)] mt-1">
-            Dedicated 1-server-per-user Rust infrastructure: manage authoritative control planes, gRPC listeners, credentials, and real-time health.
+            Manage dedicated and shared Rust infrastructure, authoritative control planes, gRPC listeners, credentials, capacity, and real-time health.
           </p>
         </div>
 
@@ -582,7 +594,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
           </div>
           <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.availableNodes}</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-            Ready for instant dedicated provisioning
+            Ready slots across hosting pools
           </p>
         </div>
 
@@ -593,7 +605,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
           </div>
           <p className="text-2xl font-bold text-[var(--text-strong)] font-mono mt-2">{stats.totalAssigned}</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-1 font-mono">
-            Exclusive 1:1 customer allocation
+            Active database allocations
           </p>
         </div>
       </div>
@@ -663,6 +675,9 @@ export default function AdminHostingClient({ initialNodes }: Props) {
               ) : (
                 filteredNodes.map((node) => {
                   const isAssigned = node.currentAssignedCount > 0;
+                  const maxCapacity = node.maxCapacity || 1;
+                  const availableCapacity = node.availableCapacity ?? Math.max(0, maxCapacity - node.currentAssignedCount);
+                  const capacityPercent = Math.min(100, Math.round((node.currentAssignedCount / maxCapacity) * 100));
                   const cpEndpoint = node.controlPlaneEndpoint || `${node.protocol || 'http'}://${node.dbUrl}:${node.httpPort || 27018}`;
 
                   return (
@@ -723,11 +738,20 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                       </td>
 
                       <td className="px-4 py-3.5">
+                        <div className="mb-1.5 flex items-center gap-1.5">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-[4px] text-[9px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-bold">
+                            {node.allocationMode === 'SHARED' ? 'SHARED' : 'DEDICATED'}
+                          </span>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">{node.currentAssignedCount} / {maxCapacity}</span>
+                        </div>
+                        <div className="mb-1.5 h-1.5 w-32 rounded-full bg-[var(--surface-2)] border border-[var(--border)] overflow-hidden">
+                          <div className="h-full bg-[var(--text-strong)]" style={{ width: `${capacityPercent}%` }} />
+                        </div>
                         {node.status === 'QUARANTINED' ? (
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-red-500/10 text-red-500 dark:text-red-400 border border-red-500/20 font-bold">
                               <AlertCircle className="w-3 h-3 text-red-500" />
-                              QUARANTINED (0/1)
+                              QUARANTINED ({node.currentAssignedCount}/{maxCapacity})
                             </span>
                             <div className="text-[10px] text-red-500 dark:text-red-400 font-sans truncate max-w-[140px]" title={node.quarantineReason || `${node.name} unavailable: reset required.`}>
                               Reset Required
@@ -737,7 +761,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-semibold">
                               <RotateCw className="w-3 h-3 animate-spin text-[var(--text-muted)]" />
-                              RESETTING (0/1)
+                              RESETTING ({node.currentAssignedCount}/{maxCapacity})
                             </span>
                             <div className="text-[10px] text-[var(--text-muted)] font-mono">
                               Authoritative Reset
@@ -746,7 +770,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                         ) : node.status === 'DISABLED' ? (
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-muted)] border border-[var(--border)] font-semibold">
-                              DISABLED (0/1)
+                              DISABLED ({node.currentAssignedCount}/{maxCapacity})
                             </span>
                             <div className="text-[10px] text-[var(--text-muted)] font-mono">
                               Administratively Off
@@ -756,7 +780,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-semibold">
                               <RotateCw className="w-3 h-3 animate-spin text-[var(--text-muted)]" />
-                              RESERVED (1/1)
+                              RESERVED ({node.currentAssignedCount}/{maxCapacity})
                             </span>
                             <div className="text-[11px] text-[var(--text-muted)] truncate max-w-[140px]" title={node.assignedInstanceName || 'Provisioning'}>
                               {node.assignedInstanceName || 'Provisioning'}
@@ -766,7 +790,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-2)] text-[var(--text-strong)] border border-[var(--border-strong)] font-bold">
                               <Database className="w-3 h-3" />
-                              ASSIGNED (1/1)
+                              ASSIGNED ({node.currentAssignedCount}/{maxCapacity})
                             </span>
                             <div className="text-[11px] text-[var(--text-muted)] truncate max-w-[140px]" title={node.assignedInstanceName || 'Dedicated instance'}>
                               {node.assignedInstanceName || 'Dedicated Instance'}
@@ -776,7 +800,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                           <div className="space-y-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-medium">
                               <CheckCircle2 className="w-3 h-3 text-[var(--text-strong)]" />
-                              AVAILABLE (0/1)
+                              {availableCapacity === 0 ? 'FULL' : `AVAILABLE (${node.currentAssignedCount}/${maxCapacity})`}
                             </span>
                             <div className="text-[10px] text-[var(--text-muted)] font-mono">
                               Unassigned • Ready
@@ -836,7 +860,7 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                             <Edit2 className="w-3 h-3" />
                             <span>Edit</span>
                           </button>
-                          {node.currentAssignedCount === 0 && (
+                          {node.allocationMode !== 'SHARED' && node.currentAssignedCount === 0 && (
                             <button
                               type="button"
                               onClick={() => handlePurgeNode(node)}
@@ -1002,6 +1026,56 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                     <option value="DISABLED">DISABLED (Archived)</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Hosting Allocation Configuration */}
+              <div className="p-3.5 rounded-[7px] bg-[var(--surface-soft)] border border-[var(--border)] space-y-3">
+                <div>
+                  <span className="text-xs font-bold text-[var(--text-strong)] block">Hosting Allocation Configuration</span>
+                  <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+                    Choose whether this Rust server is exclusive to one database or hosts isolated logical databases.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      Allocation Mode *
+                    </label>
+                    <select
+                      required
+                      value={formAllocationMode}
+                      onChange={(e) => {
+                        const nextMode = e.target.value as 'DEDICATED' | 'SHARED';
+                        setFormAllocationMode(nextMode);
+                        setFormMaxCapacity(nextMode === 'DEDICATED' ? 1 : (formMaxCapacity === 1 ? 10 : formMaxCapacity));
+                      }}
+                      className="input-field w-full text-xs font-medium cursor-pointer"
+                    >
+                      <option value="DEDICATED">Dedicated</option>
+                      <option value="SHARED">Shared</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase text-[var(--text-muted)] mb-1">
+                      Maximum Database Allocations *
+                    </label>
+                    <input
+                      type="number"
+                      min={formAllocationMode === 'DEDICATED' ? 1 : 1}
+                      step={1}
+                      required
+                      readOnly={formAllocationMode === 'DEDICATED'}
+                      value={formAllocationMode === 'DEDICATED' ? 1 : formMaxCapacity}
+                      onChange={(e) => setFormMaxCapacity(Number(e.target.value))}
+                      className={`input-field w-full text-xs font-mono ${formAllocationMode === 'DEDICATED' ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    />
+                  </div>
+                </div>
+                {formAllocationMode === 'SHARED' && (
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    Shared hosting allows multiple independently isolated databases to run within a single LioranDB server instance.
+                  </p>
+                )}
               </div>
 
               {/* Endpoints & Networking */}

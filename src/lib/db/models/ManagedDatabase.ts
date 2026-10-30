@@ -58,6 +58,8 @@ export interface IManagedDatabase extends Document {
   couponDiscountPercentage?: number;
   databaseUsers: IDatabaseUser[];
   opsPerSecondLimit?: number;
+  storageQuotaBytes?: number;
+  storageUsedBytes?: number;
   documentLimit?: number;
   cpu?: string;
   memoryMb?: number;
@@ -143,6 +145,8 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
     couponDiscountPercentage: { type: Number, default: 0 },
     databaseUsers: { type: [DatabaseUserSchema], default: [] },
     opsPerSecondLimit: { type: Number },
+    storageQuotaBytes: { type: Number },
+    storageUsedBytes: { type: Number },
     documentLimit: { type: Number },
     cpu: { type: String },
     memoryMb: { type: Number },

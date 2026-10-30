@@ -2,6 +2,7 @@ import React from 'react';
 import { requireAdmin } from '@/lib/auth/guards';
 import { connectToDatabase, HostingNode, ManagedDatabase, IHostingNode } from '@/lib/db';
 import { reconcileHostingNodes } from '@/lib/providers/reconciliation';
+import { getHostingNodeAllocationSnapshot, getNodeMaxCapacity } from '@/lib/hosting/allocation';
 import AdminHostingClient, { AdminHostingNodeItem } from './AdminHostingClient';
 
 export const metadata = { title: 'Database Hosting Nodes — Admin' };
@@ -15,9 +16,10 @@ export default async function AdminHostingPage() {
 
   const formattedNodes: AdminHostingNodeItem[] = await Promise.all(
     nodes.map(async (n) => {
+      const snapshot = await getHostingNodeAllocationSnapshot(n as any);
       const activeInstance = await ManagedDatabase.findOne({
         hostingNodeId: n._id,
-        status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
+        status: { $in: ['PENDING', 'PROVISIONING', 'ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
       })
         .select('name status _id')
         .lean();
@@ -32,8 +34,6 @@ export default async function AdminHostingPage() {
         : null;
 
       const effectiveInstance = activeInstance || provisioningInstance;
-      const assignedCount = activeInstance ? 1 : n.status === 'ASSIGNED' ? 1 : 0;
-
       return {
         _id: n._id.toString(),
         name: n.name,
@@ -52,8 +52,10 @@ export default async function AdminHostingPage() {
         serverVersion: n.serverVersion || '2.4.1',
         allocationMode: n.allocationMode || 'DEDICATED',
         status: n.status,
-        maxCapacity: 1,
-        currentAssignedCount: assignedCount,
+        maxCapacity: getNodeMaxCapacity(n as any),
+        currentAssignedCount: snapshot.currentAssignedCount,
+        pendingReservations: snapshot.pendingReservations,
+        availableCapacity: snapshot.availableCapacity,
         assignedInstanceName: effectiveInstance?.name || undefined,
         assignedInstanceStatus: effectiveInstance?.status || undefined,
         assignedDatabaseId: effectiveInstance?._id?.toString() || undefined,

@@ -22,6 +22,8 @@ import { buildLioranDBConnectionUri } from '../liorandb-admin/uri';
 import { resolveControlPlaneEndpoint } from '../liorandb-admin/url';
 import { LioranDBAdminError, LioranDBUnreachableError } from '../liorandb-admin/errors';
 import { reconcileHostingNodes } from './reconciliation';
+import { bindHostingReservationToInstance, clearHostingNodeAssignment, finalizeHostingNodeSlot, releaseHostingNodeAssignment, releaseHostingNodeReservation, reserveHostingNodeSlot } from '../hosting/allocation';
+import { provisionFreeSharedTenant } from '../services/shared-hosting.service';
 
 export interface DeploymentParams {
   customerId: string;
@@ -355,6 +357,32 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
 
     // 3. If assigned to a hosting node, atomically lock node to RESETTING and execute comprehensive purge
     if (instance.hostingNodeId) {
+      const populatedNode = instance.hostingNodeId as unknown as Partial<IHostingNode> & { _id: any };
+      if (populatedNode.allocationMode === 'SHARED') {
+        if (!instance.providerDeploymentId) {
+          return { success: false, error: 'Shared tenant identity is missing; refusing to reset or delete the shared Rust server.' };
+        }
+        try {
+          const sharedClient = LioranDBAdminClient.forNode(populatedNode);
+          const result = await sharedClient.deleteSharedTenant(instance.providerDeploymentId);
+          if (!result.deleted && !result.slot_released) {
+            throw new Error('Shared control plane did not confirm tenant deletion.');
+          }
+          instance.status = 'TERMINATED';
+          instance.terminatedAt = now;
+          await instance.save();
+          await releaseHostingNodeAssignment(
+            String(populatedNode._id),
+            instance._id.toString()
+          );
+          return { success: true };
+        } catch (error) {
+          instance.status = 'FAILED';
+          instance.adminNotes = error instanceof Error ? error.message : 'Shared tenant deletion failed';
+          await instance.save();
+          return { success: false, error: instance.adminNotes };
+        }
+      }
       // Concurrency protection: atomically claim and lock the node to RESETTING
       const node = await HostingNode.findOneAndUpdate(
         {
@@ -407,6 +435,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           }
           node.adminNotes = `Purged and reset on ${now.toISOString()}. Pre-mem: ${purgeResult.preResetMemoryBytes || 'N/A'}, Post-mem: ${purgeResult.postResetMemoryBytes || 'N/A'}`;
           await node.save();
+          await clearHostingNodeAssignment(node._id.toString(), instance._id.toString());
 
           instance.status = 'TERMINATED';
           instance.terminatedAt = now;
@@ -636,104 +665,28 @@ export async function allocateAndProvisionInstance(
 
   const now = new Date();
   const allocationToken = `alloc_${Date.now()}_${generateSecureToken(8)}`;
-  const leaseDurationMs = 120_000; // 2 minutes reservation lease
-  const leaseExpiresAt = new Date(Date.now() + leaseDurationMs);
 
   const plan = getPlan(params.planId);
   if (!plan) {
     throw new Error('Invalid database plan selected.');
   }
+  if (plan.type === 'shared') {
+    throw new Error('Shared plans must be provisioned through the shared tenant control-plane API.');
+  }
 
   const cleanName = params.name.trim().toLowerCase();
   const targetDbName = (params.databaseName || cleanName).replace(/-/g, '_');
 
-  // Find genuinely active customer instances to ensure dedicated 1:1 isolation
-  const activeCustomerInstances = await ManagedDatabase.find({
-    status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
-    hostingNodeId: { $exists: true, $ne: null },
-  })
-    .select('hostingNodeId')
-    .lean();
-
-  const occupiedNodeIds = activeCustomerInstances
-    .map((inst) => inst.hostingNodeId?.toString())
-    .filter((id): id is string => Boolean(id));
-
   // Step 1: Atomic conditional claim (CAS) on an allocatable node
   let reservedNode: IHostingNode | null = null;
 
-  const allocatableFilter: any = {
-    status: { $in: ['AVAILABLE', 'ACTIVE'] },
-    healthStatus: 'HEALTHY',
-    currentAssignedCount: 0,
-    $or: [
-      { currentAllocationId: { $exists: false } },
-      { currentAllocationId: null },
-      { currentAllocationId: '' },
-      { allocationExpiresAt: { $exists: false } },
-      { allocationExpiresAt: null },
-      { allocationExpiresAt: { $lt: new Date() } },
-    ],
-  };
-
-  if (params.nodeId) {
-    const explicitTarget = await HostingNode.findById(params.nodeId);
-    if (!explicitTarget) {
-      throw new Error(`Requested hosting node '${params.nodeId}' was not found.`);
-    }
-    if (explicitTarget.status === 'QUARANTINED') {
-      throw new Error(`${explicitTarget.name} unavailable: reset required.`);
-    }
-    if (explicitTarget.status === 'RESETTING') {
-      throw new Error(`${explicitTarget.name} unavailable: reset in progress.`);
-    }
-    if (explicitTarget.status === 'DISABLED') {
-      throw new Error(`${explicitTarget.name} is disabled.`);
-    }
-    if (occupiedNodeIds.includes(params.nodeId.toString()) || explicitTarget.currentAssignedCount > 0) {
-      throw new Error(`Requested hosting node '${explicitTarget.name}' is currently assigned to an active customer.`);
-    }
-
-    allocatableFilter._id = params.nodeId;
-    reservedNode = await HostingNode.findOneAndUpdate(
-      allocatableFilter,
-      {
-        $set: {
-          status: 'PROVISIONING',
-          currentAllocationId: allocationToken,
-          allocationExpiresAt: leaseExpiresAt,
-          currentAssignedCount: 1,
-        },
-        $unset: {
-          quarantineReason: 1,
-          quarantineCode: 1,
-          cleanupFailureReason: 1,
-        },
-      },
-      { returnDocument: 'after' }
-    );
-  } else {
-    if (occupiedNodeIds.length > 0) {
-      allocatableFilter._id = { $nin: occupiedNodeIds };
-    }
-    reservedNode = await HostingNode.findOneAndUpdate(
-      allocatableFilter,
-      {
-        $set: {
-          status: 'PROVISIONING',
-          currentAllocationId: allocationToken,
-          allocationExpiresAt: leaseExpiresAt,
-          currentAssignedCount: 1,
-        },
-        $unset: {
-          quarantineReason: 1,
-          quarantineCode: 1,
-          cleanupFailureReason: 1,
-        },
-      },
-      { returnDocument: 'after', sort: { isDefault: -1, createdAt: 1 } }
-    );
-  }
+  const reservation = await reserveHostingNodeSlot({
+    nodeId: params.nodeId,
+    allocationMode: 'DEDICATED',
+    customerId: params.customerId.toString(),
+    idempotencyKey: allocationToken,
+  });
+  if (reservation) reservedNode = reservation.node;
 
   if (!reservedNode) {
     throw new Error(
@@ -784,15 +737,14 @@ export async function allocateAndProvisionInstance(
       ],
     });
 
-    // Update node with assignedInstanceId
-    await HostingNode.findOneAndUpdate(
-      { _id: reservedNode._id, currentAllocationId: allocationToken },
-      { $set: { assignedInstanceId: instance._id } }
-    );
+    // Link the durable reservation to the ManagedDatabase without replacing
+    // the shared allocation registry.
+    await bindHostingReservationToInstance(reservedNode._id.toString(), allocationToken, instance._id.toString());
   } catch (dbErr: unknown) {
     // Release node reservation back to AVAILABLE if instance creation failed before any Rust call
+    await releaseHostingNodeReservation(reservedNode._id.toString(), allocationToken);
     await HostingNode.findOneAndUpdate(
-      { _id: reservedNode._id, currentAllocationId: allocationToken },
+      { _id: reservedNode._id },
       {
         $set: {
           status: 'AVAILABLE',
@@ -819,7 +771,7 @@ export async function allocateAndProvisionInstance(
       const statusFailReason = `${reservedNode.name} unavailable: server is not in Ready state (current state: ${serverStatus.state || serverStatus.status})`;
 
       await HostingNode.findOneAndUpdate(
-        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        { _id: reservedNode._id },
         {
           $set: {
             status: 'AVAILABLE',
@@ -854,7 +806,7 @@ export async function allocateAndProvisionInstance(
       const identityMismatchReason = `${reservedNode.name} unavailable: server identity mismatch (expected '${reservedNode.serverIdentity}', received '${serverStatus.instanceId}')`;
 
       await HostingNode.findOneAndUpdate(
-        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        { _id: reservedNode._id },
         {
           $set: {
             status: 'AVAILABLE',
@@ -881,8 +833,9 @@ export async function allocateAndProvisionInstance(
     }
   } catch (preCheckErr: unknown) {
     const preCheckMsg = preCheckErr instanceof Error ? preCheckErr.message : String(preCheckErr);
+    await releaseHostingNodeReservation(reservedNode._id.toString(), allocationToken);
     await HostingNode.findOneAndUpdate(
-      { _id: reservedNode._id, currentAllocationId: allocationToken },
+      { _id: reservedNode._id },
       {
         $set: {
           status: 'AVAILABLE',
@@ -954,8 +907,9 @@ export async function allocateAndProvisionInstance(
       const resetMsg = resetErr instanceof Error ? resetErr.message : String(resetErr);
       const conciseQuarantineMsg = `${reservedNode.name} unavailable: reset required.`;
 
+      await releaseHostingNodeReservation(reservedNode._id.toString(), allocationToken);
       await HostingNode.findOneAndUpdate(
-        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        { _id: reservedNode._id },
         {
           $set: {
             status: 'QUARANTINED',
@@ -1008,8 +962,9 @@ export async function allocateAndProvisionInstance(
 
     const conciseQuarantineMsg = `${reservedNode.name} unavailable: reset required.`;
 
+    await releaseHostingNodeReservation(reservedNode._id.toString(), allocationToken);
     await HostingNode.findOneAndUpdate(
-      { _id: reservedNode._id, currentAllocationId: allocationToken },
+      { _id: reservedNode._id },
       {
         $set: {
           status: 'QUARANTINED',
@@ -1074,8 +1029,9 @@ export async function allocateAndProvisionInstance(
       const failReason = `${reservedNode.name} unavailable: reset required.`;
       console.error(`[Provisioning] Readiness failure on node ${reservedNode.name}: ${readMsg}`);
 
+      await releaseHostingNodeReservation(reservedNode._id.toString(), allocationToken);
       await HostingNode.findOneAndUpdate(
-        { _id: reservedNode._id, currentAllocationId: allocationToken },
+        { _id: reservedNode._id },
         {
           $set: {
             status: 'QUARANTINED',
@@ -1145,28 +1101,17 @@ export async function allocateAndProvisionInstance(
 
   await instance.save();
 
-  // Atomically commit node to ASSIGNED
-  const updatedNode = await HostingNode.findOneAndUpdate(
-    { _id: reservedNode._id, currentAllocationId: allocationToken },
-    {
-      $set: {
-        status: 'ASSIGNED',
-        currentAssignedCount: 1,
-        serverVersion: deploymentResult.serverVersion || '2.4.1',
-        healthStatus: 'HEALTHY',
-        lastCredentialRotationAt: finalNow,
-        assignedInstanceId: instance._id,
-      },
-      $unset: {
-        currentAllocationId: 1,
-        allocationExpiresAt: 1,
-        quarantineReason: 1,
-        quarantineCode: 1,
-        cleanupFailureReason: 1,
-      },
-    },
-    { returnDocument: 'after' }
+  await finalizeHostingNodeSlot({
+    nodeId: reservedNode._id.toString(),
+    token: allocationToken,
+    instanceId: instance._id.toString(),
+    serverVersion: deploymentResult.serverVersion || '2.4.1',
+  });
+  await HostingNode.updateOne(
+    { _id: reservedNode._id },
+    { $set: { healthStatus: 'HEALTHY', lastCredentialRotationAt: finalNow } }
   );
+  const updatedNode = await HostingNode.findById(reservedNode._id);
 
   // Step 8: Create initial billing interval record strictly AFTER active transition
   await BillingInterval.create({
@@ -1212,61 +1157,31 @@ export async function provisionInstance(
     throw new Error('Database instance not found');
   }
 
-  // 1. Atomically reserve an available hosting node if not already assigned
-  let node: IHostingNode | null = null;
-
-  if (instance.hostingNodeId) {
-    const existingNode = await HostingNode.findById(instance.hostingNodeId);
-    if (!existingNode) {
-      throw new Error(`Target hosting node ${instance.hostingNodeId} not found.`);
-    }
-    if (existingNode.status === 'QUARANTINED' || existingNode.quarantineReason) {
-      throw new Error(`Target hosting node '${existingNode.name}' is QUARANTINED (${existingNode.quarantineReason || existingNode.cleanupFailureReason || 'Isolation check failed'}) and ineligible for allocation.`);
-    }
-    if (existingNode.status === 'RESETTING') {
-      throw new Error(`Target hosting node '${existingNode.name}' is currently being reset and ineligible for allocation.`);
-    }
-    if (existingNode.status === 'DISABLED') {
-      throw new Error(`Target hosting node '${existingNode.name}' is disabled.`);
-    }
-    if (existingNode.healthStatus !== 'HEALTHY') {
-      throw new Error(`Target hosting node '${existingNode.name}' health status is '${existingNode.healthStatus}', ineligible for allocation.`);
-    }
-
-    const locked = await HostingNode.findOneAndUpdate(
-      { _id: existingNode._id, status: { $in: ['AVAILABLE', 'ACTIVE', 'RESERVED', 'PROVISIONING'] } },
-      { $set: { status: 'PROVISIONING', currentAssignedCount: 1, assignedInstanceId: instance._id } },
-      { returnDocument: 'after' }
-    );
-    node = locked || existingNode;
+  if (instance.planId === 'free') {
+    const shared = await provisionFreeSharedTenant({
+      ownerId: instance.customerId.toString(),
+      ownerEmail: customerEmail,
+      databaseName: instance.databaseName || instance.name,
+      idempotencyKey: `retry-${instance._id.toString()}`,
+    });
+    const refreshed = await ManagedDatabase.findById(instance._id);
+    if (!refreshed) throw new Error('Shared database record was not synchronized after provisioning.');
+    return refreshed;
   }
 
-  if (!node) {
-    const activeInstances = await ManagedDatabase.find({
-      status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
-      hostingNodeId: { $exists: true, $ne: null },
-    })
-      .select('hostingNodeId')
-      .lean();
-    const occupiedNodeIds = activeInstances.map((i) => i.hostingNodeId?.toString()).filter(Boolean);
-
-    // Atomically find and reserve an AVAILABLE and HEALTHY node not occupied by active customers
-    node = await HostingNode.findOneAndUpdate(
-      {
-        ...(occupiedNodeIds.length > 0 ? { _id: { $nin: occupiedNodeIds } } : {}),
-        status: { $in: ['AVAILABLE', 'ACTIVE'] },
-        healthStatus: 'HEALTHY',
-        currentAssignedCount: 0,
-      },
-      {
-        $set: {
-          status: 'PROVISIONING',
-          currentAssignedCount: 1,
-          assignedInstanceId: instance._id,
-        },
-      },
-      { returnDocument: 'after', sort: { isDefault: -1, createdAt: 1 } }
-    );
+  // 1. Atomically reserve an available hosting node if not already assigned
+  let node: IHostingNode | null = null;
+  const retryAllocationKey = instance.allocationToken || `retry-${instance._id.toString()}`;
+  const reservation = await reserveHostingNodeSlot({
+    nodeId: instance.hostingNodeId?.toString(),
+    allocationMode: 'DEDICATED',
+    customerId: instance.customerId.toString(),
+    instanceId: instance._id.toString(),
+    idempotencyKey: retryAllocationKey,
+  });
+  if (reservation) {
+    node = reservation.node;
+    instance.allocationToken = reservation.reservation.token;
   }
 
   if (!node) {
@@ -1314,6 +1229,9 @@ export async function provisionInstance(
     instance.adminNotes = deploymentResult.error || 'Failed to provision on Rust server';
     await instance.save();
 
+    if (instance.allocationToken) {
+      await releaseHostingNodeReservation(node._id.toString(), instance.allocationToken);
+    }
     await HostingNode.findByIdAndUpdate(node._id, {
       $set: {
         status: 'QUARANTINED',
@@ -1435,18 +1353,19 @@ export async function provisionInstance(
 
   await instance.save();
 
-  // 4. Update hosting node status to ASSIGNED
-  await HostingNode.findByIdAndUpdate(node._id, {
-    $set: {
-      status: 'ASSIGNED',
-      currentAssignedCount: 1,
+  // 4. Commit the fenced dedicated allocation and keep its active registry entry.
+  if (instance.allocationToken) {
+    await finalizeHostingNodeSlot({
+      nodeId: node._id.toString(),
+      token: instance.allocationToken,
+      instanceId: instance._id.toString(),
       serverVersion: deploymentResult.serverVersion || '2.4.1',
-      healthStatus: 'HEALTHY',
-      lastCredentialRotationAt: now,
-      assignedInstanceId: instance._id,
-    },
-    $unset: { currentAllocationId: 1, allocationExpiresAt: 1 },
-  });
+    });
+  }
+  await HostingNode.updateOne(
+    { _id: node._id },
+    { $set: { healthStatus: 'HEALTHY', lastCredentialRotationAt: now } }
+  );
 
   // 5. Create initial billing interval record only after active verification
   await BillingInterval.create({

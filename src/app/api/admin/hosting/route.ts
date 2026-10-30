@@ -5,7 +5,8 @@ import { createAuditLog } from '@/lib/audit';
 import { encrypt } from '@/lib/crypto';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin/client';
 import { reconcileHostingNodes } from '@/lib/providers/reconciliation';
-import type { HostingAllocationMode, HostingNodeHealthStatus, HostingNodeStatus } from '@/lib/db/models/HostingNode';
+import { getHostingNodeAllocationSnapshot, getNodeMaxCapacity, normalizeHostingAllocationConfig } from '@/lib/hosting/allocation';
+import type { HostingNodeHealthStatus, HostingNodeStatus } from '@/lib/db/models/HostingNode';
 
 export async function GET(_req: NextRequest) {
   try {
@@ -18,9 +19,10 @@ export async function GET(_req: NextRequest) {
     // Reconcile current assigned server 1:1 allocation dynamically
     const enrichedNodes = await Promise.all(
       nodes.map(async (node) => {
+        const snapshot = await getHostingNodeAllocationSnapshot(node as any);
         const activeInstance = await ManagedDatabase.findOne({
           hostingNodeId: node._id,
-          status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
+          status: { $in: ['PENDING', 'PROVISIONING', 'ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED'] },
         })
           .select('name status _id')
           .lean();
@@ -35,12 +37,13 @@ export async function GET(_req: NextRequest) {
           : null;
 
         const effectiveInstance = activeInstance || provisioningInstance;
-        const assignedCount = activeInstance ? 1 : node.status === 'ASSIGNED' ? 1 : 0;
-
         return {
           ...node,
-          maxCapacity: 1,
-          currentAssignedCount: assignedCount,
+          allocationMode: node.allocationMode || 'DEDICATED',
+          maxCapacity: getNodeMaxCapacity(node as any),
+          currentAssignedCount: snapshot.currentAssignedCount,
+          pendingReservations: snapshot.pendingReservations,
+          availableCapacity: snapshot.availableCapacity,
           assignedInstanceName: effectiveInstance?.name || undefined,
           assignedInstanceStatus: effectiveInstance?.status || undefined,
           assignedDatabaseId: effectiveInstance?._id?.toString() || undefined,
@@ -101,6 +104,7 @@ export async function POST(req: NextRequest) {
       controlPlaneEndpoint,
       controlPlaneToken,
       allocationMode,
+      maxCapacity,
       defaultRootUsername,
       notes,
       isDefault,
@@ -111,6 +115,13 @@ export async function POST(req: NextRequest) {
         { error: 'Node Name, DB URL (Host), and gRPC URL are required.' },
         { status: 400 }
       );
+    }
+
+    let allocationConfig: ReturnType<typeof normalizeHostingAllocationConfig>;
+    try {
+      allocationConfig = normalizeHostingAllocationConfig(allocationMode, maxCapacity);
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid hosting allocation configuration.' }, { status: 400 });
     }
 
     const nodeSlug = (slug || name)
@@ -194,10 +205,14 @@ export async function POST(req: NextRequest) {
       healthStatus,
       cleanupFailureReason,
       quarantineReason: initialStatus === 'QUARANTINED' ? cleanupFailureReason : undefined,
-      allocationMode: (allocationMode as HostingAllocationMode) || 'DEDICATED',
+      allocationMode: allocationConfig.allocationMode,
       status: initialStatus,
-      maxCapacity: 1,
+      maxCapacity: allocationConfig.maxCapacity,
       currentAssignedCount: 0,
+      pendingReservations: 0,
+      capacityRemaining: allocationConfig.maxCapacity,
+      allocationReservations: [],
+      allocationRevision: 0,
       lastHealthCheckAt: new Date(),
       defaultRootUsername: (defaultRootUsername || 'admin').trim(),
       notes: notes || '',

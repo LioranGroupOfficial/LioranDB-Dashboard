@@ -54,6 +54,9 @@ export async function POST(req: NextRequest) {
     if (error instanceof Error && error.message === 'SHARED_HOSTING_CAPACITY_EXHAUSTED') {
       return NextResponse.json({ error: 'No free shared database slots are currently available.', code: error.message }, { status: 409 });
     }
+    if (error instanceof Error && error.message === 'FREE_TIER_ALREADY_ALLOCATED') {
+      return NextResponse.json({ error: 'Each customer may have at most one free shared database.', code: error.message }, { status: 409 });
+    }
     return createApiError(error);
   }
 }

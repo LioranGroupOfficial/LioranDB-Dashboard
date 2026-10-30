@@ -6,6 +6,7 @@ import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
 import { encrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
+import { adminSharedTenantAction, rotateOwnedSharedTenantCredentials } from '@/lib/services/shared-hosting.service';
 
 export async function DELETE(
   _req: NextRequest,
@@ -81,6 +82,22 @@ export async function POST(
 
     let newPassword = '';
     if (isMasterUser) {
+      const hostingNode = instance.hostingNodeId as any;
+      if (hostingNode?.allocationMode === 'SHARED') {
+        if (!instance.providerDeploymentId) return NextResponse.json({ error: 'Shared tenant identity is missing; refusing to rotate server root credentials.' }, { status: 409 });
+        const rotated = session.role === 'admin'
+          ? await adminSharedTenantAction(session.userId, instance.providerDeploymentId, 'rotate')
+          : await rotateOwnedSharedTenantCredentials(session.userId, instance.providerDeploymentId);
+        const credentials = 'credentials' in rotated ? rotated.credentials : undefined;
+        if (!credentials) return NextResponse.json({ error: 'Shared control plane did not return tenant credentials.' }, { status: 502 });
+        return NextResponse.json({
+          success: true,
+          username: credentials.username,
+          generatedPassword: credentials.password,
+          password: credentials.password,
+          message: 'Tenant credentials rotated without changing the shared server root credentials.',
+        });
+      }
       const rot = await client.rotateRootCredential();
       newPassword = rot.newGeneratedPassword;
 

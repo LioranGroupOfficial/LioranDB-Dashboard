@@ -24,6 +24,9 @@ export async function POST(
     if (!node) {
       return NextResponse.json({ error: 'Hosting node not found' }, { status: 404 });
     }
+    if (node.allocationMode === 'SHARED') {
+      return NextResponse.json({ error: 'Whole-node cleanup/reset is disabled for shared hosting pools. Manage tenants individually.' }, { status: 409 });
+    }
 
     // Safety constraint: Never reset a node that has genuinely active customer databases
     const activeInstancesCount = await ManagedDatabase.countDocuments({

@@ -5,6 +5,7 @@ import { LioranDBAdminClient } from '@/lib/liorandb-admin';
 import { createAuditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { rateLimit } from '@/lib/rate-limit';
+import { adminSharedTenantAction } from '@/lib/services/shared-hosting.service';
 
 export async function POST(
   _req: NextRequest,
@@ -23,6 +24,13 @@ export async function POST(
     const instance = await ManagedDatabase.findById(id).populate('hostingNodeId');
     if (!instance) {
       return NextResponse.json({ error: 'Database instance not found' }, { status: 404 });
+    }
+
+    const hostingNode = instance.hostingNodeId as any;
+    if (hostingNode?.allocationMode === 'SHARED') {
+      if (!instance.providerDeploymentId) return NextResponse.json({ error: 'Shared tenant identity is missing; refusing to rotate server root credentials.' }, { status: 409 });
+      const result = await adminSharedTenantAction(admin.userId, instance.providerDeploymentId, 'rotate');
+      return NextResponse.json({ success: true, result, message: 'Only the shared tenant credentials were rotated.' });
     }
 
     const client = await LioranDBAdminClient.forInstanceAsync(instance);

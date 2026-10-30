@@ -1,6 +1,7 @@
 import { connectToDatabase, HostingNode, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient, logCleanupStage } from '@/lib/liorandb-admin/client';
 import { isLocalhost, resolveControlPlaneEndpoint } from '@/lib/liorandb-admin/url';
+import { clearExpiredHostingReservations, reconcileHostingNodeAllocation } from '@/lib/hosting/allocation';
 
 let activeReconciliationPromise: Promise<void> | null = null;
 let lastReconciliationCompletedAt = 0;
@@ -84,6 +85,30 @@ export async function reconcileHostingNodes(options?: { force?: boolean }): Prom
       for (const node of allNodes) {
         // Concurrency safeguard 1: never touch a node currently undergoing active reset
         if (node.status === 'RESETTING') {
+          continue;
+        }
+
+        // Shared pools are tenant-isolated Rust instances. They must never be
+        // treated as a dedicated 1:1 server or auto-reset when one tenant ends.
+        if (node.allocationMode === 'SHARED') {
+          await clearExpiredHostingReservations(node._id.toString());
+          await reconcileHostingNodeAllocation(node._id.toString());
+          try {
+            const client = LioranDBAdminClient.forNode(node);
+            const status = await client.getServerStatus();
+            await HostingNode.findByIdAndUpdate(node._id, {
+              $set: {
+                healthStatus: status.status === 'HEALTHY' ? 'HEALTHY' : 'DEGRADED',
+                serverIdentity: status.instanceId || node.serverIdentity,
+                serverVersion: status.version || node.serverVersion,
+                lastHealthCheckAt: new Date(),
+              },
+            });
+          } catch {
+            await HostingNode.findByIdAndUpdate(node._id, {
+              $set: { healthStatus: 'UNREACHABLE', lastHealthCheckAt: new Date() },
+            });
+          }
           continue;
         }
 

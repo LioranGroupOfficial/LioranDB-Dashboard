@@ -31,6 +31,7 @@ export async function GET() {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '';
     if (message === 'SHARED_HOSTING_CAPACITY_EXHAUSTED') return NextResponse.json({ error: 'No free shared database slots are currently available.', code: message }, { status: 409 });
+    if (message === 'FREE_TIER_ALREADY_ALLOCATED') return NextResponse.json({ error: 'Each customer may have at most one free shared database.', code: message }, { status: 409 });
     return createApiError(error);
   }
 }
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
       credentials: result.credentials,
     });
   } catch (error: unknown) {
+    if (error instanceof Error && error.message === 'FREE_TIER_ALREADY_ALLOCATED') return NextResponse.json({ error: 'Each customer may have at most one free shared database.', code: error.message }, { status: 409 });
     return createApiError(error);
   }
 }
