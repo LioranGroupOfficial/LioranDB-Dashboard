@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import { Newsreader, Inter, JetBrains_Mono } from 'next/font/google';
-import Script from 'next/script';
 import './globals.css';
 
 const newsreader = Newsreader({
@@ -106,24 +105,6 @@ export default function RootLayout({
         <ThemeProvider>
           {children}
         </ThemeProvider>
-        <Script
-          id="lioran-theme-init"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                var t = localStorage.getItem('lioran_theme') || 'light';
-                if (t === 'dark') {
-                  document.documentElement.classList.add('dark');
-                  document.documentElement.setAttribute('data-theme', 'dark');
-                } else {
-                  document.documentElement.classList.remove('dark');
-                  document.documentElement.setAttribute('data-theme', 'light');
-                }
-              } catch (_) {}
-            `,
-          }}
-        />
       </body>
     </html>
   );
