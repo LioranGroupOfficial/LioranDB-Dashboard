@@ -14,6 +14,7 @@ export const HOSTING_RESERVATION_LEASE_MS = 120_000;
 type HostingNodeWithRawReservations = {
   _id: unknown;
   allocationReservations?: unknown;
+  allocationRevision?: unknown;
 };
 
 function isAllocationReservation(value: unknown): value is IHostingAllocationReservation {
@@ -73,9 +74,13 @@ export async function ensureHostingNodeAllocationReservations(
 
   if (!needsRepair) return reservations;
 
+  const repairFilter: Record<string, unknown> = { _id: node._id };
+  repairFilter.allocationRevision = typeof node.allocationRevision === 'number'
+    ? node.allocationRevision
+    : { $exists: false };
   const repaired = await HostingNode.updateOne(
-    { _id: node._id, allocationReservations: raw },
-    { $set: { allocationReservations: reservations } }
+    repairFilter,
+    { $set: { allocationReservations: reservations }, $inc: { allocationRevision: 1 } }
   );
   if (repaired.matchedCount === 1) return reservations;
 

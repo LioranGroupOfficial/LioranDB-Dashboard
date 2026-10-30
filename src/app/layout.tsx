@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Newsreader, Inter, JetBrains_Mono } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 
 const newsreader = Newsreader({
@@ -98,24 +99,6 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${newsreader.variable} ${inter.variable} ${jetbrainsMono.variable}`}
     >
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                var t = localStorage.getItem('lioran_theme') || 'light';
-                if (t === 'dark') {
-                  document.documentElement.classList.add('dark');
-                  document.documentElement.setAttribute('data-theme', 'dark');
-                } else {
-                  document.documentElement.classList.remove('dark');
-                  document.documentElement.setAttribute('data-theme', 'light');
-                }
-              } catch (_) {}
-            `,
-          }}
-        />
-      </head>
       <body
         suppressHydrationWarning
         className="min-h-dvh bg-[var(--background)] text-[var(--text-primary)] font-sans antialiased transition-colors duration-150"
@@ -124,6 +107,24 @@ export default function RootLayout({
           {children}
         </ThemeProvider>
       </body>
+      <Script
+        id="lioran-theme-init"
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            try {
+              var t = localStorage.getItem('lioran_theme') || 'light';
+              if (t === 'dark') {
+                document.documentElement.classList.add('dark');
+                document.documentElement.setAttribute('data-theme', 'dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.setAttribute('data-theme', 'light');
+              }
+            } catch (_) {}
+          `,
+        }}
+      />
     </html>
   );
 }
