@@ -7,7 +7,7 @@ export default function OpenStudioButton({ db, className = '' }: { db: DatabaseC
   const unavailableReason = studioUnavailableReason(db);
 
   function openStudio() {
-    const connectionUri = getRootConnectionUri(db.connectionUri, db.port);
+    const connectionUri = getRootConnectionUri(db.connectionUri, db.port, db.host);
     if (studioUnavailableReason(db) || !connectionUri) return;
 
     // Keep username/password percent-encoded inside the URI (passwords can contain @/#).

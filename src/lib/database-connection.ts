@@ -25,19 +25,29 @@ export function getFullConnectionUri(uri: string | null): string | null {
 }
 
 /** Format the customer-facing root URI without changing the stored credentials. */
-export function getRootConnectionUri(uri: string | null, port: number): string | null {
+export function getRootConnectionUri(uri: string | null, port: number, hostOverride?: string): string | null {
   const fullUri = getFullConnectionUri(uri);
   if (!fullUri) return null;
 
   try {
     const parsed = new URL(fullUri);
+    let hostname = parsed.hostname;
+    if (hostOverride?.trim()) {
+      const hostUrl = new URL(
+        /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(hostOverride.trim())
+          ? hostOverride.trim()
+          : `https://${hostOverride.trim()}`
+      );
+      if (!hostUrl.hostname) return null;
+      hostname = hostUrl.hostname;
+    }
     // URL parsing removes default HTTPS ports; use this instance's actual port.
     const connectionPort = parsed.port || String(port);
     if (!Number.isInteger(Number(connectionPort)) || Number(connectionPort) < 1 || Number(connectionPort) > 65535) {
       return null;
     }
     // username/password are already percent-encoded. Preserve them without encoding again.
-    return `liorandb://${parsed.username}:${parsed.password}@${parsed.hostname}:${connectionPort}/`;
+    return `liorandb://${parsed.username}:${parsed.password}@${hostname}:${connectionPort}/`;
   } catch {
     return null;
   }
@@ -59,6 +69,7 @@ export function maskConnectionUri(uri: string): string {
 
 export interface DatabaseConnection {
   connectionUri: string | null;
+  host?: string;
   port: number;
   status: string;
   provisionedAt?: string;
@@ -75,7 +86,7 @@ export function studioUnavailableReason(db: DatabaseConnection): string | null {
   if (db.serverHealth && db.serverHealth !== 'HEALTHY') {
     return 'Studio is unavailable while this database is not healthy.';
   }
-  if (!getRootConnectionUri(db.connectionUri, db.port)) {
+  if (!getRootConnectionUri(db.connectionUri, db.port, db.host)) {
     return 'The complete connection URI is unavailable. Contact support if this persists.';
   }
   return null;

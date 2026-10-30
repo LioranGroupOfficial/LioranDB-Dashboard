@@ -26,7 +26,7 @@ export default async function InstanceDetailsContent({ id, sessionUser }: { id: 
   const discount = instance.couponDiscountPercentage || 0;
   const usage = calculateInstanceUsage(instance as unknown as IManagedDatabase, getCurrentMonthPeriod());
   let connectionUri: string | null = null;
-  if (instance.encryptedConnectionUri) { try { connectionUri = getRootConnectionUri(decrypt(instance.encryptedConnectionUri), instance.port); } catch {} }
+  if (instance.encryptedConnectionUri) { try { connectionUri = getRootConnectionUri(decrypt(instance.encryptedConnectionUri), instance.port, instance.host); } catch {} }
   const dbData = { id: instance._id.toString(), name: instance.name, status: instance.status, serverHealth: instance.serverHealth, host: instance.host, port: instance.port, databaseName: instance.databaseName, username: instance.username, connectionUri, planId: instance.planId, billingStartedAt: instance.billingStartedAt?.toISOString(), provisionedAt: instance.provisionedAt?.toISOString() };
   const users = (instance.databaseUsers || []).map((user) => { let password = ''; if (user.encryptedPassword) { try { password = decrypt(user.encryptedPassword); } catch {} } return { username: user.username, role: user.role || 'read_write', status: user.status || 'ACTIVE', password: password || undefined, createdAt: user.createdAt || instance.createdAt }; });
   const shared = instance.type === 'shared' || instance.planId === 'free';

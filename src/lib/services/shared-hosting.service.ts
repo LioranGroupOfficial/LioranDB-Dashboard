@@ -382,7 +382,12 @@ async function upsertManagedDatabaseForTenant(
   const connection = result.tenant.connection;
   const username = result.credentials?.username || connection?.username || `tenant_${tenant.tenant_id.replace(/^tenant_/, '')}`;
   const password = result.credentials?.password || connection?.password;
-  const connectionUri = connection?.uri || (password ? buildSharedConnectionUri(username, password, node, tenant.database_name) : undefined);
+  // Free/shared instances are client-facing through the database endpoint.
+  // Build the URI from the node's dbUrl so a control-plane response cannot
+  // accidentally expose the internal .grpc endpoint to the customer.
+  const connectionUri = password
+    ? buildSharedConnectionUri(username, password, node, tenant.database_name)
+    : connection?.uri;
   const sharedFields = {
     customerId,
     userId: customerId,
@@ -391,7 +396,7 @@ async function upsertManagedDatabaseForTenant(
     type: 'shared' as const,
     username,
     host: String(node.dbUrl || node.grpcUrl || 'shared-host'),
-    port: Number(node.grpcPort || node.port || 27019),
+    port: Number(node.port || node.grpcPort || 27019),
     databaseName: tenant.database_name,
     status: mapTenantStatus(tenant.status),
     planId: FREE_SHARED_PLAN_ID,
@@ -493,8 +498,8 @@ function buildSharedConnectionUri(
   node: Partial<IHostingNode>,
   databaseName: string
 ): string {
-  const endpoint = String(node.grpcUrl || node.dbUrl || 'localhost');
+  const endpoint = String(node.dbUrl || node.grpcUrl || 'localhost');
   const host = endpoint.replace(/^[a-z]+:\/\//i, '').replace(/\/$/, '');
-  const port = node.grpcPort || node.port || 27019;
+  const port = node.port || node.grpcPort || 27019;
   return `grpc://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(databaseName)}?tls=true`;
 }

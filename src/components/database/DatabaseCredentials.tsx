@@ -19,7 +19,7 @@ interface DbData extends DatabaseConnection {
 export default function DatabaseCredentials({ db }: { db: DbData }) {
   const [showUri, setShowUri] = useState(false);
   const uriId = useId();
-  const connectionUri = getRootConnectionUri(db.connectionUri, db.port);
+  const connectionUri = getRootConnectionUri(db.connectionUri, db.port, db.host);
   const unavailableReason = studioUnavailableReason(db);
   const displayedUri = connectionUri
     ? showUri ? connectionUri : maskConnectionUri(connectionUri)
