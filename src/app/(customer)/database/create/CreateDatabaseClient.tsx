@@ -89,7 +89,8 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
   // Create instance and directly redirect to database details
   async function handleCreateInstance(e: React.FormEvent) {
     e.preventDefault();
-    if (!instanceName.trim()) {
+    const requiresManualName = selectedPlanId !== 'free';
+    if (requiresManualName && !instanceName.trim()) {
       setErrorMessage('Please enter an instance name');
       return;
     }
@@ -97,15 +98,17 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
     setLoading(true);
     setErrorMessage('');
     try {
+      const payload: Record<string, unknown> = {
+        planId: selectedPlanId,
+        backupEnabled,
+        couponCode: appliedCoupon?.code,
+      };
+      if (requiresManualName) payload.name = instanceName.trim();
+
       const res = await fetch('/api/instances', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: instanceName.trim(),
-          planId: selectedPlanId,
-          backupEnabled,
-          couponCode: appliedCoupon?.code,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -165,13 +168,26 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
 
       <form onSubmit={handleCreateInstance} className="space-y-6">
         {/* Step 1: Instance Name */}
-        <div className="card space-y-3">
+        {selectedPlanId === 'free' ? (
+          <div className="card space-y-3">
+            <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">
+              1. Instance Name
+            </label>
+            <div className="rounded-[5px] border border-[var(--border)] bg-[var(--surface-soft)] p-3 font-mono text-xs text-[var(--text-strong)]">
+              Generated automatically after you create the database
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)]">
+              Free Shared instances receive a unique name such as <span className="font-mono">free-a7k2m9c3</span>.
+            </p>
+          </div>
+        ) : null}
+        <div className={`${selectedPlanId === 'free' ? 'hidden' : ''} card space-y-3`}>
           <label className="block text-xs font-mono uppercase tracking-wider text-[var(--text-muted)]">
             1. Instance Name *
           </label>
           <input
             type="text"
-            required
+            required={selectedPlanId !== 'free'}
             pattern="^[a-z0-9-]+$"
             title="Lowercase letters, numbers, and hyphens only"
             className="input-field text-xs w-full font-mono"
@@ -415,7 +431,7 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
 
           <button
             type="submit"
-            disabled={loading || !instanceName.trim()}
+            disabled={loading || (selectedPlanId !== 'free' && !instanceName.trim())}
             className="btn-primary w-full py-2.5 text-xs inline-flex items-center justify-center gap-2"
           >
             {loading ? (

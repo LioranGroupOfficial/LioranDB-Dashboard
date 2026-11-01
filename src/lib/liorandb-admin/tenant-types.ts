@@ -91,7 +91,8 @@ export const CreateTenantInputSchema = z.object({
     .toLowerCase()
     .min(3)
     .max(63)
-    .regex(/^[a-z0-9][a-z0-9_-]*$/, 'Database name may contain lowercase letters, numbers, underscores, and hyphens.'),
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, 'Database name may contain lowercase letters, numbers, underscores, and hyphens.')
+    .optional(),
   storage_quota_bytes: z.number().int().positive().optional(),
 });
 

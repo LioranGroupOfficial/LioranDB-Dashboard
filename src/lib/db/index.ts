@@ -22,6 +22,7 @@ import Notification from './models/Notification';
 import Wallet from './models/Wallet';
 import WalletTransaction from './models/WalletTransaction';
 import HostingNode from './models/HostingNode';
+import FreeInstanceNameReservation from './models/FreeInstanceNameReservation';
 
 export { connectToDatabase, getDb, getLioranDBClient, disconnectFromDatabase, resolveLioranDBUri };
 export { ObjectId, Types, Schema, model, models };
@@ -46,6 +47,7 @@ export {
   Wallet,
   WalletTransaction,
   HostingNode,
+  FreeInstanceNameReservation,
 };
 
 /**
@@ -74,6 +76,7 @@ export async function initConnexusCollectionsAndIndexes(targetDb?: Db): Promise<
     PolicyDocument,
     PolicyAcceptance,
     Coupon,
+    FreeInstanceNameReservation,
   ];
 
   for (const m of connexusModels) {
@@ -109,3 +112,4 @@ export type {
   WalletTransactionCategory,
 } from './models/WalletTransaction';
 export type { IHostingNode, HostingNodeStatus, HostingProtocol } from './models/HostingNode';
+export type { IFreeInstanceNameReservation } from './models/FreeInstanceNameReservation';

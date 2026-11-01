@@ -1161,7 +1161,6 @@ export async function provisionInstance(
     const shared = await provisionFreeSharedTenant({
       ownerId: instance.customerId.toString(),
       ownerEmail: customerEmail,
-      databaseName: instance.databaseName || instance.name,
       idempotencyKey: `retry-${instance._id.toString()}`,
     });
     const refreshed = await ManagedDatabase.findById(instance._id);

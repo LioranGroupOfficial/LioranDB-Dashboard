@@ -1,4 +1,4 @@
-import { connectToDatabase, HostingNode, ManagedDatabase, User } from '@/lib/db';
+import { connectToDatabase, FreeInstanceNameReservation, HostingNode, ManagedDatabase, User } from '@/lib/db';
 import type { IHostingNode } from '@/lib/db/models/HostingNode';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 import { encrypt, decrypt, generateSecureToken } from '@/lib/crypto';
@@ -63,6 +63,63 @@ export interface SharedHostingSnapshot {
   };
   nodeName: string;
   measuredAt: string;
+}
+
+const FREE_INSTANCE_NAME_MAX_RETRIES = 8;
+
+function isPersistentConflict(error: unknown): boolean {
+  const candidate = error as { code?: unknown; status?: unknown; message?: unknown } | null;
+  const message = String(candidate?.message || '').toLowerCase();
+  return candidate?.code === 'LDB_CONFLICT'
+    || candidate?.status === 409
+    || message.includes('already exists')
+    || message.includes('duplicate')
+    || message.includes('conflict');
+}
+
+async function reserveFreeInstanceName(ownerId: string, requestKey: string): Promise<string> {
+  await connectToDatabase();
+
+  const existingReservation = await FreeInstanceNameReservation.findOne({ requestKey }).lean();
+  if (existingReservation) {
+    if (existingReservation.ownerId.toString() !== ownerId) {
+      throw new LioranDBNotFoundError('Shared database not found.', { requestId: 'free-instance-name-owner-check' });
+    }
+    return existingReservation.name;
+  }
+
+  for (let attempt = 0; attempt < FREE_INSTANCE_NAME_MAX_RETRIES; attempt += 1) {
+    // generateSecureToken uses crypto.randomBytes; four bytes produce the
+    // required eight lowercase hexadecimal characters without personal data.
+    const name = `free-${generateSecureToken(4)}`;
+
+    // Protect names from allocations created before this reservation collection
+    // existed. The reservation's unique index handles concurrent new requests.
+    const legacyName = await ManagedDatabase.findOne({ planId: FREE_SHARED_PLAN_ID, name });
+    if (legacyName) continue;
+
+    try {
+      await FreeInstanceNameReservation.create({
+        name,
+        ownerId,
+        requestKey,
+      });
+      return name;
+    } catch (error: unknown) {
+      // A concurrent request may have won this request key or name. Reuse the
+      // request-key reservation when available; otherwise retry a new name.
+      const requestReservation = await FreeInstanceNameReservation.findOne({ requestKey }).lean();
+      if (requestReservation) {
+        if (requestReservation.ownerId.toString() !== ownerId) {
+          throw new LioranDBNotFoundError('Shared database not found.', { requestId: 'free-instance-name-owner-check' });
+        }
+        return requestReservation.name;
+      }
+      if (!isPersistentConflict(error)) throw error;
+    }
+  }
+
+  throw new Error('FREE_INSTANCE_NAME_GENERATION_EXHAUSTED');
 }
 
 export async function getSharedHostingContext(): Promise<SharedHostingContext> {
@@ -171,7 +228,6 @@ export async function getOwnedSharedTenant(ownerId: string, tenantId: string, in
 export async function provisionFreeSharedTenant(params: {
   ownerId: string;
   ownerEmail?: string;
-  databaseName: string;
   idempotencyKey?: string;
 }): Promise<OwnedSharedTenant & { credentials?: { username: string; password: string } }> {
   await connectToDatabase();
@@ -199,6 +255,7 @@ export async function provisionFreeSharedTenant(params: {
       { tenant },
       params.ownerId,
       existingRecord.allocationToken,
+      (await FreeInstanceNameReservation.findOne({ requestKey }).lean())?.name,
     );
     const pendingReservation = (await ensureHostingNodeAllocationReservations(context.node)).find(
       (item) => item.token === existingRecord.allocationToken && item.state === 'PENDING'
@@ -232,7 +289,8 @@ export async function provisionFreeSharedTenant(params: {
       const tenants = await context.client.listSharedTenants();
       const existing = tenants.find((tenant) => tenant.external_owner_id === params.ownerId && tenant.status !== 'DELETING');
       if (existing) {
-        const record = await upsertManagedDatabaseForTenant(context.node, { tenant: existing }, params.ownerId);
+        const reservedName = (await FreeInstanceNameReservation.findOne({ requestKey }).lean())?.name;
+        const record = await upsertManagedDatabaseForTenant(context.node, { tenant: existing }, params.ownerId, undefined, reservedName);
         const pendingReservation = (await ensureHostingNodeAllocationReservations(context.node)).find((item) => item.idempotencyKey === requestKey && item.state === 'PENDING');
         if (pendingReservation) {
           await finalizeHostingNodeSlot({ nodeId: String(context.node._id), token: pendingReservation.token, instanceId: record._id.toString() });
@@ -252,16 +310,23 @@ export async function provisionFreeSharedTenant(params: {
       if (!reservation) continue;
 
       try {
+        const instanceName = await reserveFreeInstanceName(params.ownerId, requestKey);
         const result: CreateTenantResult = await context.client.createSharedTenant(
           {
             external_owner_id: params.ownerId,
             plan: FREE_SHARED_PLAN_ID,
-            database_name: params.databaseName,
+            database_name: instanceName,
             storage_quota_bytes: FREE_SHARED_STORAGE_BYTES,
           },
           requestKey
         );
-        const record = await upsertManagedDatabaseForTenant(context.node, result, params.ownerId, reservation.reservation.token);
+        const record = await upsertManagedDatabaseForTenant(
+          context.node,
+          result,
+          params.ownerId,
+          reservation.reservation.token,
+          instanceName,
+        );
         await finalizeHostingNodeSlot({
           nodeId: String(context.node._id),
           token: reservation.reservation.token,
@@ -405,7 +470,8 @@ async function upsertManagedDatabaseForTenant(
   node: Partial<IHostingNode> & { _id?: unknown },
   result: CreateTenantResult,
   customerId: string,
-  allocationToken?: string
+  allocationToken?: string,
+  customerFacingName?: string,
 ): Promise<IManagedDatabase> {
   await connectToDatabase();
   const tenant = result.tenant;
@@ -451,9 +517,9 @@ async function upsertManagedDatabaseForTenant(
     userId: customerId,
     hostingNodeId: node._id,
     // Keep the customer-facing instance label separate from Rust's authoritative
-    // database name. New free allocations use the requested name for both by
-    // design, but later reconciliation never replaces an existing label.
-    name: existing?.name || tenant.database_name,
+    // database name. New free allocations use the reserved generated name;
+    // later reconciliation never replaces an existing customer-facing label.
+    name: existing?.name || customerFacingName || tenant.database_name,
     type: 'shared' as const,
     username: resolvedUsername,
     host: String(node.dbUrl || node.grpcUrl || 'shared-host'),

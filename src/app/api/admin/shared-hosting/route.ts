@@ -46,7 +46,6 @@ export async function POST(req: NextRequest) {
     if (!owner) return NextResponse.json({ error: 'Customer account not found.' }, { status: 404 });
     const result = await provisionFreeSharedTenant({
       ownerId: parsed.data.external_owner_id,
-      databaseName: parsed.data.database_name,
       idempotencyKey: req.headers.get('idempotency-key') || undefined,
     });
     return NextResponse.json({ success: true, tenant: result.tenant, credentials: result.credentials }, { status: 201 });

@@ -91,6 +91,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (planId !== 'free' && !name?.trim()) {
+      return NextResponse.json({ error: 'An instance name is required for this plan.' }, { status: 400 });
+    }
+
     // Enforce 2 databases per user limit (only active and in-progress databases count)
     const MAX_DATABASES_PER_USER = 2;
     const activeDatabasesCount = await ManagedDatabase.countDocuments({
@@ -110,20 +114,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check unique name for this customer among active instances
-    const existing = await ManagedDatabase.findOne({
-      customerId: user._id,
-      name: name.trim().toLowerCase(),
-      status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED', 'PROVISIONING'] },
-    });
-
-    if (existing) {
-      return NextResponse.json(
-        { error: `You already have an active database instance named "${name}". Please choose another name.` },
-        { status: 409 }
-      );
-    }
-
     // Free Shared is provisioned by the Rust shared-hosting control plane. The
     // control plane is authoritative for the one-tenant-per-owner rule,
     // capacity, quota, credential generation, and successful completion.
@@ -132,7 +122,6 @@ export async function POST(req: NextRequest) {
         const freeTenant = await provisionFreeSharedTenant({
           ownerId: user._id.toString(),
           ownerEmail: user.email,
-          databaseName: name.trim().toLowerCase(),
           idempotencyKey: req.headers.get('idempotency-key') || undefined,
         });
 
@@ -192,6 +181,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Dedicated/shared customer-facing names retain their existing behavior.
+    const normalizedName = name?.trim().toLowerCase();
+    if (!normalizedName) {
+      return NextResponse.json({ error: 'An instance name is required for this plan.' }, { status: 400 });
+    }
+    const existing = await ManagedDatabase.findOne({
+      customerId: user._id,
+      name: normalizedName,
+      status: { $in: ['ACTIVE', 'RUNNING', 'SUSPENDED', 'STOPPED', 'PROVISIONING'] },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: `You already have an active database instance named "${name}". Please choose another name.` },
+        { status: 409 }
+      );
+    }
+
     // Validate coupon if provided
     let appliedCouponCode: string | undefined = undefined;
     let couponDiscountPercentage = 0;
@@ -220,7 +227,7 @@ export async function POST(req: NextRequest) {
       allocationResult = await allocateAndProvisionInstance({
         customerId: user._id,
         customerEmail: user.email,
-        name: name.trim().toLowerCase(),
+        name: normalizedName,
         planId: plan.id,
         backupEnabled: Boolean(backupEnabled),
         couponCode: appliedCouponCode,

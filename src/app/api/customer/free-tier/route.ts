@@ -52,7 +52,6 @@ export async function POST(req: NextRequest) {
     const result = await provisionFreeSharedTenant({
       ownerId: user.userId,
       ownerEmail: user.email,
-      databaseName: parsed.data.database_name,
       idempotencyKey: req.headers.get('idempotency-key') || undefined,
     });
     return NextResponse.json({
