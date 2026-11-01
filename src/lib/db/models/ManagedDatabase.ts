@@ -70,6 +70,8 @@ export interface IManagedDatabase extends Document {
   terminatedAt?: Date;
   terminationReason?: string;
   adminNotes?: string;
+  /** Immutable Rust tenant allocation identity. Kept separate from display/database names. */
+  sharedTenantId?: string;
   providerDeploymentId?: string;
   hostingNodeId?: Types.ObjectId;
   allocationToken?: string; // Fencing token matching HostingNode.currentAllocationId
@@ -157,6 +159,7 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
     terminatedAt: { type: Date },
     terminationReason: { type: String },
     adminNotes: { type: String },
+    sharedTenantId: { type: String, index: true },
     providerDeploymentId: { type: String },
     allocationToken: { type: String, index: true },
     provisioningStage: { type: String },

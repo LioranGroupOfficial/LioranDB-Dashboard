@@ -91,10 +91,11 @@ export async function POST(
     if (isMasterUser) {
       const hostingNode = instance.hostingNodeId as any;
       if (hostingNode?.allocationMode === 'SHARED') {
-        if (!instance.providerDeploymentId) return NextResponse.json({ error: 'Shared tenant identity is missing; refusing to rotate server root credentials.' }, { status: 409 });
+        const sharedTenantId = instance.sharedTenantId || instance.providerDeploymentId;
+        if (!sharedTenantId) return NextResponse.json({ error: 'Shared tenant identity is missing; refusing to rotate server root credentials.' }, { status: 409 });
         const rotated = session.role === 'admin'
-          ? await adminSharedTenantAction(session.userId, instance.providerDeploymentId, 'rotate')
-          : await rotateOwnedSharedTenantCredentials(session.userId, instance.providerDeploymentId);
+          ? await adminSharedTenantAction(session.userId, sharedTenantId, 'rotate')
+          : await rotateOwnedSharedTenantCredentials(session.userId, sharedTenantId);
         const credentials = 'credentials' in rotated ? rotated.credentials : undefined;
         if (!credentials) return NextResponse.json({ error: 'Shared control plane did not return tenant credentials.' }, { status: 502 });
         return NextResponse.json({

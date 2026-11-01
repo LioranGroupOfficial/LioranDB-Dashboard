@@ -9,7 +9,6 @@ import RefreshIndicator from '@/components/dashboard/widgets/RefreshIndicator';
 const POLL_INTERVAL_MS = 10_000;
 
 interface Usage {
-  tenant_id: string;
   storage_used_bytes: number;
   storage_quota_bytes: number;
   remaining_bytes: number;
@@ -18,11 +17,10 @@ interface Usage {
   freshness: string;
 }
 
-function isUsageForTenant(value: unknown, tenantId: string): value is Usage {
+function isValidUsage(value: unknown): value is Usage {
   if (!value || typeof value !== 'object') return false;
   const usage = value as Partial<Usage>;
-  return usage.tenant_id === tenantId
-    && typeof usage.storage_used_bytes === 'number' && Number.isFinite(usage.storage_used_bytes) && usage.storage_used_bytes >= 0
+  return typeof usage.storage_used_bytes === 'number' && Number.isFinite(usage.storage_used_bytes) && usage.storage_used_bytes >= 0
     && typeof usage.storage_quota_bytes === 'number' && Number.isFinite(usage.storage_quota_bytes) && usage.storage_quota_bytes > 0
     && typeof usage.remaining_bytes === 'number' && Number.isFinite(usage.remaining_bytes) && usage.remaining_bytes >= 0
     && typeof usage.percentage === 'number' && Number.isFinite(usage.percentage) && usage.percentage >= 0
@@ -34,7 +32,7 @@ function formatFreshness(freshness: string): string {
   return freshness.replaceAll('_', ' ').toLowerCase();
 }
 
-export default function SharedStorageWidget({ tenantId }: { tenantId: string }) {
+export default function SharedStorageWidget({ allocationId }: { allocationId: string }) {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -52,13 +50,13 @@ export default function SharedStorageWidget({ tenantId }: { tenantId: string }) 
       if (!background) setRefreshing(true);
 
       try {
-        const response = await fetch(`/api/customer/free-tier/${encodeURIComponent(tenantId)}/usage`, {
+        const response = await fetch(`/api/customer/free-tier/${encodeURIComponent(allocationId)}/usage`, {
           cache: 'no-store',
           headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
           signal: controller.signal,
         });
         const data = await response.json().catch(() => null) as { usage?: unknown } | null;
-        if (!response.ok || !isUsageForTenant(data?.usage, tenantId)) {
+        if (!response.ok || !isValidUsage(data?.usage)) {
           throw new Error('Storage usage is unavailable.');
         }
         if (!mounted) return;
@@ -90,7 +88,7 @@ export default function SharedStorageWidget({ tenantId }: { tenantId: string }) 
       document.removeEventListener('visibilitychange', refreshWhenVisible);
       controller?.abort();
     };
-  }, [tenantId]);
+  }, [allocationId]);
 
   if (!usage && !error) return <StorageWidgetSkeleton />;
   if (!usage) {

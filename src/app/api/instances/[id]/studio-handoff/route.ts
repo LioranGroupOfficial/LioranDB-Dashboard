@@ -4,6 +4,7 @@ import { connectToDatabase, ManagedDatabase, StudioHandoff } from '@/lib/db';
 import { decrypt, generateSecureToken, sha256 } from '@/lib/crypto';
 import { createApiError } from '@/lib/errors';
 import { parseLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
+import { getOwnedSharedTenant } from '@/lib/services/shared-hosting.service';
 
 const STUDIO_URL = 'https://studio.liorandb.com/';
 const HANDOFF_TTL_MS = 60_000;
@@ -26,8 +27,19 @@ export async function POST(
     if (!['ACTIVE', 'RUNNING'].includes(instance.status)) {
       return NextResponse.json({ error: 'Studio is available only for an active database.' }, { status: 409 });
     }
-    if (!instance.databaseName || !instance.encryptedConnectionUri) {
+    if (!instance.encryptedConnectionUri) {
       return NextResponse.json({ error: 'The database connection is not ready.' }, { status: 409 });
+    }
+
+    if (instance.planId === 'free' || instance.type === 'shared') {
+      const sharedTenantId = instance.sharedTenantId || instance.providerDeploymentId;
+      if (!sharedTenantId) {
+        return NextResponse.json({ error: 'The shared tenant connection is not ready.' }, { status: 409 });
+      }
+      const ownedTenant = await getOwnedSharedTenant(user.userId, sharedTenantId, false);
+      if (!['ACTIVE', 'QUOTA_EXCEEDED'].includes(ownedTenant.tenant.status)) {
+        return NextResponse.json({ error: 'Studio is available only for an active shared allocation.' }, { status: 409 });
+      }
     }
 
     // Validate the encrypted record server-side without returning the credential.

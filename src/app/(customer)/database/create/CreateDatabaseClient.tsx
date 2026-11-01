@@ -231,7 +231,7 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
                   <span className="text-xs font-mono font-bold text-[var(--text-strong)]">₹0</span>
                 </div>
               </div>
-              <p className="mt-3 min-w-0 text-xs leading-5 text-[var(--text-secondary)]">One isolated logical database in the shared free-tier pool.</p>
+              <p className="mt-3 min-w-0 text-xs leading-5 text-[var(--text-secondary)]">One isolated tenant allocation in the shared free-tier pool. Create multiple logical databases in Studio.</p>
               <div className="mt-4 space-y-2 border-t border-[var(--border)] pt-4 text-xs leading-5 text-[var(--text-muted)]">
                 <div className="flex min-w-0 items-start gap-1.5"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-strong)]" /><span className="min-w-0">512 MiB storage quota</span></div>
                 <div className="flex min-w-0 items-start gap-1.5"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-strong)]" /><span className="min-w-0">Shared pool: 2 vCPU / 512 MiB</span></div>

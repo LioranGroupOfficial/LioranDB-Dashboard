@@ -192,7 +192,7 @@ export async function listOwnedSharedTenants(ownerId: string, includeUsage = fal
     providerDeploymentId: { $in: tenantContexts.map(({ tenant }) => tenant.tenant_id) },
     $or: [{ customerId: ownerId }, { userId: ownerId }],
   }).lean();
-  const recordByTenant = new Map(records.map((record) => [record.providerDeploymentId, record]));
+  const recordByTenant = new Map(records.map((record) => [record.sharedTenantId || record.providerDeploymentId, record]));
 
   return Promise.all(
     tenantContexts.map(async ({ tenant, context }) => {
@@ -208,7 +208,12 @@ export async function listOwnedSharedTenants(ownerId: string, includeUsage = fal
 
 export async function getOwnedSharedTenant(ownerId: string, tenantId: string, includeUsage = true): Promise<OwnedSharedTenant> {
   await connectToDatabase();
-  const record = await ManagedDatabase.findOne({ providerDeploymentId: tenantId, $or: [{ customerId: ownerId }, { userId: ownerId }] }).lean();
+  const record = await ManagedDatabase.findOne({
+    $and: [
+      { $or: [{ sharedTenantId: tenantId }, { providerDeploymentId: tenantId }] },
+      { $or: [{ customerId: ownerId }, { userId: ownerId }] },
+    ],
+  }).lean();
   const existingNode = record?.hostingNodeId ? await HostingNode.findById(record.hostingNodeId).lean() : null;
   const context = existingNode
     ? {
@@ -238,7 +243,8 @@ export async function provisionFreeSharedTenant(params: {
     status: { $nin: ['TERMINATED', 'DELETED', 'FAILED'] },
   }).lean();
   if (existingRecord) {
-    if (!existingRecord.providerDeploymentId) throw new Error('FREE_TIER_ALREADY_ALLOCATED');
+    const existingTenantId = existingRecord.sharedTenantId || existingRecord.providerDeploymentId;
+    if (!existingTenantId) throw new Error('FREE_TIER_ALREADY_ALLOCATED');
     const existingNode = existingRecord.hostingNodeId
       ? await HostingNode.findById(existingRecord.hostingNodeId).lean()
       : null;
@@ -248,7 +254,7 @@ export async function provisionFreeSharedTenant(params: {
           client: createSharedHostingClient(existingNode as Partial<IHostingNode> & { _id: unknown }),
         }
       : await getSharedHostingContext();
-    const tenant = await context.client.getSharedTenant(existingRecord.providerDeploymentId);
+    const tenant = await context.client.getSharedTenant(existingTenantId);
     assertTenantOwner(tenant, params.ownerId);
     const record = await upsertManagedDatabaseForTenant(
       context.node,
@@ -367,7 +373,12 @@ export async function rotateOwnedSharedTenantCredentials(ownerId: string, tenant
   const rotated = await context.client.rotateSharedTenantCredentials(tenantId);
 
   await connectToDatabase();
-  const record = await ManagedDatabase.findOne({ providerDeploymentId: tenantId, $or: [{ customerId: ownerId }, { userId: ownerId }] });
+  const record = await ManagedDatabase.findOne({
+    $and: [
+      { $or: [{ sharedTenantId: tenantId }, { providerDeploymentId: tenantId }] },
+      { $or: [{ customerId: ownerId }, { userId: ownerId }] },
+    ],
+  });
   if (record) {
     const connectionUri = buildSharedConnectionUri(
       rotated.credentials.username,
@@ -410,7 +421,9 @@ export async function adminSharedTenantAction(
   quotaBytes?: number
 ): Promise<RustTenant | TenantActionResult | TenantCredentialRotation> {
   await connectToDatabase();
-  const existingRecord = await ManagedDatabase.findOne({ providerDeploymentId: tenantId }).lean();
+  const existingRecord = await ManagedDatabase.findOne({
+    $or: [{ sharedTenantId: tenantId }, { providerDeploymentId: tenantId }],
+  }).lean();
   const existingNode = existingRecord?.hostingNodeId
     ? await HostingNode.findById(existingRecord.hostingNodeId).lean()
     : null;
@@ -481,11 +494,17 @@ async function upsertManagedDatabaseForTenant(
 
   // The Rust tenant ID is the stable allocation identity. Never create a second
   // Dashboard record for that ID under another customer if local data is stale.
-  const existingByTenant = await ManagedDatabase.findOne({ providerDeploymentId: tenant.tenant_id });
+  const existingByTenant = await ManagedDatabase.findOne({
+    $or: [{ sharedTenantId: tenant.tenant_id }, { providerDeploymentId: tenant.tenant_id }],
+  });
   if (existingByTenant && existingByTenant.customerId.toString() !== customerId && existingByTenant.userId?.toString() !== customerId) {
     throw new LioranDBNotFoundError('Shared database not found.', { requestId: 'shared-tenant-record-owner-check' });
   }
   const existing = existingByTenant || await ManagedDatabase.findOne({
+    // sharedTenantId is the canonical immutable Rust allocation identity.
+    // providerDeploymentId remains populated for compatibility with existing
+    // Dashboard records and older routes.
+    sharedTenantId: tenant.tenant_id,
     providerDeploymentId: tenant.tenant_id,
     $or: [{ customerId }, { userId: customerId }],
   });
@@ -562,7 +581,9 @@ async function upsertManagedDatabaseForTenant(
 
 async function syncManagedDatabaseRecord(tenantId: string, result: RustTenant | TenantActionResult | TenantCredentialRotation): Promise<void> {
   await connectToDatabase();
-  const record = await ManagedDatabase.findOne({ providerDeploymentId: tenantId });
+  const record = await ManagedDatabase.findOne({
+    $or: [{ sharedTenantId: tenantId }, { providerDeploymentId: tenantId }],
+  });
   if (!record) return;
   if ('deleted' in result && result.deleted) {
     record.status = 'DELETED';
@@ -592,6 +613,8 @@ async function syncManagedDatabaseRecord(tenantId: string, result: RustTenant | 
   if ('status' in result && result.status) record.status = mapTenantStatus(result.status);
   const tenant = 'tenant' in result && result.tenant ? result.tenant : isRustTenant(result) ? result : undefined;
   if (tenant) {
+    record.sharedTenantId = tenant.tenant_id;
+    record.providerDeploymentId = tenant.tenant_id;
     record.databaseName = tenant.database_name;
     record.status = mapTenantStatus(tenant.status);
     record.storageQuotaBytes = tenant.storage_quota_bytes;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase, ManagedDatabase, StudioHandoff } from '@/lib/db';
 import { decrypt, sha256 } from '@/lib/crypto';
 import { buildLioranDBConnectionUri, parseLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
+import { getOwnedSharedTenant } from '@/lib/services/shared-hosting.service';
 
 const STUDIO_ORIGIN = 'https://studio.liorandb.com';
 
@@ -52,7 +53,23 @@ export async function POST(request: NextRequest) {
       customerId: handoff.customerId,
       status: { $in: ['ACTIVE', 'RUNNING'] },
     }).lean();
-    if (!instance?.encryptedConnectionUri || !instance.databaseName) {
+    if (!instance?.encryptedConnectionUri) {
+      return NextResponse.json({ error: 'The database connection is no longer available.' }, { status: 409, headers });
+    }
+
+    let connectionDatabaseName = instance.databaseName;
+    if (instance.planId === 'free' || instance.type === 'shared') {
+      const sharedTenantId = instance.sharedTenantId || instance.providerDeploymentId;
+      if (!sharedTenantId) {
+        return NextResponse.json({ error: 'The shared tenant connection is no longer available.' }, { status: 409, headers });
+      }
+      const ownedTenant = await getOwnedSharedTenant(instance.customerId.toString(), sharedTenantId, false);
+      if (!['ACTIVE', 'QUOTA_EXCEEDED'].includes(ownedTenant.tenant.status)) {
+        return NextResponse.json({ error: 'The shared allocation is not active.' }, { status: 409, headers });
+      }
+      connectionDatabaseName = ownedTenant.tenant.database_name;
+    }
+    if (!connectionDatabaseName) {
       return NextResponse.json({ error: 'The database connection is no longer available.' }, { status: 409, headers });
     }
 
@@ -69,7 +86,7 @@ export async function POST(request: NextRequest) {
       password: parsed.password,
       host: instance.host || parsed.host,
       port: instance.port || parsed.port,
-      database: instance.databaseName,
+      database: connectionDatabaseName,
       tls: parsed.tls,
       transport: parsed.transport,
       allowHttpFallback: parsed.allowHttpFallback,
@@ -78,7 +95,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(
-      { connectionUri, databaseName: instance.databaseName, instanceId: instance._id.toString() },
+      { connectionUri, databaseName: connectionDatabaseName, instanceId: instance._id.toString() },
       { headers: { ...headers, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } },
     );
   } catch {

@@ -14,6 +14,7 @@ interface DbData extends DatabaseConnection {
   port: number;
   databaseName: string;
   username: string;
+  planId?: string;
 }
 
 export default function DatabaseCredentials({ db }: { db: DbData }) {
@@ -39,7 +40,7 @@ export default function DatabaseCredentials({ db }: { db: DbData }) {
             </p>
           </div>
           <OpenStudioButton
-            db={db}
+            db={{ ...db, connectionUri: null }}
             className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] shadow-2xs transition-colors hover:bg-[var(--surface-card)]"
           />
         </div>
@@ -49,7 +50,7 @@ export default function DatabaseCredentials({ db }: { db: DbData }) {
         <div className="space-y-2.5">
           <CredRow label="Hostname" value={db.host} />
           <CredRow label="Port" value={db.port ? String(db.port) : ''} />
-          <CredRow label="Database Name" value={db.databaseName} />
+          <CredRow label={db.planId === 'free' ? 'Allocation Database' : 'Database Name'} value={db.databaseName} />
           <CredRow label="Default User" value={db.username} />
         </div>
 
@@ -83,7 +84,9 @@ export default function DatabaseCredentials({ db }: { db: DbData }) {
           </p>
         </div>
         <p className="text-[11px] text-[var(--muted)]">
-          Open Studio receives this allocation URI, including the database path. Treat the generated Studio URL as sensitive.
+          {db.planId === 'free'
+            ? 'This is the protected bootstrap database for your tenant allocation. Studio can create and manage additional logical databases under the same 512 MiB quota.'
+            : 'Studio receives a one-time handoff for this database without placing credentials in the Studio URL.'}
         </p>
       </section>
       <QuickConnect key={db.id} connectionUri={connectionUri} databaseName={db.databaseName} unavailableReason={unavailableReason} />

@@ -44,7 +44,7 @@ export const PLANS: Record<string, PlanConfig> = {
     type: 'shared',
     purpose: 'A durable shared database for learning, prototypes, and lightweight applications.',
     resourceModel: 'Shared free-tier pool (2 vCPU / 512 MiB for the pool)',
-    documentGuideline: 'One database per customer, 512 MiB logical storage quota',
+    documentGuideline: 'One tenant allocation per customer with multiple logical databases, 512 MiB combined logical storage quota',
     opsLimitGuideline: '10 sustained requests/sec with a shared pool backstop',
     opsPerSecondLimit: 10,
     maxOpsPerSec: 10,
@@ -57,7 +57,7 @@ export const PLANS: Record<string, PlanConfig> = {
     isSelfService: true,
     selfService: true,
     badge: 'Free tier',
-    description: 'One isolated logical database in the LioranDB shared free-tier pool.',
+    description: 'One isolated tenant allocation in the LioranDB shared free-tier pool. Create multiple logical databases in Studio.',
   },
   shared: {
     id: 'shared',

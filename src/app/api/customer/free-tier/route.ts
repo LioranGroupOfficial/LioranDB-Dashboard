@@ -19,13 +19,15 @@ export async function GET() {
       quotaBytes: snapshot.status.default_storage_quota_bytes,
       resources: snapshot.status.resources,
       hasAllocation: databases.length > 0,
-      databases: databases.map(({ tenant, usage, database }) => ({
-        tenantId: tenant.tenant_id,
-        databaseName: tenant.database_name,
-        status: tenant.status,
-        usage,
-        database,
-      })),
+      databases: databases.map(({ tenant, usage, database }) => {
+        const safeUsage = usage ? (({ tenant_id: _tenantId, ...rest }) => rest)(usage) : undefined;
+        return {
+          databaseName: tenant.database_name,
+          status: tenant.status,
+          usage: safeUsage,
+          database: database ? { ...database, connectionUri: undefined } : undefined,
+        };
+      }),
       measuredAt: snapshot.measuredAt,
     });
   } catch (error: unknown) {
@@ -56,7 +58,6 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({
       success: true,
-      tenantId: result.tenant.tenant_id,
       database: result.database,
       credentials: result.credentials,
     });
