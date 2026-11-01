@@ -26,6 +26,7 @@ import type {
   TenantCredentialRotation,
 } from '@/lib/liorandb-admin/tenant-types';
 import {
+  bindHostingReservationToInstance,
   finalizeHostingNodeSlot,
   ensureHostingNodeAllocationReservations,
   releaseHostingNodeAssignment,
@@ -53,6 +54,12 @@ export interface OwnedSharedTenant {
     storageQuotaBytes?: number;
     storageUsedBytes?: number;
   };
+}
+
+export function getManagedSharedTenantId(
+  record: Pick<IManagedDatabase, 'sharedTenantId' | 'providerDeploymentId'>,
+): string | undefined {
+  return record.sharedTenantId || record.providerDeploymentId;
 }
 
 export interface SharedHostingSnapshot {
@@ -144,6 +151,62 @@ export async function getSharedHostingContext(): Promise<SharedHostingContext> {
   };
 }
 
+async function getSharedHostingContextForRecord(record: Pick<IManagedDatabase, 'hostingNodeId'>): Promise<SharedHostingContext> {
+  if (!record.hostingNodeId) {
+    throw new LioranDBAdminError('Shared allocation is missing its shared-server mapping.', {
+      code: 'SHARED_TENANT_MAPPING_INCOMPLETE',
+      statusCode: 409,
+    });
+  }
+  const node = await HostingNode.findById(record.hostingNodeId).lean();
+  if (!node || node.allocationMode !== 'SHARED') {
+    throw new LioranDBAdminError('Shared allocation is not mapped to a shared hosting server.', {
+      code: 'SHARED_TENANT_MAPPING_INCOMPLETE',
+      statusCode: 409,
+    });
+  }
+  return {
+    node: node as Partial<IHostingNode> & { _id: unknown },
+    client: createSharedHostingClient(node as Partial<IHostingNode> & { _id: unknown }),
+  };
+}
+
+async function getSharedTenantFromControlPlane(
+  context: SharedHostingContext,
+  tenantId: string,
+): Promise<RustTenant> {
+  try {
+    return await context.client.getSharedTenant(tenantId);
+  } catch (error: unknown) {
+    if (error instanceof LioranDBAdminError && error.statusCode === 404) {
+      throw new LioranDBAdminError('The Dashboard allocation is not present in the Rust tenant registry.', {
+        code: 'SHARED_TENANT_REGISTRY_MISSING',
+        statusCode: 409,
+        requestId: error.requestId,
+      });
+    }
+    if (error instanceof LioranDBAdminError && error.statusCode >= 500) {
+      // Some Rust versions can fail the single-tenant serializer while the
+      // registry listing remains available. Use that read-only listing only
+      // as a compatibility fallback, then apply the normal owner assertion.
+      try {
+        const listedTenant = (await context.client.listSharedTenants()).find(
+          (candidate) => candidate.tenant_id === tenantId,
+        );
+        if (listedTenant) return listedTenant;
+      } catch {
+        // Preserve the original classified control-plane failure below.
+      }
+      throw new LioranDBAdminError('The Rust tenant registry is temporarily unavailable.', {
+        code: 'SHARED_TENANT_REGISTRY_UNAVAILABLE',
+        statusCode: 503,
+        requestId: error.requestId,
+      });
+    }
+    throw error;
+  }
+}
+
 async function getSharedHostingContexts(): Promise<SharedHostingContext[]> {
   await connectToDatabase();
   const nodes = await HostingNode.find({
@@ -184,6 +247,200 @@ export async function listSharedTenants(): Promise<RustTenant[]> {
   return client.listSharedTenants();
 }
 
+export interface SharedHostingConsistencyIssue {
+  code: string;
+  severity: 'WARNING' | 'ERROR';
+  nodeId?: string;
+  tenantId?: string;
+  allocationId?: string;
+  message: string;
+}
+
+export interface SharedHostingConsistencyReport {
+  checkedAt: string;
+  nodesChecked: number;
+  allocationsChecked: number;
+  issues: SharedHostingConsistencyIssue[];
+}
+
+/**
+ * Read-only Dashboard/Rust mapping inspection. This intentionally never
+ * creates, updates, deletes, rotates, or reprovisions any resource.
+ */
+export async function inspectSharedHostingConsistency(): Promise<SharedHostingConsistencyReport> {
+  await connectToDatabase();
+  const [nodes, records] = await Promise.all([
+    HostingNode.find({
+      allocationMode: 'SHARED',
+      status: { $nin: ['DISABLED', 'MAINTENANCE'] },
+    }).lean<IHostingNode[]>(),
+    ManagedDatabase.find({
+      $or: [{ type: 'shared' }, { planId: FREE_SHARED_PLAN_ID }],
+      status: { $nin: ['TERMINATED', 'DELETED'] },
+    }).lean(),
+  ]);
+  const issues: SharedHostingConsistencyIssue[] = [];
+  const nodeById = new Map(nodes.map((node) => [node._id.toString(), node]));
+  const recordsByTenant = new Map<string, IManagedDatabase[]>();
+
+  for (const record of records) {
+    const allocationId = record._id.toString();
+    const tenantId = getManagedSharedTenantId(record);
+    const nodeId = record.hostingNodeId?.toString();
+    if (!tenantId) {
+      issues.push({
+        code: 'DASHBOARD_TENANT_ID_MISSING',
+        severity: 'ERROR',
+        allocationId,
+        message: 'Dashboard shared allocation has no immutable Rust tenant ID.',
+      });
+    } else {
+      const existing = recordsByTenant.get(tenantId) || [];
+      existing.push(record);
+      recordsByTenant.set(tenantId, existing);
+    }
+    if (!nodeId || !nodeById.has(nodeId)) {
+      issues.push({
+        code: 'DASHBOARD_SHARED_SERVER_MAPPING_MISSING',
+        severity: 'ERROR',
+        allocationId,
+        tenantId,
+        message: 'Dashboard shared allocation is not mapped to a known shared hosting server.',
+      });
+    } else if (nodeById.get(nodeId)?.allocationMode !== 'SHARED') {
+      issues.push({
+        code: 'DASHBOARD_SHARED_SERVER_MAPPING_INVALID',
+        severity: 'ERROR',
+        allocationId,
+        tenantId,
+        nodeId,
+        message: 'Dashboard shared allocation points to a non-shared hosting server.',
+      });
+    }
+    if (!record.encryptedControlPlaneCredential || !record.encryptedConnectionUri) {
+      issues.push({
+        code: 'DASHBOARD_CREDENTIAL_STATE_INCOMPLETE',
+        severity: 'WARNING',
+        allocationId,
+        tenantId,
+        message: 'Dashboard allocation is missing an encrypted credential or connection reference.',
+      });
+    }
+  }
+
+  for (const [tenantId, tenantRecords] of recordsByTenant) {
+    if (tenantRecords.length > 1) {
+      issues.push({
+        code: 'DUPLICATE_DASHBOARD_TENANT_MAPPING',
+        severity: 'ERROR',
+        tenantId,
+        message: 'Multiple Dashboard allocations reference the same Rust tenant ID.',
+      });
+    }
+  }
+
+  const seenRustTenants = new Map<string, string>();
+  for (const node of nodes) {
+    const nodeId = node._id.toString();
+    const client = createSharedHostingClient(node);
+    let tenants: RustTenant[];
+    try {
+      tenants = await client.listSharedTenants();
+    } catch (error: unknown) {
+      issues.push({
+        code: 'RUST_TENANT_REGISTRY_UNAVAILABLE',
+        severity: 'ERROR',
+        nodeId,
+        message: error instanceof LioranDBAdminError && error.statusCode >= 500
+          ? 'Rust tenant registry could not be read for this shared hosting server.'
+          : 'Rust tenant registry read failed for this shared hosting server.',
+      });
+      continue;
+    }
+
+    for (const tenant of tenants) {
+      const previousNodeId = seenRustTenants.get(tenant.tenant_id);
+      if (previousNodeId && previousNodeId !== nodeId) {
+        issues.push({
+          code: 'DUPLICATE_RUST_TENANT_ID',
+          severity: 'ERROR',
+          nodeId,
+          tenantId: tenant.tenant_id,
+          message: 'The same Rust tenant ID was returned by multiple shared hosting servers.',
+        });
+      }
+      seenRustTenants.set(tenant.tenant_id, nodeId);
+
+      const tenantRecords = recordsByTenant.get(tenant.tenant_id) || [];
+      if (tenantRecords.length === 0) {
+        issues.push({
+          code: 'RUST_TENANT_WITHOUT_DASHBOARD_MAPPING',
+          severity: 'ERROR',
+          nodeId,
+          tenantId: tenant.tenant_id,
+          message: 'Rust has a tenant allocation with no Dashboard allocation mapping.',
+        });
+        continue;
+      }
+
+      for (const record of tenantRecords) {
+        const allocationId = record._id.toString();
+        const localOwner = record.customerId.toString();
+        if (tenant.external_owner_id !== localOwner && tenant.external_owner_id !== record.userId?.toString()) {
+          issues.push({
+            code: 'TENANT_OWNER_MISMATCH',
+            severity: 'ERROR',
+            nodeId,
+            tenantId: tenant.tenant_id,
+            allocationId,
+            message: 'Rust tenant owner does not match the Dashboard allocation owner.',
+          });
+        }
+        if (record.hostingNodeId?.toString() !== nodeId) {
+          issues.push({
+            code: 'TENANT_SHARED_SERVER_MISMATCH',
+            severity: 'ERROR',
+            nodeId,
+            tenantId: tenant.tenant_id,
+            allocationId,
+            message: 'Dashboard allocation points to a different shared hosting server.',
+          });
+        }
+        try {
+          const logicalName = getSharedTenantLogicalDatabaseName(tenant, record.name);
+          const dashboardLogicalName = getSharedRecordLogicalDatabaseName(record);
+          if (logicalName !== dashboardLogicalName) {
+            issues.push({
+              code: 'LOGICAL_DATABASE_MAPPING_MISMATCH',
+              severity: 'ERROR',
+              nodeId,
+              tenantId: tenant.tenant_id,
+              allocationId,
+              message: 'Dashboard and Rust disagree on the assigned logical database name.',
+            });
+          }
+        } catch {
+          issues.push({
+            code: 'LOGICAL_DATABASE_MAPPING_UNAVAILABLE',
+            severity: 'ERROR',
+            nodeId,
+            tenantId: tenant.tenant_id,
+            allocationId,
+            message: 'The logical database mapping could not be resolved safely.',
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    checkedAt: new Date().toISOString(),
+    nodesChecked: nodes.length,
+    allocationsChecked: records.length,
+    issues,
+  };
+}
+
 export async function listOwnedSharedTenants(ownerId: string, includeUsage = false): Promise<OwnedSharedTenant[]> {
   const contexts = await getSharedHostingContexts();
   const tenantContexts = (await Promise.all(contexts.map(async (context) => ({ context, tenants: await context.client.listSharedTenants() })))).flatMap(({ context, tenants }) =>
@@ -192,10 +449,17 @@ export async function listOwnedSharedTenants(ownerId: string, includeUsage = fal
   await connectToDatabase();
 
   const records = await ManagedDatabase.find({
-    providerDeploymentId: { $in: tenantContexts.map(({ tenant }) => tenant.tenant_id) },
-    $or: [{ customerId: ownerId }, { userId: ownerId }],
+    $and: [
+      {
+        $or: [
+          { sharedTenantId: { $in: tenantContexts.map(({ tenant }) => tenant.tenant_id) } },
+          { providerDeploymentId: { $in: tenantContexts.map(({ tenant }) => tenant.tenant_id) } },
+        ],
+      },
+      { $or: [{ customerId: ownerId }, { userId: ownerId }] },
+    ],
   }).lean();
-  const recordByTenant = new Map(records.map((record) => [record.sharedTenantId || record.providerDeploymentId, record]));
+  const recordByTenant = new Map(records.map((record) => [getManagedSharedTenantId(record), record]));
 
   return Promise.all(
     tenantContexts.map(async ({ tenant, context }) => {
@@ -217,20 +481,15 @@ export async function getOwnedSharedTenant(ownerId: string, tenantId: string, in
       { $or: [{ customerId: ownerId }, { userId: ownerId }] },
     ],
   }).lean();
-  const existingNode = record?.hostingNodeId ? await HostingNode.findById(record.hostingNodeId).lean() : null;
-  const context = existingNode
-    ? {
-        node: existingNode as Partial<IHostingNode> & { _id: unknown },
-        client: createSharedHostingClient(existingNode as Partial<IHostingNode> & { _id: unknown }),
-      }
-    : await getSharedHostingContext();
-  const tenant = await context.client.getSharedTenant(tenantId);
+  if (!record) {
+    throw new LioranDBNotFoundError('Shared database not found.', { requestId: 'shared-tenant-owner-check' });
+  }
+  const context = await getSharedHostingContextForRecord(record);
+  const tenant = await getSharedTenantFromControlPlane(context, tenantId);
   assertTenantOwner(tenant, ownerId);
   const usage = includeUsage ? await getVerifiedTenantUsage(context.client, tenant.tenant_id) : undefined;
-  const synchronizedRecord = record
-    ? await upsertManagedDatabaseForTenant(context.node, { tenant }, ownerId, record.allocationToken)
-    : undefined;
-  return { tenant, usage, database: synchronizedRecord ? databaseView(synchronizedRecord) : undefined };
+  const synchronizedRecord = await upsertManagedDatabaseForTenant(context.node, { tenant }, ownerId, record.allocationToken);
+  return { tenant, usage, database: databaseView(synchronizedRecord) };
 }
 
 /**
@@ -251,13 +510,7 @@ export async function getOwnedSharedTenantUsage(ownerId: string, tenantId: strin
     throw new LioranDBNotFoundError('Shared database not found.', { requestId: 'shared-tenant-usage-owner-check' });
   }
 
-  const existingNode = record.hostingNodeId ? await HostingNode.findById(record.hostingNodeId).lean() : null;
-  const context = existingNode
-    ? {
-        node: existingNode as Partial<IHostingNode> & { _id: unknown },
-        client: createSharedHostingClient(existingNode as Partial<IHostingNode> & { _id: unknown }),
-      }
-    : await getSharedHostingContext();
+  const context = await getSharedHostingContextForRecord(record);
   return getVerifiedTenantUsage(context.client, tenantId);
 }
 
@@ -271,21 +524,13 @@ export async function provisionFreeSharedTenant(params: {
   const existingRecord = await ManagedDatabase.findOne({
     $or: [{ customerId: params.ownerId }, { userId: params.ownerId }],
     planId: FREE_SHARED_PLAN_ID,
-    status: { $nin: ['TERMINATED', 'DELETED', 'FAILED'] },
+    status: { $nin: ['TERMINATED', 'DELETED'] },
   }).lean();
   if (existingRecord) {
-    const existingTenantId = existingRecord.sharedTenantId || existingRecord.providerDeploymentId;
+    const existingTenantId = getManagedSharedTenantId(existingRecord);
     if (!existingTenantId) throw new Error('FREE_TIER_ALREADY_ALLOCATED');
-    const existingNode = existingRecord.hostingNodeId
-      ? await HostingNode.findById(existingRecord.hostingNodeId).lean()
-      : null;
-    const context = existingNode
-      ? {
-          node: existingNode as Partial<IHostingNode> & { _id: unknown },
-          client: createSharedHostingClient(existingNode as Partial<IHostingNode> & { _id: unknown }),
-        }
-      : await getSharedHostingContext();
-    const tenant = await context.client.getSharedTenant(existingTenantId);
+    const context = await getSharedHostingContextForRecord(existingRecord);
+    const tenant = await getSharedTenantFromControlPlane(context, existingTenantId);
     assertTenantOwner(tenant, params.ownerId);
     const record = await upsertManagedDatabaseForTenant(
       context.node,
@@ -346,8 +591,11 @@ export async function provisionFreeSharedTenant(params: {
       });
       if (!reservation) continue;
 
+      let instanceName = '';
+      let rustResult: CreateTenantResult | undefined;
+      let dashboardRecord: IManagedDatabase | undefined;
       try {
-        const instanceName = await reserveFreeInstanceName(params.ownerId, requestKey);
+        instanceName = await reserveFreeInstanceName(params.ownerId, requestKey);
         const result: CreateTenantResult = await context.client.createSharedTenant(
           {
             external_owner_id: params.ownerId,
@@ -357,6 +605,7 @@ export async function provisionFreeSharedTenant(params: {
           },
           requestKey
         );
+        rustResult = result;
         const record = await upsertManagedDatabaseForTenant(
           context.node,
           result,
@@ -364,6 +613,7 @@ export async function provisionFreeSharedTenant(params: {
           reservation.reservation.token,
           instanceName,
         );
+        dashboardRecord = record;
         await finalizeHostingNodeSlot({
           nodeId: String(context.node._id),
           token: reservation.reservation.token,
@@ -386,7 +636,34 @@ export async function provisionFreeSharedTenant(params: {
         });
         return { tenant: result.tenant, database: databaseView(record), credentials: result.credentials };
       } catch (error) {
-        await releaseHostingNodeReservation(String(context.node._id), reservation.reservation.token);
+        // Once Rust has created the tenant, retain the shared reservation and
+        // leave a durable failed mapping for reconciliation. Releasing the
+        // slot here could let another customer overbook the same pool while
+        // this tenant still exists in Rust.
+        const result = rustResult;
+        if (result) {
+          const failedRecord = dashboardRecord || await persistFailedSharedTenantRecord(
+            context.node,
+            result,
+            params.ownerId,
+            reservation.reservation.token,
+            instanceName,
+            error,
+          );
+          if (failedRecord) {
+            await bindHostingReservationToInstance(
+              String(context.node._id),
+              reservation.reservation.token,
+              failedRecord._id.toString(),
+            );
+            failedRecord.status = 'FAILED';
+            failedRecord.provisioningStage = 'RUST_TENANT_CREATED_MAPPING_FAILED';
+            failedRecord.lastProvisioningError = getSafeProvisioningFailureCode(error);
+            await failedRecord.save();
+          }
+        } else {
+          await releaseHostingNodeReservation(String(context.node._id), reservation.reservation.token);
+        }
         throw error;
       }
     }
@@ -398,11 +675,6 @@ export async function provisionFreeSharedTenant(params: {
 }
 
 export async function rotateOwnedSharedTenantCredentials(ownerId: string, tenantId: string): Promise<TenantCredentialRotation> {
-  const context = await getSharedHostingContext();
-  const tenant = await context.client.getSharedTenant(tenantId);
-  assertTenantOwner(tenant, ownerId);
-  const rotated = await context.client.rotateSharedTenantCredentials(tenantId);
-
   await connectToDatabase();
   const record = await ManagedDatabase.findOne({
     $and: [
@@ -410,6 +682,11 @@ export async function rotateOwnedSharedTenantCredentials(ownerId: string, tenant
       { $or: [{ customerId: ownerId }, { userId: ownerId }] },
     ],
   });
+  if (!record) throw new LioranDBNotFoundError('Shared database not found.', { requestId: 'shared-tenant-owner-check' });
+  const context = await getSharedHostingContextForRecord(record);
+  const tenant = await getSharedTenantFromControlPlane(context, tenantId);
+  assertTenantOwner(tenant, ownerId);
+  const rotated = await context.client.rotateSharedTenantCredentials(tenantId);
   if (record) {
     const connectionUri = buildSharedConnectionUri(
       rotated.credentials.username,
@@ -421,7 +698,6 @@ export async function rotateOwnedSharedTenantCredentials(ownerId: string, tenant
     record.encryptedControlPlaneCredential = encrypt(rotated.credentials.password);
     record.encryptedConnectionUri = encrypt(connectionUri);
     record.lastCredentialRotationAt = new Date();
-    record.credentialVersion = (record.credentialVersion || 1) + 1;
     record.credentialVersion = (record.credentialVersion || 1) + 1;
     record.databaseUsers = [
       {
@@ -455,15 +731,10 @@ export async function adminSharedTenantAction(
   const existingRecord = await ManagedDatabase.findOne({
     $or: [{ sharedTenantId: tenantId }, { providerDeploymentId: tenantId }],
   }).lean();
-  const existingNode = existingRecord?.hostingNodeId
-    ? await HostingNode.findById(existingRecord.hostingNodeId).lean()
-    : null;
-  const context = existingNode
-    ? {
-        node: existingNode as Partial<IHostingNode> & { _id: unknown },
-        client: createSharedHostingClient(existingNode as Partial<IHostingNode> & { _id: unknown }),
-      }
-    : await getSharedHostingContext();
+  if (!existingRecord) {
+    throw new LioranDBNotFoundError('Shared database mapping not found.', { requestId: 'shared-tenant-admin-mapping' });
+  }
+  const context = await getSharedHostingContextForRecord(existingRecord);
   let result: RustTenant | TenantActionResult | TenantCredentialRotation;
   if (action === 'suspend') result = await context.client.suspendSharedTenant(tenantId);
   else if (action === 'resume') result = await context.client.resumeSharedTenant(tenantId);
@@ -476,7 +747,7 @@ export async function adminSharedTenantAction(
   }
 
   await syncManagedDatabaseRecord(tenantId, result);
-  if (action === 'delete' && existingRecord?.hostingNodeId) {
+  if (action === 'delete' && existingRecord.hostingNodeId) {
     await releaseHostingNodeAssignment(existingRecord.hostingNodeId.toString(), existingRecord._id.toString());
   }
   await createAuditLog({
@@ -492,15 +763,107 @@ export async function adminSharedTenantAction(
 
 function assertTenantOwner(tenant: RustTenant, ownerId: string): void {
   if (tenant.external_owner_id !== ownerId) {
-    throw new LioranDBNotFoundError('Shared database not found.', { requestId: 'shared-tenant-owner-check' });
+    throw new LioranDBAdminError('Shared tenant ownership does not match the Dashboard allocation.', {
+      code: 'SHARED_TENANT_OWNERSHIP_MISMATCH',
+      statusCode: 404,
+      requestId: 'shared-tenant-owner-check',
+    });
   }
+}
+
+function getSafeProvisioningFailureCode(error: unknown): string {
+  return error instanceof LioranDBAdminError
+    ? error.code
+    : 'SHARED_PROVISIONING_MAPPING_FAILED';
+}
+
+async function persistFailedSharedTenantRecord(
+  node: Partial<IHostingNode> & { _id?: unknown },
+  result: CreateTenantResult,
+  customerId: string,
+  allocationToken: string,
+  customerFacingName: string,
+  error: unknown,
+): Promise<IManagedDatabase | undefined> {
+  const tenant = result.tenant;
+  if (tenant.external_owner_id !== customerId || !node._id) return undefined;
+
+  const existing = await ManagedDatabase.findOne({
+    $or: [{ sharedTenantId: tenant.tenant_id }, { providerDeploymentId: tenant.tenant_id }],
+  });
+  if (existing && existing.customerId.toString() !== customerId && existing.userId?.toString() !== customerId) {
+    throw new LioranDBNotFoundError('Shared database mapping belongs to another account.', { requestId: 'shared-tenant-record-owner-check' });
+  }
+
+  const logicalDatabaseName = getSharedTenantLogicalDatabaseName(tenant, customerFacingName);
+  const physicalDatabaseName = getSharedTenantPhysicalDatabaseName(tenant);
+  const username = result.credentials?.username || tenant.connection?.username || `tenant_${tenant.tenant_id.replace(/^tenant_/, '')}`;
+  const password = result.credentials?.password || tenant.connection?.password;
+  const fields: Record<string, unknown> = {
+    customerId,
+    userId: customerId,
+    hostingNodeId: node._id,
+    name: existing?.name || customerFacingName,
+    type: 'shared',
+    username,
+    host: String(node.dbUrl || node.grpcUrl || 'shared-host'),
+    port: Number(node.port || node.grpcPort || 27019),
+    databaseName: tenant.database_name,
+    sharedLogicalDatabaseName: logicalDatabaseName,
+    sharedPhysicalDatabaseName: physicalDatabaseName,
+    status: 'FAILED',
+    planId: FREE_SHARED_PLAN_ID,
+    planName: 'Free Shared',
+    hourlyRatePaise: 0,
+    backupMonthlyPaise: 0,
+    backupEnabled: false,
+    databaseUsers: password ? [{ username, role: 'read_write', status: 'ACTIVE', encryptedPassword: encrypt(password), createdAt: new Date() }] : [],
+    providerDeploymentId: tenant.tenant_id,
+    sharedTenantId: tenant.tenant_id,
+    allocationToken,
+    storageQuotaBytes: tenant.storage_quota_bytes,
+    storageUsedBytes: tenant.storage_used_bytes,
+    provisionedAt: tenant.created_at ? new Date(tenant.created_at) : new Date(),
+    provisioningStage: 'RUST_TENANT_CREATED_MAPPING_FAILED',
+    lastProvisioningError: getSafeProvisioningFailureCode(error),
+  };
+  if (password) {
+    fields.encryptedControlPlaneCredential = encrypt(password);
+    fields.encryptedConnectionUri = encrypt(buildSharedConnectionUri(username, password, node, logicalDatabaseName));
+  }
+
+  if (existing) {
+    Object.assign(existing, fields);
+    await existing.save();
+    return existing;
+  }
+  return ManagedDatabase.create(fields as unknown as Partial<IManagedDatabase>);
 }
 
 async function getVerifiedTenantUsage(
   client: ReturnType<typeof createSharedHostingClient>,
   tenantId: string,
 ): Promise<RustTenantUsage> {
-  const usage = await client.getSharedTenantUsage(tenantId);
+  let usage: RustTenantUsage;
+  try {
+    usage = await client.getSharedTenantUsage(tenantId);
+  } catch (error: unknown) {
+    if (error instanceof LioranDBAdminError && error.statusCode === 404) {
+      throw new LioranDBAdminError('The Dashboard allocation is not present in the Rust tenant registry.', {
+        code: 'SHARED_TENANT_REGISTRY_MISSING',
+        statusCode: 409,
+        requestId: error.requestId,
+      });
+    }
+    if (error instanceof LioranDBAdminError && error.statusCode >= 500) {
+      throw new LioranDBAdminError('Rust tenant storage accounting is temporarily unavailable.', {
+        code: 'SHARED_TENANT_USAGE_UNAVAILABLE',
+        statusCode: 503,
+        requestId: error.requestId,
+      });
+    }
+    throw error;
+  }
   if (usage.tenant_id !== tenantId) {
     throw new LioranDBAdminError('Control plane returned usage for an unexpected tenant.', {
       code: 'TENANT_USAGE_ID_MISMATCH',

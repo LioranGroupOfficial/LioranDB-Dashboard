@@ -23,7 +23,7 @@ import { resolveControlPlaneEndpoint } from '../liorandb-admin/url';
 import { LioranDBAdminError, LioranDBUnreachableError } from '../liorandb-admin/errors';
 import { reconcileHostingNodes } from './reconciliation';
 import { bindHostingReservationToInstance, clearHostingNodeAssignment, finalizeHostingNodeSlot, releaseHostingNodeAssignment, releaseHostingNodeReservation, reserveHostingNodeSlot } from '../hosting/allocation';
-import { provisionFreeSharedTenant } from '../services/shared-hosting.service';
+import { getManagedSharedTenantId, provisionFreeSharedTenant } from '../services/shared-hosting.service';
 
 export interface DeploymentParams {
   customerId: string;
@@ -276,6 +276,9 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
     await connectToDatabase();
     const instance = await ManagedDatabase.findById(instanceId).populate('hostingNodeId');
     if (!instance) return { success: false, error: 'Instance not found' };
+    if (instance.type === 'shared' || instance.planId === 'free') {
+      return { success: false, error: 'Whole-server reset is disabled for shared hosting allocations.' };
+    }
 
     const client = await LioranDBAdminClient.forInstanceAsync(instance);
     try {
@@ -323,7 +326,6 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
       {
         $set: {
           status: 'DELETING',
-          databaseUsers: [],
           billingStoppedAt: now,
           ...( { backupStoppedAt: now } ),
         },
@@ -355,16 +357,32 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
       { $set: { endedAt: now, stoppedAt: now } }
     );
 
-    // 3. If assigned to a hosting node, atomically lock node to RESETTING and execute comprehensive purge
-    if (instance.hostingNodeId) {
-      const populatedNode = instance.hostingNodeId as unknown as Partial<IHostingNode> & { _id: any };
-      if (populatedNode.allocationMode === 'SHARED') {
-        if (!instance.providerDeploymentId) {
-          return { success: false, error: 'Shared tenant identity is missing; refusing to reset or delete the shared Rust server.' };
-        }
+    // 3. Shared allocations are tenant resources, never whole-server resources.
+    // Resolve the node from Mongo instead of treating an unpopulated ObjectId as
+    // a node document. This prevents a shared allocation from entering the
+    // dedicated purge/reset path.
+    const assignedNode = instance.hostingNodeId
+      ? await HostingNode.findById(instance.hostingNodeId).lean<IHostingNode>()
+      : null;
+    const isSharedAllocation = instance.type === 'shared' || instance.planId === 'free';
+    if (isSharedAllocation && assignedNode?.allocationMode !== 'SHARED') {
+      instance.status = 'FAILED';
+      instance.adminNotes = 'Shared allocation mapping is incomplete; refusing deletion without a verified shared hosting node.';
+      await instance.save();
+      return { success: false, error: 'Shared allocation mapping is incomplete; deletion was stopped without touching the server.' };
+    }
+
+    if (assignedNode?.allocationMode === 'SHARED') {
+      const sharedTenantId = getManagedSharedTenantId(instance);
+      if (!sharedTenantId) {
+        instance.status = 'FAILED';
+        instance.adminNotes = 'Shared tenant identity is missing; refusing deletion of the shared server.';
+        await instance.save();
+        return { success: false, error: 'Shared tenant identity is missing; deletion was stopped without touching the server.' };
+      }
         try {
-          const sharedClient = LioranDBAdminClient.forNode(populatedNode);
-          const result = await sharedClient.deleteSharedTenant(instance.providerDeploymentId);
+          const sharedClient = LioranDBAdminClient.forNode(assignedNode);
+          const result = await sharedClient.deleteSharedTenant(sharedTenantId);
           if (!result.deleted && !result.slot_released) {
             throw new Error('Shared control plane did not confirm tenant deletion.');
           }
@@ -372,7 +390,7 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           instance.terminatedAt = now;
           await instance.save();
           await releaseHostingNodeAssignment(
-            String(populatedNode._id),
+            String(assignedNode._id),
             instance._id.toString()
           );
           return { success: true };
@@ -382,7 +400,10 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
           await instance.save();
           return { success: false, error: instance.adminNotes };
         }
-      }
+    }
+
+    // 4. Dedicated allocations may use the existing whole-node cleanup path.
+    if (assignedNode?.allocationMode === 'DEDICATED') {
       // Concurrency protection: atomically claim and lock the node to RESETTING
       const node = await HostingNode.findOneAndUpdate(
         {

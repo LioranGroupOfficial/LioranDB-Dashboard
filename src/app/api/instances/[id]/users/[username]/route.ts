@@ -3,7 +3,6 @@ import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin';
 import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
-import { getSharedRecordLogicalDatabaseName } from '@/lib/liorandb-admin/shared-hosting';
 import { encrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
@@ -29,7 +28,7 @@ export async function DELETE(
       }
     }
 
-    if (instance.planId === 'free') {
+    if (instance.planId === 'free' || instance.type === 'shared') {
       return NextResponse.json({ error: 'The user on a Free Shared database cannot be deleted.' }, { status: 400 });
     }
 
@@ -86,12 +85,9 @@ export async function POST(
     if (instance.planId === 'free' && !isMasterUser) {
       return NextResponse.json({ error: 'Free Shared databases allow password changes only for the tenant user.' }, { status: 400 });
     }
-    const client = await LioranDBAdminClient.forInstanceAsync(instance);
-
     let newPassword = '';
     if (isMasterUser) {
-      const hostingNode = instance.hostingNodeId as any;
-      if (hostingNode?.allocationMode === 'SHARED') {
+      if (instance.planId === 'free' || instance.type === 'shared') {
         const sharedTenantId = instance.sharedTenantId || instance.providerDeploymentId;
         if (!sharedTenantId) return NextResponse.json({ error: 'Shared tenant identity is missing; refusing to rotate server root credentials.' }, { status: 409 });
         const rotated = session.role === 'admin'
@@ -107,6 +103,7 @@ export async function POST(
           message: 'Tenant credentials rotated without changing the shared server root credentials.',
         });
       }
+      const client = await LioranDBAdminClient.forInstanceAsync(instance);
       const rot = await client.rotateRootCredential();
       newPassword = rot.newGeneratedPassword;
 
@@ -116,9 +113,7 @@ export async function POST(
         password: newPassword,
         host: instance.host,
         port: instance.port || 27018,
-        database: instance.planId === 'free' || instance.type === 'shared'
-          ? getSharedRecordLogicalDatabaseName(instance)
-          : instance.databaseName || 'default',
+        database: instance.databaseName || 'default',
         scheme: instance.port === 443 || instance.port === 8443 ? 'liorandb+https' : 'liorandb',
         tls: instance.port === 443 || instance.port === 8443,
         transport: 'grpc',
@@ -138,6 +133,7 @@ export async function POST(
       }
       await instance.save();
     } else {
+      const client = await LioranDBAdminClient.forInstanceAsync(instance);
       const res = await client.resetUserPassword(username);
       newPassword = res.newGeneratedPassword;
 

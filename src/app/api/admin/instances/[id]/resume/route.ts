@@ -4,6 +4,7 @@ import { connectToDatabase, ManagedDatabase, BillingInterval } from '@/lib/db';
 import { provisioningProvider } from '@/lib/providers/provisioning';
 import { createAuditLog } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
+import { adminSharedTenantAction, getManagedSharedTenantId } from '@/lib/services/shared-hosting.service';
 
 export async function POST(
   _req: NextRequest,
@@ -23,7 +24,11 @@ export async function POST(
       return NextResponse.json({ error: 'Instance is not suspended' }, { status: 400 });
     }
 
-    if (instance.providerDeploymentId) {
+    const sharedTenantId = getManagedSharedTenantId(instance);
+    if (instance.type === 'shared' || instance.planId === 'free') {
+      if (!sharedTenantId) return NextResponse.json({ error: 'Shared tenant identity is missing; refusing to modify the shared server.' }, { status: 409 });
+      await adminSharedTenantAction(admin.userId, sharedTenantId, 'resume');
+    } else if (instance.providerDeploymentId) {
       await provisioningProvider.resumeDeployment(instance.providerDeploymentId);
     }
 

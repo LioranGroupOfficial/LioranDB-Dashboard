@@ -40,7 +40,7 @@ export default function DatabaseCredentials({ db }: { db: DbData }) {
             </p>
           </div>
           <OpenStudioButton
-            db={db}
+            db={{ ...db, connectionUri: null }}
             className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] shadow-2xs transition-colors hover:bg-[var(--surface-card)]"
           />
         </div>

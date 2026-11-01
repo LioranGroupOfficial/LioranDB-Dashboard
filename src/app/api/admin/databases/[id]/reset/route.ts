@@ -7,7 +7,7 @@ import { encrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { rateLimit } from '@/lib/rate-limit';
-import { adminSharedTenantAction } from '@/lib/services/shared-hosting.service';
+import { adminSharedTenantAction, getManagedSharedTenantId } from '@/lib/services/shared-hosting.service';
 
 export async function POST(
   req: NextRequest,
@@ -43,9 +43,12 @@ export async function POST(
     }
 
     const hostingNode = instance.hostingNodeId as any;
-    if (hostingNode?.allocationMode === 'SHARED') {
-      if (!instance.providerDeploymentId) return NextResponse.json({ error: 'Shared tenant identity is missing; refusing a whole-server reset.' }, { status: 409 });
-      const result = await adminSharedTenantAction(admin.userId, instance.providerDeploymentId, 'reset');
+    if (instance.type === 'shared' || instance.planId === 'free' || hostingNode?.allocationMode === 'SHARED') {
+      const sharedTenantId = getManagedSharedTenantId(instance);
+      if (!sharedTenantId || hostingNode?.allocationMode !== 'SHARED') {
+        return NextResponse.json({ error: 'Shared allocation mapping is incomplete; refusing a whole-server reset.' }, { status: 409 });
+      }
+      const result = await adminSharedTenantAction(admin.userId, sharedTenantId, 'reset');
       return NextResponse.json({ success: true, result, message: 'Only the shared tenant was reset; the Rust server and other tenants were left untouched.' });
     }
 

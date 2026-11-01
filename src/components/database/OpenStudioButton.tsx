@@ -2,26 +2,34 @@
 
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
-import { getRootConnectionUri, studioUnavailableReason, type DatabaseConnection } from '@/lib/database-connection';
+import { studioHandoffUnavailableReason, type DatabaseConnection } from '@/lib/database-connection';
 
 export default function OpenStudioButton({ db, className = '' }: { db: DatabaseConnection; className?: string }) {
-  const unavailableReason = studioUnavailableReason(db);
+  const unavailableReason = studioHandoffUnavailableReason(db);
   const [opening, setOpening] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
   async function openStudio() {
-    const connectionUri = getRootConnectionUri(db.connectionUri, db.port, db.host, db.databaseName);
-    if (unavailableReason || !connectionUri || opening) return;
+    if (unavailableReason || !db.id || opening) return;
     setOpening(true);
     setLaunchError(null);
+    const studioWindow = window.open('about:blank', '_blank');
 
     try {
-      window.open(
-        `https://studio.liorandb.com/?connection=${encodeURIComponent(connectionUri)}`,
-        '_blank',
-        'noopener,noreferrer',
-      );
+      const response = await fetch(`/api/instances/${encodeURIComponent(db.id)}/studio-handoff`, {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      const data = await response.json().catch(() => null) as { url?: unknown; error?: unknown } | null;
+      if (!response.ok || typeof data?.url !== 'string') {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Studio handoff failed.');
+      }
+      if (!studioWindow) throw new Error('Please allow pop-ups to open Studio.');
+      studioWindow.opener = null;
+      studioWindow.location.replace(data.url);
     } catch (error) {
+      studioWindow?.close();
       setLaunchError(error instanceof Error ? error.message : 'Studio handoff failed.');
     } finally {
       setOpening(false);
@@ -32,7 +40,7 @@ export default function OpenStudioButton({ db, className = '' }: { db: DatabaseC
     <button
       type="button"
       onClick={() => void openStudio()}
-      disabled={!!unavailableReason || !db.connectionUri || opening}
+      disabled={!!unavailableReason || !db.id || opening}
       title={launchError || unavailableReason || 'Open this allocation in Studio (opens a new tab)'}
       aria-label={unavailableReason ? `Open Studio: ${unavailableReason}` : 'Open Studio (opens a new tab)'}
       className={`${className} shrink-0 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]`}

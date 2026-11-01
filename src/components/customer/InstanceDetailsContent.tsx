@@ -60,6 +60,7 @@ export default async function InstanceDetailsContent({ id, sessionUser }: { id: 
   });
   const freeShared = instance.planId === 'free';
   const sharedTenantId = instance.sharedTenantId || instance.providerDeploymentId;
+  const sharedMappingComplete = !shared || Boolean(sharedTenantId && instance.hostingNodeId);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-16">
@@ -69,7 +70,7 @@ export default async function InstanceDetailsContent({ id, sessionUser }: { id: 
           <div className="flex items-center gap-3"><h1 className="break-all text-2xl font-bold tracking-tight text-[var(--text-strong)] sm:text-3xl">{instance.name}</h1><span className="badge badge-default">{instance.status}</span></div>
           <p className="mt-1 text-xs text-[var(--text-muted)]">{shared ? 'Free Shared' : instance.planName || plan?.name || 'Dedicated'} Plan · {instance.region || 'Region unavailable'}</p>
         </div>
-        <div className="flex flex-wrap gap-2"><a href="https://docs.liorandb.com/docs/driver/overview" target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs"><BookOpen className="h-3.5 w-3.5" />Developer Docs</a><OpenStudioButton db={dbData} className="btn-secondary text-xs" /><Link href="/billing" className="btn-secondary text-xs"><CreditCard className="h-3.5 w-3.5" />Billing</Link></div>
+        <div className="flex flex-wrap gap-2"><a href="https://docs.liorandb.com/docs/driver/overview" target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs"><BookOpen className="h-3.5 w-3.5" />Developer Docs</a><OpenStudioButton db={{ ...dbData, connectionUri: null }} className="btn-secondary text-xs" /><Link href="/billing" className="btn-secondary text-xs"><CreditCard className="h-3.5 w-3.5" />Billing</Link></div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -79,6 +80,7 @@ export default async function InstanceDetailsContent({ id, sessionUser }: { id: 
         <div className="card p-4"><p className="label"><ShieldCheck className="mr-1 inline h-3.5 w-3.5" />Deployment</p><p className="mt-1 font-mono text-lg font-bold">{shared ? 'Shared pool' : 'Dedicated'}</p></div>
       </div>
 
+      {shared && !sharedMappingComplete ? <div role="status" className="border-2 border-amber-400/40 bg-amber-400/10 p-4 text-xs text-[var(--text-secondary)]"><p className="font-semibold text-[var(--text-strong)]">Shared allocation needs attention</p><p className="mt-1">The tenant mapping is incomplete, so Studio and storage details are temporarily unavailable. No tenant or database was recreated automatically. Please contact support.</p></div> : null}
       {shared && sharedTenantId ? <div className="grid gap-4 md:grid-cols-2"><SharedStorageWidget allocationId={instance._id.toString()} /><div className="card min-h-[164px] space-y-3 p-5"><p className="label">Credential management</p><p className="text-xs text-[var(--text-muted)]">Rotate the tenant allocation credentials when needed. Studio can create multiple logical databases inside this allocation; all use the shared 512 MiB quota.</p><SharedCredentialRotationButton allocationId={instance._id.toString()} /></div></div> : null}
       {instance.couponCode ? <div className="flex items-center gap-2 border-2 border-[var(--hairline-strong)] p-3.5 text-xs"><Tag className="h-4 w-4" />Promo discount <strong>{instance.couponDiscountPercentage}% OFF</strong> applied ({instance.couponCode}).</div> : null}
       <DatabaseCredentials key={dbData.id} db={dbData} />

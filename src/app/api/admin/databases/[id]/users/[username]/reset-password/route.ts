@@ -5,7 +5,7 @@ import { LioranDBAdminClient } from '@/lib/liorandb-admin';
 import { createAuditLog } from '@/lib/audit';
 import { AppError } from '@/lib/errors';
 import { rateLimit } from '@/lib/rate-limit';
-import { adminSharedTenantAction } from '@/lib/services/shared-hosting.service';
+import { adminSharedTenantAction, getManagedSharedTenantId } from '@/lib/services/shared-hosting.service';
 
 export async function POST(
   _req: NextRequest,
@@ -27,9 +27,12 @@ export async function POST(
     }
 
     const hostingNode = instance.hostingNodeId as any;
-    if (hostingNode?.allocationMode === 'SHARED') {
-      if (!instance.providerDeploymentId) return NextResponse.json({ error: 'Shared tenant identity is missing.' }, { status: 409 });
-      const rotated = await adminSharedTenantAction(admin.userId, instance.providerDeploymentId, 'rotate');
+    if (instance.type === 'shared' || instance.planId === 'free' || hostingNode?.allocationMode === 'SHARED') {
+      const sharedTenantId = getManagedSharedTenantId(instance);
+      if (!sharedTenantId || hostingNode?.allocationMode !== 'SHARED') {
+        return NextResponse.json({ error: 'Shared allocation mapping is incomplete.' }, { status: 409 });
+      }
+      const rotated = await adminSharedTenantAction(admin.userId, sharedTenantId, 'rotate');
       if (!('credentials' in rotated) || !rotated.credentials) return NextResponse.json({ error: 'Shared control plane did not return tenant credentials.' }, { status: 502 });
       return NextResponse.json({ success: true, username: rotated.credentials.username, newGeneratedPassword: rotated.credentials.password, rotatedAt: new Date().toISOString() });
     }

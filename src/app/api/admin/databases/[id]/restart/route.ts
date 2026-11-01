@@ -18,6 +18,12 @@ export async function POST(
     if (!instance) {
       return NextResponse.json({ error: 'Database instance not found' }, { status: 404 });
     }
+    if (instance.type === 'shared' || instance.planId === 'free') {
+      return NextResponse.json(
+        { error: 'Whole-server restart is disabled for shared hosting allocations. Manage the tenant allocation instead.' },
+        { status: 409 },
+      );
+    }
 
     const client = await LioranDBAdminClient.forInstanceAsync(instance);
     const result = await client.restartInstance();
