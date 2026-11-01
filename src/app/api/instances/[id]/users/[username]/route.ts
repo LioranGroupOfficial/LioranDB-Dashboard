@@ -28,6 +28,10 @@ export async function DELETE(
       }
     }
 
+    if (instance.planId === 'free') {
+      return NextResponse.json({ error: 'The user on a Free Shared database cannot be deleted.' }, { status: 400 });
+    }
+
     if (instance.username && instance.username.toLowerCase() === username.toLowerCase()) {
       return NextResponse.json({ error: 'Cannot delete the master database administrator user.' }, { status: 400 });
     }
@@ -78,6 +82,9 @@ export async function POST(
     }
 
     const isMasterUser = instance.username && instance.username.toLowerCase() === username.toLowerCase();
+    if (instance.planId === 'free' && !isMasterUser) {
+      return NextResponse.json({ error: 'Free Shared databases allow password changes only for the tenant user.' }, { status: 400 });
+    }
     const client = await LioranDBAdminClient.forInstanceAsync(instance);
 
     let newPassword = '';

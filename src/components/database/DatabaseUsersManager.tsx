@@ -29,15 +29,25 @@ interface Props {
   instanceId: string;
   initialUsers: DatabaseUser[];
   instanceStatus: string;
+  isFreeShared?: boolean;
+  primaryUsername?: string;
 }
 
 export default function DatabaseUsersManager({
   instanceId,
   initialUsers,
   instanceStatus,
+  isFreeShared = false,
+  primaryUsername,
 }: Props) {
   const router = useRouter();
-  const [users, setUsers] = useState<DatabaseUser[]>(initialUsers);
+  const primaryUsers = primaryUsername
+    ? initialUsers.filter((user) => user.username.toLowerCase() === primaryUsername.toLowerCase())
+    : [];
+  const initialVisibleUsers = isFreeShared
+    ? (primaryUsers.length > 0 ? primaryUsers : initialUsers).slice(0, 1)
+    : initialUsers;
+  const [users, setUsers] = useState<DatabaseUser[]>(initialVisibleUsers);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [loading, setLoading] = useState(false);
@@ -91,6 +101,10 @@ export default function DatabaseUsersManager({
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isFreeShared) {
+      setError('Free Shared databases use one database user. Change its password instead.');
+      return;
+    }
     const username = newUsername.trim();
     if (!username) return;
 
@@ -179,6 +193,11 @@ export default function DatabaseUsersManager({
 
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
+    if (isFreeShared) {
+      setActionError('The user on a Free Shared database cannot be deleted.');
+      setUserToDelete(null);
+      return;
+    }
 
     setDeletingUser(true);
     setActionError(null);
@@ -204,7 +223,7 @@ export default function DatabaseUsersManager({
   };
 
   const isActive = instanceStatus === 'ACTIVE' || instanceStatus === 'RUNNING';
-  const isMaxUsersReached = users.length >= 5;
+  const isMaxUsersReached = isFreeShared ? users.length >= 1 : users.length >= 5;
 
   return (
     <div className="card space-y-4">
@@ -232,15 +251,17 @@ export default function DatabaseUsersManager({
               <span>Database Users &amp; Access Control</span>
             </h2>
             <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-mono bg-[var(--surface-soft)] text-[var(--text-strong)] border border-[var(--border)] font-bold">
-              {users.length}/5 Users
+              {users.length}/{isFreeShared ? 1 : 5} User{isFreeShared ? '' : 's'}
             </span>
           </div>
           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-            Manage authenticated users (max 5). You can reveal or copy user passwords directly.
+            {isFreeShared
+              ? 'Free Shared databases have one tenant user. You can change its password when needed.'
+              : 'Manage authenticated users (max 5). You can reveal or copy user passwords directly.'}
           </p>
         </div>
 
-        {isActive && (
+        {isActive && !isFreeShared && (
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
@@ -331,22 +352,24 @@ export default function DatabaseUsersManager({
                         type="button"
                         onClick={() => handleResetPassword(u.username)}
                         disabled={loading || !isActive}
-                        title="Reset and generate new password"
+                        title={isFreeShared ? 'Change database password' : 'Reset and generate new password'}
                         className="btn-secondary text-xs py-1 px-2.5 inline-flex items-center gap-1 disabled:opacity-50"
                       >
                         <KeyRound className="w-3 h-3" />
-                        <span>Reset Password</span>
+                        <span>{isFreeShared ? 'Change Password' : 'Reset Password'}</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setUserToDelete(u.username)}
-                        disabled={loading || !isActive}
-                        title="Delete user"
-                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {!isFreeShared && (
+                        <button
+                          type="button"
+                          onClick={() => setUserToDelete(u.username)}
+                          disabled={loading || !isActive}
+                          title="Delete user"
+                          className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--surface-soft)] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

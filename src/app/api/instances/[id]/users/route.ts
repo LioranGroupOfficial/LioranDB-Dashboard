@@ -46,7 +46,12 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ success: true, users, maxUsers: 5, currentCount: users.length });
+    const primaryUsers = users.filter((user) => user.username.toLowerCase() === (instance.username || '').toLowerCase());
+    const visibleUsers = instance.planId === 'free'
+      ? (primaryUsers.length > 0 ? primaryUsers : users).slice(0, 1)
+      : users;
+
+    return NextResponse.json({ success: true, users: visibleUsers, maxUsers: instance.planId === 'free' ? 1 : 5, currentCount: visibleUsers.length });
   } catch (error: unknown) {
     return createApiError(error);
   }
@@ -84,6 +89,10 @@ export async function POST(
 
     if (instance.status === 'TERMINATED' || instance.status === 'DELETED') {
       return NextResponse.json({ error: 'Cannot add users to a terminated instance.' }, { status: 400 });
+    }
+
+    if (instance.planId === 'free') {
+      return NextResponse.json({ error: 'Free Shared databases use one database user. Change its password instead.' }, { status: 400 });
     }
 
     // Enforce max 5 users limit
