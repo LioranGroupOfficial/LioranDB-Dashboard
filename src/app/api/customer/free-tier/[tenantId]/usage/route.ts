@@ -8,7 +8,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ tenantI
     const user = await requireAccountVerifiedUserAPI();
     const { tenantId } = await params;
     const result = await getOwnedSharedTenant(user.userId, tenantId, true);
-    return NextResponse.json({ usage: result.usage, measuredAt: new Date().toISOString() });
+    if (!result.usage) {
+      return NextResponse.json(
+        { error: 'Storage usage is currently unavailable.', code: 'TENANT_USAGE_UNAVAILABLE' },
+        { status: 503, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+    return NextResponse.json(
+      { usage: result.usage, fetchedAt: new Date().toISOString() },
+      { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', Pragma: 'no-cache' } },
+    );
   } catch (error: unknown) {
     return createApiError(error);
   }

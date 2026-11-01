@@ -47,8 +47,15 @@ export function parseTenantUsage(payload: unknown): RustTenantUsage {
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return 'Unavailable';
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KiB`;
-  return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MiB`;
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 * 1024) {
+    const kib = bytes / 1024;
+    const precision = kib < 10 ? 2 : kib < 100 ? 1 : 0;
+    return `${Number(kib.toFixed(precision))} KiB`;
+  }
+  const mib = bytes / (1024 * 1024);
+  const precision = mib < 10 ? 2 : mib < 100 ? 1 : 0;
+  return `${Number(mib.toFixed(precision))} MiB`;
 }
 
 export function tenantStatusLabel(status: string): string {

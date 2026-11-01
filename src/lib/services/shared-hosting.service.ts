@@ -3,7 +3,7 @@ import type { IHostingNode } from '@/lib/db/models/HostingNode';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 import { encrypt, decrypt, generateSecureToken } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
-import { LioranDBNotFoundError } from '@/lib/liorandb-admin/errors';
+import { LioranDBAdminError, LioranDBNotFoundError } from '@/lib/liorandb-admin/errors';
 import { createSharedHostingClient } from '@/lib/liorandb-admin/tenant-client';
 import { buildLioranDBConnectionUri, parseLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
 import {
@@ -143,7 +143,7 @@ export async function listOwnedSharedTenants(ownerId: string, includeUsage = fal
       const synchronizedRecord = record
         ? await upsertManagedDatabaseForTenant(context.node, { tenant }, ownerId, record.allocationToken)
         : undefined;
-      const usage = includeUsage ? await context.client.getSharedTenantUsage(tenant.tenant_id) : undefined;
+      const usage = includeUsage ? await getVerifiedTenantUsage(context.client, tenant.tenant_id) : undefined;
       return { tenant, usage, database: synchronizedRecord ? databaseView(synchronizedRecord) : undefined };
     })
   );
@@ -161,7 +161,7 @@ export async function getOwnedSharedTenant(ownerId: string, tenantId: string, in
     : await getSharedHostingContext();
   const tenant = await context.client.getSharedTenant(tenantId);
   assertTenantOwner(tenant, ownerId);
-  const usage = includeUsage ? await context.client.getSharedTenantUsage(tenantId) : undefined;
+  const usage = includeUsage ? await getVerifiedTenantUsage(context.client, tenant.tenant_id) : undefined;
   const synchronizedRecord = record
     ? await upsertManagedDatabaseForTenant(context.node, { tenant }, ownerId, record.allocationToken)
     : undefined;
@@ -385,6 +385,20 @@ function assertTenantOwner(tenant: RustTenant, ownerId: string): void {
   if (tenant.external_owner_id !== ownerId) {
     throw new LioranDBNotFoundError('Shared database not found.', { requestId: 'shared-tenant-owner-check' });
   }
+}
+
+async function getVerifiedTenantUsage(
+  client: ReturnType<typeof createSharedHostingClient>,
+  tenantId: string,
+): Promise<RustTenantUsage> {
+  const usage = await client.getSharedTenantUsage(tenantId);
+  if (usage.tenant_id !== tenantId) {
+    throw new LioranDBAdminError('Control plane returned usage for an unexpected tenant.', {
+      code: 'TENANT_USAGE_ID_MISMATCH',
+      statusCode: 502,
+    });
+  }
+  return usage;
 }
 
 async function upsertManagedDatabaseForTenant(
