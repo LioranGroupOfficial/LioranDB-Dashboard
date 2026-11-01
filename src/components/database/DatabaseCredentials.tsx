@@ -83,7 +83,7 @@ export default function DatabaseCredentials({ db }: { db: DbData }) {
           </p>
         </div>
         <p className="text-[11px] text-[var(--muted)]">
-          Open Studio uses a short-lived handoff token. Credentials are redeemed over HTTPS and are not placed in the Studio URL.
+          Open Studio receives this allocation URI, including the database path. Treat the generated Studio URL as sensitive.
         </p>
       </section>
       <QuickConnect key={db.id} connectionUri={connectionUri} databaseName={db.databaseName} unavailableReason={unavailableReason} />
