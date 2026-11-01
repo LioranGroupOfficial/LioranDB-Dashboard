@@ -44,6 +44,10 @@ export interface IManagedDatabase extends Document {
   host: string;
   port: number;
   databaseName: string;
+  /** Logical database context used in customer-facing shared-hosting URIs. */
+  sharedLogicalDatabaseName?: string;
+  /** Rust's namespaced physical database identity; never sent to customers. */
+  sharedPhysicalDatabaseName?: string;
   status: DatabaseStatus;
   planId: string;
   planName?: string;
@@ -117,6 +121,8 @@ const ManagedDatabaseSchema = new Schema<IManagedDatabase>(
     host: { type: String, required: true, trim: true },
     port: { type: Number, required: true, default: 27017 },
     databaseName: { type: String, required: true, trim: true },
+    sharedLogicalDatabaseName: { type: String, trim: true },
+    sharedPhysicalDatabaseName: { type: String, trim: true },
     status: {
       type: String,
       enum: [

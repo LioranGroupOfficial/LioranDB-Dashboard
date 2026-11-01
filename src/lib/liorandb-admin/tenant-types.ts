@@ -26,6 +26,10 @@ export const TenantSchema = z.object({
   external_owner_id: z.string().min(1),
   database_id: z.string().min(1),
   database_name: z.string().min(1),
+  // New Rust responses expose the namespace mapping explicitly. Older
+  // responses only returned database_name, so both fields remain optional.
+  logical_database_name: z.string().min(1).optional(),
+  physical_database_name: z.string().min(1).optional(),
   plan: z.string().min(1),
   status: TenantStatusSchema,
   storage_quota_bytes: numericLike,

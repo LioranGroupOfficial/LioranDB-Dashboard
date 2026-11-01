@@ -40,7 +40,7 @@ export default function DatabaseCredentials({ db }: { db: DbData }) {
             </p>
           </div>
           <OpenStudioButton
-            db={db}
+            db={{ ...db, connectionUri: null }}
             className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--text-primary)] shadow-2xs transition-colors hover:bg-[var(--surface-card)]"
           />
         </div>
@@ -85,8 +85,8 @@ export default function DatabaseCredentials({ db }: { db: DbData }) {
         </div>
         <p className="text-[11px] text-[var(--muted)]">
           {db.planId === 'free'
-            ? 'This is the protected bootstrap database for your tenant allocation. Studio can create and manage additional logical databases under the same 512 MiB quota.'
-            : 'Studio receives this allocation URI, including the database path. Treat the generated Studio URL as sensitive.'}
+            ? 'This is the protected bootstrap database context for your tenant allocation. Studio can create and manage additional logical databases under the same 512 MiB quota.'
+            : 'Studio opens through a short-lived, one-time handoff. The connection password is not placed in the Studio URL.'}
         </p>
       </section>
       <QuickConnect key={db.id} connectionUri={connectionUri} databaseName={db.databaseName} unavailableReason={unavailableReason} />

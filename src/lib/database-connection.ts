@@ -103,3 +103,18 @@ export function studioUnavailableReason(db: DatabaseConnection): string | null {
   }
   return null;
 }
+
+/** Availability checks for the server-side, one-time Studio handoff. */
+export function studioHandoffUnavailableReason(db: DatabaseConnection): string | null {
+  if (!db.id) return 'Studio handoff is unavailable for this database.';
+  if (['PENDING', 'PROVISIONING', 'STARTING', 'RESETTING'].includes(db.status)) {
+    return 'Studio will be available when this database finishes starting.';
+  }
+  if (!['ACTIVE', 'RUNNING'].includes(db.status) || !db.provisionedAt) {
+    return 'Studio requires a provisioned, running database.';
+  }
+  if (db.serverHealth && db.serverHealth !== 'HEALTHY') {
+    return 'Studio is unavailable while this database is not healthy.';
+  }
+  return null;
+}

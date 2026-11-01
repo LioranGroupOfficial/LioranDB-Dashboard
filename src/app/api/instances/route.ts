@@ -12,6 +12,7 @@ import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import { createApiError } from '@/lib/errors';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 import { provisionFreeSharedTenant } from '@/lib/services/shared-hosting.service';
+import { getSharedRecordLogicalDatabaseName } from '@/lib/liorandb-admin/shared-hosting';
 
 export async function GET() {
   try {
@@ -30,6 +31,9 @@ export async function GET() {
     const enriched = instances.map((inst) => {
       const plan = PLANS[inst.planId] || { name: inst.planId, hourlyRatePaise: inst.hourlyRatePaise || 100 };
       const calc = calculateInstanceUsage(inst as unknown as IManagedDatabase, period);
+      const customerDatabaseName = inst.planId === 'free' || inst.type === 'shared'
+        ? getSharedRecordLogicalDatabaseName(inst)
+        : inst.databaseName;
       return {
         id: inst._id.toString(),
         name: inst.name,
@@ -40,7 +44,7 @@ export async function GET() {
         status: inst.status,
         host: inst.host,
         port: inst.port,
-        databaseName: inst.databaseName,
+        databaseName: customerDatabaseName,
         backupEnabled: Boolean(inst.backupEnabled),
         billingStartedAt: inst.billingStartedAt ? new Date(inst.billingStartedAt).toISOString() : null,
         currentEstimatedUsagePaise: calc.totalPaise,

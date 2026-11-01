@@ -3,6 +3,7 @@ import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin';
 import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
+import { getSharedRecordLogicalDatabaseName } from '@/lib/liorandb-admin/shared-hosting';
 import { encrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
@@ -115,7 +116,9 @@ export async function POST(
         password: newPassword,
         host: instance.host,
         port: instance.port || 27018,
-        database: instance.databaseName || 'default',
+        database: instance.planId === 'free' || instance.type === 'shared'
+          ? getSharedRecordLogicalDatabaseName(instance)
+          : instance.databaseName || 'default',
         scheme: instance.port === 443 || instance.port === 8443 ? 'liorandb+https' : 'liorandb',
         tls: instance.port === 443 || instance.port === 8443,
         transport: 'grpc',

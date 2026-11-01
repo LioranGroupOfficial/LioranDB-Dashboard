@@ -3,6 +3,7 @@ import { connectToDatabase, ManagedDatabase, StudioHandoff } from '@/lib/db';
 import { decrypt, sha256 } from '@/lib/crypto';
 import { buildLioranDBConnectionUri, parseLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
 import { getOwnedSharedTenant } from '@/lib/services/shared-hosting.service';
+import { getSharedTenantLogicalDatabaseName } from '@/lib/liorandb-admin/shared-hosting';
 
 const STUDIO_ORIGIN = 'https://studio.liorandb.com';
 
@@ -67,7 +68,10 @@ export async function POST(request: NextRequest) {
       if (!['ACTIVE', 'QUOTA_EXCEEDED'].includes(ownedTenant.tenant.status)) {
         return NextResponse.json({ error: 'The shared allocation is not active.' }, { status: 409, headers });
       }
-      connectionDatabaseName = ownedTenant.tenant.database_name;
+      connectionDatabaseName = getSharedTenantLogicalDatabaseName(
+        ownedTenant.tenant,
+        ownedTenant.database?.databaseName || instance.name,
+      );
     }
     if (!connectionDatabaseName) {
       return NextResponse.json({ error: 'The database connection is no longer available.' }, { status: 409, headers });

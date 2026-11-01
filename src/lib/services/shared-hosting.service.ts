@@ -12,6 +12,9 @@ import {
   FREE_SHARED_PLAN_ID,
   FREE_SHARED_STORAGE_BYTES,
   formatBytes,
+  getSharedRecordLogicalDatabaseName,
+  getSharedTenantLogicalDatabaseName,
+  getSharedTenantPhysicalDatabaseName,
 } from '@/lib/liorandb-admin/shared-hosting';
 import type {
   CreateTenantResult,
@@ -348,7 +351,7 @@ export async function provisionFreeSharedTenant(params: {
           entityId: result.tenant.tenant_id,
           metadata: {
             planId: FREE_SHARED_PLAN_ID,
-            databaseName: result.tenant.database_name,
+            databaseName: getSharedTenantLogicalDatabaseName(result.tenant, instanceName),
             storageQuota: formatBytes(result.tenant.storage_quota_bytes),
             ownerEmail: params.ownerEmail,
           },
@@ -384,7 +387,7 @@ export async function rotateOwnedSharedTenantCredentials(ownerId: string, tenant
       rotated.credentials.username,
       rotated.credentials.password,
       context.node,
-      tenant.database_name
+      getSharedTenantLogicalDatabaseName(tenant, record.sharedLogicalDatabaseName || record.name)
     );
     record.username = rotated.credentials.username;
     record.encryptedControlPlaneCredential = encrypt(rotated.credentials.password);
@@ -508,13 +511,20 @@ async function upsertManagedDatabaseForTenant(
     providerDeploymentId: tenant.tenant_id,
     $or: [{ customerId }, { userId: customerId }],
   });
-  const duplicateDatabase = await ManagedDatabase.findOne({
-    hostingNodeId: node._id,
-    type: 'shared',
-    databaseName: tenant.database_name,
-    providerDeploymentId: { $ne: tenant.tenant_id },
-    status: { $nin: ['TERMINATED', 'DELETED', 'FAILED'] },
-  });
+  const logicalDatabaseName = getSharedTenantLogicalDatabaseName(
+    tenant,
+    customerFacingName || existing?.sharedLogicalDatabaseName || existing?.name,
+  );
+  const physicalDatabaseName = getSharedTenantPhysicalDatabaseName(tenant) || existing?.sharedPhysicalDatabaseName;
+  const duplicateDatabase = physicalDatabaseName
+    ? await ManagedDatabase.findOne({
+        hostingNodeId: node._id,
+        type: 'shared',
+        sharedPhysicalDatabaseName: physicalDatabaseName,
+        providerDeploymentId: { $ne: tenant.tenant_id },
+        status: { $nin: ['TERMINATED', 'DELETED', 'FAILED'] },
+      })
+    : null;
   if (duplicateDatabase && duplicateDatabase.customerId.toString() !== customerId && duplicateDatabase.userId?.toString() !== customerId) {
     throw new Error('SHARED_DATABASE_NAME_CONFLICT');
   }
@@ -525,10 +535,10 @@ async function upsertManagedDatabaseForTenant(
   // Build the URI from the node's dbUrl so a control-plane response cannot
   // accidentally expose the internal .grpc endpoint to the customer.
   let connectionUri = password
-    ? buildSharedConnectionUri(username, password, node, tenant.database_name)
+    ? buildSharedConnectionUri(username, password, node, logicalDatabaseName)
     : connection?.uri;
   if (!connectionUri && existing?.encryptedConnectionUri) {
-    connectionUri = rewriteSharedConnectionUri(existing, node, tenant.database_name);
+    connectionUri = rewriteSharedConnectionUri(existing, node, logicalDatabaseName);
   }
   const resolvedUsername = password || connection?.username ? username : existing?.username || username;
   const sharedFields: Record<string, unknown> = {
@@ -538,12 +548,14 @@ async function upsertManagedDatabaseForTenant(
     // Keep the customer-facing instance label separate from Rust's authoritative
     // database name. New free allocations use the reserved generated name;
     // later reconciliation never replaces an existing customer-facing label.
-    name: existing?.name || customerFacingName || tenant.database_name,
+    name: existing?.name || customerFacingName || logicalDatabaseName,
     type: 'shared' as const,
     username: resolvedUsername,
     host: String(node.dbUrl || node.grpcUrl || 'shared-host'),
     port: Number(node.port || node.grpcPort || 27019),
     databaseName: tenant.database_name,
+    sharedLogicalDatabaseName: logicalDatabaseName,
+    sharedPhysicalDatabaseName: physicalDatabaseName,
     status: mapTenantStatus(tenant.status),
     planId: FREE_SHARED_PLAN_ID,
     planName: 'Free Shared',
@@ -599,7 +611,7 @@ async function syncManagedDatabaseRecord(tenantId: string, result: RustTenant | 
       credentials.username,
       credentials.password,
       { dbUrl: record.host, port: record.port },
-      record.databaseName,
+      getSharedRecordLogicalDatabaseName(record),
     ));
     record.lastCredentialRotationAt = new Date();
     record.databaseUsers = [{
@@ -616,12 +628,18 @@ async function syncManagedDatabaseRecord(tenantId: string, result: RustTenant | 
     record.sharedTenantId = tenant.tenant_id;
     record.providerDeploymentId = tenant.tenant_id;
     record.databaseName = tenant.database_name;
+    record.sharedLogicalDatabaseName = getSharedTenantLogicalDatabaseName(tenant, record.sharedLogicalDatabaseName || record.name);
+    record.sharedPhysicalDatabaseName = getSharedTenantPhysicalDatabaseName(tenant) || record.sharedPhysicalDatabaseName;
     record.status = mapTenantStatus(tenant.status);
     record.storageQuotaBytes = tenant.storage_quota_bytes;
     record.storageUsedBytes = tenant.storage_used_bytes;
     if (record.encryptedConnectionUri && !('credentials' in result)) {
       const node = record.hostingNodeId ? await HostingNode.findById(record.hostingNodeId).lean() : null;
-      const rewritten = rewriteSharedConnectionUri(record, node || { dbUrl: record.host, port: record.port }, tenant.database_name);
+      const rewritten = rewriteSharedConnectionUri(
+        record,
+        node || { dbUrl: record.host, port: record.port },
+        record.sharedLogicalDatabaseName || getSharedRecordLogicalDatabaseName(record),
+      );
       if (rewritten) record.encryptedConnectionUri = encrypt(rewritten);
     }
   }
@@ -641,10 +659,18 @@ function databaseView(record: IManagedDatabase): OwnedSharedTenant['database'] {
       connectionUri = undefined;
     }
   }
+  const logicalDatabaseName = getSharedRecordLogicalDatabaseName(record);
+  if (connectionUri) {
+    try {
+      connectionUri = rewriteSharedConnectionUri(record, { dbUrl: record.host, port: record.port }, logicalDatabaseName);
+    } catch {
+      connectionUri = undefined;
+    }
+  }
   return {
     id: record._id.toString(),
     name: record.name,
-    databaseName: record.databaseName,
+    databaseName: logicalDatabaseName,
     status: record.status,
     host: record.host,
     port: record.port,
@@ -667,7 +693,7 @@ function buildSharedConnectionUri(
   username: string,
   password: string,
   node: Partial<IHostingNode>,
-  databaseName: string
+  logicalDatabaseName: string
 ): string {
   const endpoint = String(node.dbUrl || node.grpcUrl || 'localhost');
   const port = node.port || node.grpcPort || 27019;
@@ -677,7 +703,7 @@ function buildSharedConnectionUri(
     password,
     host: endpoint,
     port,
-    database: databaseName,
+    database: logicalDatabaseName,
     tls: true,
     transport: 'grpc',
     allowHttpFallback: false,
@@ -687,7 +713,7 @@ function buildSharedConnectionUri(
 function rewriteSharedConnectionUri(
   record: Pick<IManagedDatabase, 'encryptedConnectionUri' | 'host' | 'port'>,
   node: Partial<IHostingNode>,
-  databaseName: string,
+  logicalDatabaseName: string,
 ): string | undefined {
   if (!record.encryptedConnectionUri) return undefined;
   try {
@@ -699,7 +725,7 @@ function rewriteSharedConnectionUri(
       password: parsed.password,
       host: String(node.dbUrl || record.host),
       port: Number(node.port || record.port),
-      database: databaseName,
+      database: logicalDatabaseName,
       tls: parsed.tls,
       transport: parsed.transport,
       allowHttpFallback: parsed.allowHttpFallback,

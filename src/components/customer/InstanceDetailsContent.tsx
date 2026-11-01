@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getPlan, formatPaiseToRupees } from '@/lib/plans';
 import { decrypt } from '@/lib/crypto';
 import { getRootConnectionUri } from '@/lib/database-connection';
+import { getSharedRecordLogicalDatabaseName } from '@/lib/liorandb-admin/shared-hosting';
 import { calculateInstanceUsage, getCurrentMonthPeriod } from '@/lib/billing';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
 import DatabaseCredentials from '@/components/database/DatabaseCredentials';
@@ -26,9 +27,14 @@ export default async function InstanceDetailsContent({ id, sessionUser }: { id: 
   const hourlyRatePaise = instance.hourlyRatePaise || plan?.hourlyRatePaise || 0;
   const discount = instance.couponDiscountPercentage || 0;
   const usage = calculateInstanceUsage(instance as unknown as IManagedDatabase, getCurrentMonthPeriod());
+  const shared = instance.type === 'shared' || instance.planId === 'free';
   let connectionUri: string | null = null;
-  if (instance.encryptedConnectionUri) {
-    try { connectionUri = getRootConnectionUri(decrypt(instance.encryptedConnectionUri), instance.port, instance.host, instance.databaseName); } catch {}
+  let customerDatabaseName = instance.databaseName;
+  if (shared) {
+    try { customerDatabaseName = getSharedRecordLogicalDatabaseName(instance); } catch { customerDatabaseName = ''; }
+  }
+  if (instance.encryptedConnectionUri && customerDatabaseName) {
+    try { connectionUri = getRootConnectionUri(decrypt(instance.encryptedConnectionUri), instance.port, instance.host, customerDatabaseName); } catch {}
   }
 
   const dbData = {
@@ -38,7 +44,7 @@ export default async function InstanceDetailsContent({ id, sessionUser }: { id: 
     serverHealth: instance.serverHealth,
     host: instance.host,
     port: instance.port,
-    databaseName: instance.databaseName,
+    databaseName: customerDatabaseName,
     username: instance.username,
     connectionUri,
     planId: instance.planId,
@@ -52,7 +58,6 @@ export default async function InstanceDetailsContent({ id, sessionUser }: { id: 
     }
     return { username: user.username, role: user.role || 'read_write', status: user.status || 'ACTIVE', password: password || undefined, createdAt: user.createdAt || instance.createdAt };
   });
-  const shared = instance.type === 'shared' || instance.planId === 'free';
   const freeShared = instance.planId === 'free';
   const sharedTenantId = instance.sharedTenantId || instance.providerDeploymentId;
 
@@ -64,7 +69,7 @@ export default async function InstanceDetailsContent({ id, sessionUser }: { id: 
           <div className="flex items-center gap-3"><h1 className="break-all text-2xl font-bold tracking-tight text-[var(--text-strong)] sm:text-3xl">{instance.name}</h1><span className="badge badge-default">{instance.status}</span></div>
           <p className="mt-1 text-xs text-[var(--text-muted)]">{shared ? 'Free Shared' : instance.planName || plan?.name || 'Dedicated'} Plan · {instance.region || 'Region unavailable'}</p>
         </div>
-        <div className="flex flex-wrap gap-2"><a href="https://docs.liorandb.com/docs/driver/overview" target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs"><BookOpen className="h-3.5 w-3.5" />Developer Docs</a><OpenStudioButton db={dbData} className="btn-secondary text-xs" /><Link href="/billing" className="btn-secondary text-xs"><CreditCard className="h-3.5 w-3.5" />Billing</Link></div>
+        <div className="flex flex-wrap gap-2"><a href="https://docs.liorandb.com/docs/driver/overview" target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs"><BookOpen className="h-3.5 w-3.5" />Developer Docs</a><OpenStudioButton db={{ ...dbData, connectionUri: null }} className="btn-secondary text-xs" /><Link href="/billing" className="btn-secondary text-xs"><CreditCard className="h-3.5 w-3.5" />Billing</Link></div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

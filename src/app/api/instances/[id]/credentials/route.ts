@@ -5,6 +5,7 @@ import { decrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
 import { buildLioranDBConnectionUri, parseLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
+import { getSharedRecordLogicalDatabaseName } from '@/lib/liorandb-admin/shared-hosting';
 
 export async function POST(
   req: NextRequest,
@@ -29,6 +30,11 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    const isShared = inst.planId === 'free' || inst.type === 'shared';
+    const customerDatabaseName = isShared
+      ? getSharedRecordLogicalDatabaseName(inst)
+      : inst.databaseName;
+
     let connectionUri = '';
     if (inst.encryptedConnectionUri) {
       try {
@@ -43,7 +49,7 @@ export async function POST(
             password: parsed.password,
             host: inst.host || parsed.host,
             port: inst.port || parsed.port,
-            database: inst.databaseName || 'default',
+            database: customerDatabaseName || 'default',
             tls: parsed.tls,
             transport: parsed.transport,
             allowHttpFallback: parsed.allowHttpFallback,
@@ -64,7 +70,7 @@ export async function POST(
         password: '••••••••',
         host: inst.host || '127.0.0.1',
         port: inst.port || 27018,
-        database: inst.databaseName || 'default',
+        database: customerDatabaseName || 'default',
         scheme: isTls ? 'liorandb+https' : 'liorandb',
         tls: isTls,
         transport: 'grpc',
@@ -87,7 +93,7 @@ export async function POST(
         port: inst.port,
         grpcUrl: inst.grpcUrl,
         grpcPort: inst.grpcPort,
-        databaseName: inst.databaseName,
+        databaseName: customerDatabaseName,
         username: inst.username,
         serverVersion: inst.serverVersion,
       }),

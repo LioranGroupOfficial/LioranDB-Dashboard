@@ -8,6 +8,7 @@ import { createNotification } from '@/lib/notifications';
 import { createApiError } from '@/lib/errors';
 import { provisioningProvider } from '@/lib/providers/provisioning';
 import type { IManagedDatabase } from '@/lib/db/models/ManagedDatabase';
+import { getSharedRecordLogicalDatabaseName } from '@/lib/liorandb-admin/shared-hosting';
 
 export async function GET(
   _req: NextRequest,
@@ -30,6 +31,9 @@ export async function GET(
     const plan = PLANS[instance.planId] || { name: instance.planId, hourlyRatePaise: instance.hourlyRatePaise || 100 };
     const period = getCurrentMonthPeriod();
     const calc = calculateInstanceUsage(instance as unknown as IManagedDatabase, period);
+    const customerDatabaseName = instance.planId === 'free' || instance.type === 'shared'
+      ? getSharedRecordLogicalDatabaseName(instance)
+      : instance.databaseName;
 
     // Filter databaseUsers so no plaintext is exposed
     const safeUsers = (instance.databaseUsers || []).map((u: { username: string; createdAt?: Date }) => ({
@@ -48,7 +52,7 @@ export async function GET(
         status: instance.status,
         host: instance.host,
         port: instance.port,
-        databaseName: instance.databaseName,
+        databaseName: customerDatabaseName,
         username: instance.username,
         backupEnabled: Boolean(instance.backupEnabled),
         billingStartedAt: instance.billingStartedAt ? new Date(instance.billingStartedAt).toISOString() : null,

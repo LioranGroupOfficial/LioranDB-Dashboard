@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAccountVerifiedUserAPI } from '@/lib/auth/guards';
 import { createApiError } from '@/lib/errors';
 import { CreateTenantInputSchema } from '@/lib/liorandb-admin/tenant-types';
+import { getSharedTenantLogicalDatabaseName } from '@/lib/liorandb-admin/shared-hosting';
 import { getSharedHostingSnapshot, listOwnedSharedTenants, provisionFreeSharedTenant } from '@/lib/services/shared-hosting.service';
 
 export async function GET() {
@@ -22,7 +23,7 @@ export async function GET() {
       databases: databases.map(({ tenant, usage, database }) => {
         const safeUsage = usage ? (({ tenant_id: _tenantId, ...rest }) => rest)(usage) : undefined;
         return {
-          databaseName: tenant.database_name,
+          databaseName: database?.databaseName || getSharedTenantLogicalDatabaseName(tenant),
           status: tenant.status,
           usage: safeUsage,
           database: database ? { ...database, connectionUri: undefined } : undefined,
