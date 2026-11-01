@@ -233,6 +233,34 @@ export async function getOwnedSharedTenant(ownerId: string, tenantId: string, in
   return { tenant, usage, database: synchronizedRecord ? databaseView(synchronizedRecord) : undefined };
 }
 
+/**
+ * Read usage without requiring the control-plane tenant detail response.
+ * Some Rust deployments can serve tenant usage while the legacy tenant detail
+ * serializer is unavailable. The local allocation ownership check remains
+ * mandatory before the Rust request is made.
+ */
+export async function getOwnedSharedTenantUsage(ownerId: string, tenantId: string): Promise<RustTenantUsage> {
+  await connectToDatabase();
+  const record = await ManagedDatabase.findOne({
+    $and: [
+      { $or: [{ sharedTenantId: tenantId }, { providerDeploymentId: tenantId }] },
+      { $or: [{ customerId: ownerId }, { userId: ownerId }] },
+    ],
+  }).lean();
+  if (!record) {
+    throw new LioranDBNotFoundError('Shared database not found.', { requestId: 'shared-tenant-usage-owner-check' });
+  }
+
+  const existingNode = record.hostingNodeId ? await HostingNode.findById(record.hostingNodeId).lean() : null;
+  const context = existingNode
+    ? {
+        node: existingNode as Partial<IHostingNode> & { _id: unknown },
+        client: createSharedHostingClient(existingNode as Partial<IHostingNode> & { _id: unknown }),
+      }
+    : await getSharedHostingContext();
+  return getVerifiedTenantUsage(context.client, tenantId);
+}
+
 export async function provisionFreeSharedTenant(params: {
   ownerId: string;
   ownerEmail?: string;
