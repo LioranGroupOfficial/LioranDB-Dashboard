@@ -1,4 +1,4 @@
-import { connectToDatabase, disconnectFromDatabase } from '@/lib/db/connection';
+import { connectToDatabase, disconnectFromDatabase, reconnectToDatabase } from '@/lib/db/connection';
 import { buildLioranDBConnectionUri, parseLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
 
 describe('LioranDB Driver gRPC Transport Configuration', () => {
@@ -23,6 +23,14 @@ describe('LioranDB Driver gRPC Transport Configuration', () => {
     expect(clientOptions).toBeDefined();
     expect(clientOptions.transport).toBe('grpc');
     expect(clientOptions.allowHttpFallback).toBe(false);
+  });
+
+  test('reconnectToDatabase closes the stale client and performs a fresh connection', async () => {
+    const first = await connectToDatabase();
+    const second = await reconnectToDatabase();
+
+    expect(second.client).not.toBe(first.client);
+    expect(second.client.isConnected()).toBe(true);
   });
 
   test('buildLioranDBConnectionUri encodes transport="grpc" and allowHttpFallback="false"', () => {

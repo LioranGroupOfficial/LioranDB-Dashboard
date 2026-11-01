@@ -1,5 +1,5 @@
 // Central export for all DB models, types, and connection utilities
-import { default as connectToDatabase, getDb, getLioranDBClient, disconnectFromDatabase, resolveLioranDBUri } from './connection';
+import { default as connectToDatabase, getDb, getLioranDBClient, disconnectFromDatabase, reconnectToDatabase, resolveLioranDBUri } from './connection';
 import { ObjectId, Types, Schema, model, models } from './adapter';
 import type { Db } from '@liorandb/driver';
 
@@ -24,7 +24,7 @@ import WalletTransaction from './models/WalletTransaction';
 import HostingNode from './models/HostingNode';
 import FreeInstanceNameReservation from './models/FreeInstanceNameReservation';
 
-export { connectToDatabase, getDb, getLioranDBClient, disconnectFromDatabase, resolveLioranDBUri };
+export { connectToDatabase, getDb, getLioranDBClient, disconnectFromDatabase, reconnectToDatabase, resolveLioranDBUri };
 export { ObjectId, Types, Schema, model, models };
 
 export {

@@ -223,12 +223,23 @@ export async function disconnectFromDatabase(): Promise<void> {
       await global.__liorandbClient.close();
     } catch {
       // Ignore close errors
-    } finally {
-      global.__liorandbClient = null;
-      global.__liorandbPromise = null;
-      global.__liorandbDb = null;
     }
   }
+
+  // Clear all references even when the client already died or a connection
+  // attempt is still pending. This lets the next request start a fresh login.
+  global.__liorandbClient = null;
+  global.__liorandbPromise = null;
+  global.__liorandbDb = null;
+}
+
+/**
+ * Forces a fresh LioranDB authentication/connection attempt.
+ * Used by the UI recovery flow when a previously connected client has gone stale.
+ */
+export async function reconnectToDatabase(): Promise<{ client: LioranDBClient; db: Db }> {
+  await disconnectFromDatabase();
+  return connectToDatabase();
 }
 
 export default connectToDatabase;
