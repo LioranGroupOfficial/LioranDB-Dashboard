@@ -64,7 +64,7 @@ export default async function InstanceDetailsContent({ id, sessionUser }: { id: 
           <div className="flex items-center gap-3"><h1 className="break-all text-2xl font-bold tracking-tight text-[var(--text-strong)] sm:text-3xl">{instance.name}</h1><span className="badge badge-default">{instance.status}</span></div>
           <p className="mt-1 text-xs text-[var(--text-muted)]">{shared ? 'Free Shared' : instance.planName || plan?.name || 'Dedicated'} Plan · {instance.region || 'Region unavailable'}</p>
         </div>
-        <div className="flex flex-wrap gap-2"><a href="https://docs.liorandb.com/docs/driver/overview" target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs"><BookOpen className="h-3.5 w-3.5" />Developer Docs</a><OpenStudioButton db={{ ...dbData, connectionUri: null }} className="btn-secondary text-xs" /><Link href="/billing" className="btn-secondary text-xs"><CreditCard className="h-3.5 w-3.5" />Billing</Link></div>
+        <div className="flex flex-wrap gap-2"><a href="https://docs.liorandb.com/docs/driver/overview" target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs"><BookOpen className="h-3.5 w-3.5" />Developer Docs</a><OpenStudioButton db={dbData} className="btn-secondary text-xs" /><Link href="/billing" className="btn-secondary text-xs"><CreditCard className="h-3.5 w-3.5" />Billing</Link></div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
