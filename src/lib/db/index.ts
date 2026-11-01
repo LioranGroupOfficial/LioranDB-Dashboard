@@ -6,6 +6,7 @@ import type { Db } from '@liorandb/driver';
 import User from './models/User';
 import EmailVerification from './models/EmailVerification';
 import PasswordReset from './models/PasswordReset';
+import StudioHandoff from './models/StudioHandoff';
 import PolicyDocument from './models/PolicyDocument';
 import PolicyAcceptance from './models/PolicyAcceptance';
 import ManagedDatabase from './models/ManagedDatabase';
@@ -29,6 +30,7 @@ export {
   User,
   EmailVerification,
   PasswordReset,
+  StudioHandoff,
   PolicyDocument,
   PolicyAcceptance,
   ManagedDatabase,
@@ -56,6 +58,7 @@ export async function initConnexusCollectionsAndIndexes(targetDb?: Db): Promise<
     User,
     EmailVerification,
     PasswordReset,
+    StudioHandoff,
     HostingNode,
     ManagedDatabase,
     BillingInterval,
@@ -81,6 +84,7 @@ export async function initConnexusCollectionsAndIndexes(targetDb?: Db): Promise<
 export type { IUser, UserRole, OnboardingStage, IUserProfile, IAccountVerification } from './models/User';
 export type { IEmailVerification } from './models/EmailVerification';
 export type { IPasswordReset } from './models/PasswordReset';
+export type { IStudioHandoff } from './models/StudioHandoff';
 export type { IPolicyDocument } from './models/PolicyDocument';
 export type { IPolicyAcceptance } from './models/PolicyAcceptance';
 export type { IManagedDatabase, DatabaseStatus, DatabaseType, IDatabaseUser } from './models/ManagedDatabase';

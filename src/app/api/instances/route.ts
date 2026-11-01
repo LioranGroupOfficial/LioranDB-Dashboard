@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
             status: database.status,
             host: database.host,
             port: database.port,
-            databaseName: database.name,
+            databaseName: database.databaseName,
             username: freeTenant.credentials?.username,
             password: freeTenant.credentials?.password,
             hourlyRatePaise: 0,

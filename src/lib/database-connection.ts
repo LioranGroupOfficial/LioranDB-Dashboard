@@ -24,8 +24,13 @@ export function getFullConnectionUri(uri: string | null): string | null {
   }
 }
 
-/** Format the customer-facing root URI without changing the stored credentials. */
-export function getRootConnectionUri(uri: string | null, port: number, hostOverride?: string): string | null {
+/** Format the customer-facing URI without changing the stored credentials. */
+export function getRootConnectionUri(
+  uri: string | null,
+  port: number,
+  hostOverride?: string,
+  databaseName?: string,
+): string | null {
   const fullUri = getFullConnectionUri(uri);
   if (!fullUri) return null;
 
@@ -47,7 +52,12 @@ export function getRootConnectionUri(uri: string | null, port: number, hostOverr
       return null;
     }
     // username/password are already percent-encoded. Preserve them without encoding again.
-    return `liorandb://${parsed.username}:${parsed.password}@${hostname}:${connectionPort}/`;
+    // The optional database name is authoritative for the allocation and is encoded as
+    // one URI path segment so names such as "app_data/main" remain unambiguous.
+    const database = databaseName?.trim();
+    if (database && /[\s\u0000-\u001f\u007f?#]/.test(database)) return null;
+    const databasePath = database ? encodeURIComponent(database) : '';
+    return `liorandb://${parsed.username}:${parsed.password}@${hostname}:${connectionPort}/${databasePath}`;
   } catch {
     return null;
   }
@@ -68,9 +78,11 @@ export function maskConnectionUri(uri: string): string {
 }
 
 export interface DatabaseConnection {
+  id?: string;
   connectionUri: string | null;
   host?: string;
   port: number;
+  databaseName?: string;
   status: string;
   provisionedAt?: string;
   serverHealth?: string;
@@ -86,7 +98,7 @@ export function studioUnavailableReason(db: DatabaseConnection): string | null {
   if (db.serverHealth && db.serverHealth !== 'HEALTHY') {
     return 'Studio is unavailable while this database is not healthy.';
   }
-  if (!getRootConnectionUri(db.connectionUri, db.port, db.host)) {
+  if (!getRootConnectionUri(db.connectionUri, db.port, db.host, db.databaseName)) {
     return 'The complete connection URI is unavailable. Contact support if this persists.';
   }
   return null;

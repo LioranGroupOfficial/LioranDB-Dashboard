@@ -4,7 +4,7 @@ import { connectToDatabase, ManagedDatabase } from '@/lib/db';
 import { decrypt } from '@/lib/crypto';
 import { createAuditLog } from '@/lib/audit';
 import { createApiError } from '@/lib/errors';
-import { buildLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
+import { buildLioranDBConnectionUri, parseLioranDBConnectionUri } from '@/lib/liorandb-admin/uri';
 
 export async function POST(
   req: NextRequest,
@@ -33,6 +33,24 @@ export async function POST(
     if (inst.encryptedConnectionUri) {
       try {
         connectionUri = decrypt(inst.encryptedConnectionUri);
+        const parsed = parseLioranDBConnectionUri(connectionUri);
+        if (parsed.username && parsed.password !== undefined) {
+          // The stored URI may predate the shared-hosting mapping fix. Rebuild
+          // only its context path from the Dashboard allocation record.
+          connectionUri = buildLioranDBConnectionUri({
+            scheme: parsed.scheme,
+            username: parsed.username,
+            password: parsed.password,
+            host: inst.host || parsed.host,
+            port: inst.port || parsed.port,
+            database: inst.databaseName || 'default',
+            tls: parsed.tls,
+            transport: parsed.transport,
+            allowHttpFallback: parsed.allowHttpFallback,
+            appName: parsed.appName,
+            authSource: parsed.authSource,
+          });
+        }
       } catch {
         connectionUri = '';
       }

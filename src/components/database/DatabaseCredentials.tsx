@@ -19,7 +19,7 @@ interface DbData extends DatabaseConnection {
 export default function DatabaseCredentials({ db }: { db: DbData }) {
   const [showUri, setShowUri] = useState(false);
   const uriId = useId();
-  const connectionUri = getRootConnectionUri(db.connectionUri, db.port, db.host);
+  const connectionUri = getRootConnectionUri(db.connectionUri, db.port, db.host, db.databaseName);
   const unavailableReason = studioUnavailableReason(db);
   const displayedUri = connectionUri
     ? showUri ? connectionUri : maskConnectionUri(connectionUri)
@@ -83,7 +83,7 @@ export default function DatabaseCredentials({ db }: { db: DbData }) {
           </p>
         </div>
         <p className="text-[11px] text-[var(--muted)]">
-          Open Studio sends credentials in its URL. Browser history and Studio access logs or monitoring may retain them.
+          Open Studio uses a short-lived handoff token. Credentials are redeemed over HTTPS and are not placed in the Studio URL.
         </p>
       </section>
       <QuickConnect key={db.id} connectionUri={connectionUri} databaseName={db.databaseName} unavailableReason={unavailableReason} />
