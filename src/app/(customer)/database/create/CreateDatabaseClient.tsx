@@ -27,7 +27,9 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
 
   // Form states
   const [instanceName, setInstanceName] = useState('');
-  const [selectedPlanId, setSelectedPlanId] = useState<'free' | 'shared' | 'dedicated'>('free');
+  // Keep the free-tier flow available in code, but default the customer form
+  // to the paid Shared plan while the free-tier card is temporarily hidden.
+  const [selectedPlanId, setSelectedPlanId] = useState<'free' | 'shared' | 'dedicated'>('shared');
   const [backupEnabled, setBackupEnabled] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{
@@ -90,6 +92,10 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
   async function handleCreateInstance(e: React.FormEvent) {
     e.preventDefault();
     const requiresManualName = selectedPlanId !== 'free';
+    if (selectedPlanId === 'free' && !canSelectFree) {
+      setErrorMessage('Free Shared provisioning is temporarily unavailable. Please select another plan.');
+      return;
+    }
     if (requiresManualName && !instanceName.trim()) {
       setErrorMessage('Please enter an instance name');
       return;
@@ -212,7 +218,8 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
           </div>
 
           <div className="@container/plan-grid grid grid-cols-1 gap-4 @lg/plan-grid:grid-cols-2 @2xl/plan-grid:grid-cols-3">
-            {/* Free shared plan — provisioned by the Rust shared-hosting control plane */}
+            {/* Temporarily hidden. Keep this Free Shared implementation for re-enabling later. */}
+            {/*
             <div
               onClick={() => { if (canSelectFree) { setSelectedPlanId('free'); setBackupEnabled(false); } }}
               onKeyDown={(event) => { if (canSelectFree && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSelectedPlanId('free'); setBackupEnabled(false); } }}
@@ -238,6 +245,7 @@ export default function CreateDatabaseClient({ activeDatabasesCount, maxLimit }:
                 <div className="flex min-w-0 items-start gap-1.5"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--text-strong)]" /><span className="min-w-0">{freeTier.loading ? 'Checking capacity…' : freeTier.hasAllocation ? 'Already allocated to this account' : freeTier.availableSlots === null ? 'Capacity unavailable' : `${freeTier.availableSlots} of 10 slots available`}</span></div>
               </div>
             </div>
+            */}
             {/* Shared Plan - Self Service */}
             <div
               onClick={() => setSelectedPlanId('shared')}

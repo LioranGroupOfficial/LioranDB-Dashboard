@@ -691,9 +691,9 @@ export async function allocateAndProvisionInstance(
   if (!plan) {
     throw new Error('Invalid database plan selected.');
   }
-  if (plan.type === 'shared') {
-    throw new Error('Shared plans must be provisioned through the shared tenant control-plane API.');
-  }
+  // The paid Shared plan currently uses the regular available-host pipeline.
+  // The Free plan is handled separately by the shared-tenant control-plane
+  // flow in the instances route, so it never reaches this path.
 
   const cleanName = params.name.trim().toLowerCase();
   const targetDbName = (params.databaseName || cleanName).replace(/-/g, '_');
@@ -1095,7 +1095,11 @@ export async function allocateAndProvisionInstance(
   instance.providerDeploymentId = deploymentResult.providerDeploymentId;
   instance.opsPerSecondLimit = plan.opsPerSecondLimit || 3000;
   instance.documentLimit = plan.documentLimit || 1000;
-  instance.type = plan.type || 'dedicated';
+  // Keep lifecycle operations aligned with the physical allocation mode. A
+  // paid Shared plan provisioned on the available dedicated-host pipeline
+  // must use dedicated cleanup/user-management behavior until paid shared
+  // tenant creation is exposed by the Rust control plane.
+  instance.type = reservedNode.allocationMode === 'SHARED' ? 'shared' : 'dedicated';
   instance.lastCredentialRotationAt = finalNow;
   instance.rootRotatedAt = finalNow;
   if (instance.backupEnabled) {
@@ -1342,7 +1346,7 @@ export async function provisionInstance(
   instance.providerDeploymentId = deploymentResult.providerDeploymentId;
   instance.opsPerSecondLimit = plan?.opsPerSecondLimit || 3000;
   instance.documentLimit = plan?.documentLimit || 1000;
-  instance.type = plan?.type || 'dedicated';
+  instance.type = node.allocationMode === 'SHARED' ? 'shared' : 'dedicated';
   instance.lastCredentialRotationAt = now;
   instance.rootRotatedAt = now;
 
