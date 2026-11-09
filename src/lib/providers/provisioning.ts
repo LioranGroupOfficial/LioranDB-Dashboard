@@ -22,7 +22,7 @@ import { buildLioranDBConnectionUri } from '../liorandb-admin/uri';
 import { resolveControlPlaneEndpoint } from '../liorandb-admin/url';
 import { LioranDBAdminError, LioranDBUnreachableError } from '../liorandb-admin/errors';
 import { reconcileHostingNodes } from './reconciliation';
-import { bindHostingReservationToInstance, clearHostingNodeAssignment, finalizeHostingNodeSlot, releaseHostingNodeAssignment, releaseHostingNodeReservation, reserveHostingNodeSlot } from '../hosting/allocation';
+import { bindHostingReservationToInstance, clearHostingNodeAssignment, finalizeHostingNodeSlot, getNodeMaxCapacity, releaseHostingNodeAssignment, releaseHostingNodeReservation, reserveHostingNodeSlot } from '../hosting/allocation';
 import { getManagedSharedTenantId, provisionFreeSharedTenant } from '../services/shared-hosting.service';
 
 export interface DeploymentParams {
@@ -441,22 +441,31 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
             throw new Error(`Server reset failed on termination: ${purgeResult.error || 'Check failed'}`);
           }
 
-          // Successful cleanup: return node to AVAILABLE with verified clean state
-          node.status = 'AVAILABLE';
-          node.currentAssignedCount = 0;
-          node.healthStatus = 'HEALTHY';
-          node.cleanStatus = 'CLEAN';
-          node.quarantineReason = undefined;
-          node.quarantineCode = undefined;
-          node.cleanupFailureReason = undefined;
-          node.lastResetAt = now;
-          node.lastCleanCheckAt = now;
-          if (purgeResult.rotatedRootPassword) {
-            node.lastCredentialRotationAt = now;
-          }
-          node.adminNotes = `Purged and reset on ${now.toISOString()}. Pre-mem: ${purgeResult.preResetMemoryBytes || 'N/A'}, Post-mem: ${purgeResult.postResetMemoryBytes || 'N/A'}`;
-          await node.save();
+          // Successful cleanup: clear the allocation reservation and reset the
+          // dedicated node counters atomically before marking it available.
           await clearHostingNodeAssignment(node._id.toString(), instance._id.toString());
+          await HostingNode.findByIdAndUpdate(node._id, {
+            $set: {
+              status: 'AVAILABLE',
+              healthStatus: 'HEALTHY',
+              cleanStatus: 'CLEAN',
+              capacityRemaining: getNodeMaxCapacity(node),
+              pendingReservations: 0,
+              lastResetAt: now,
+              lastCleanCheckAt: now,
+              ...(purgeResult.rotatedRootPassword ? { lastCredentialRotationAt: now } : {}),
+              adminNotes: `Purged and reset on ${now.toISOString()}. Pre-mem: ${purgeResult.preResetMemoryBytes || 'N/A'}, Post-mem: ${purgeResult.postResetMemoryBytes || 'N/A'}`,
+            },
+            $unset: {
+              currentAllocationId: 1,
+              allocationExpiresAt: 1,
+              assignedInstanceId: 1,
+              quarantineReason: 1,
+              quarantineCode: 1,
+              cleanupFailureReason: 1,
+            },
+            $pull: { allocationReservations: { instanceId: instance._id.toString() } },
+          });
 
           instance.status = 'TERMINATED';
           instance.terminatedAt = now;
@@ -880,78 +889,64 @@ export async function allocateAndProvisionInstance(
     throw preCheckErr;
   }
 
-  // Step 4: Handle Node Reuse / Authoritative Reset (only when required)
-  // For a newly initialized node with no previous customer assignment, provision directly.
-  // For a previously assigned node or node with residual databases/users, require completed authoritative Rust reset.
-  const isPreviouslyAssigned = Boolean(
-    (reservedNode as any).requiresReset ||
-    reservedNode.assignedInstanceId ||
-    (reservedNode as any).lastAssignedAt
-  );
-  const statusAny = serverStatus as any;
-  const hasResidualDatabases =
-    (serverStatus.databaseCount || statusAny.database_count || statusAny.total_databases || 0) > 1;
-  const hasResidualUsers = (serverStatus.userCount || statusAny.user_count || 0) > 1;
-  const needsReset = isPreviouslyAssigned || hasResidualDatabases || hasResidualUsers;
+  // Step 4: Always perform an authoritative Rust reset before allocation.
+  // This protects against stale data even when dashboard allocation metadata
+  // says the node is clean or a prior termination was interrupted.
+  try {
+    const resetResult = await client.resetInstance({
+      instanceId: targetInstanceId,
+      confirmation: 'RESET_INSTANCE',
+    });
 
-  if (needsReset) {
-    try {
-      const resetResult = await client.resetInstance({
-        instanceId: targetInstanceId,
-        confirmation: 'RESET_INSTANCE',
-      });
+    const isResetConfirmed = [resetResult.state, resetResult.status]
+      .some((value) => ['READY', 'ACTIVE', 'OK', 'HEALTHY', 'RESET', 'RESTARTED'].includes(String(value).toUpperCase()));
 
-      const isResetConfirmed =
-        resetResult.state === 'Ready' ||
-        resetResult.status === 'READY' ||
-        resetResult.status === 'ACTIVE' ||
-        resetResult.status === 'OK';
-
-      if (!isResetConfirmed) {
-        throw new Error(`${reservedNode.name} unavailable: reset required.`);
-      }
-
-      if (resetResult.newGeneratedRootPassword) {
-        masterPassword = resetResult.newGeneratedRootPassword;
-      }
-
-      await HostingNode.findByIdAndUpdate(reservedNode._id, {
-        $set: {
-          lastResetAt: new Date(),
-          encryptedDefaultRootPassword: resetResult.newGeneratedRootPassword
-            ? encrypt(resetResult.newGeneratedRootPassword)
-            : reservedNode.encryptedDefaultRootPassword,
-        },
-        $unset: { requiresReset: 1, quarantineReason: 1, quarantineCode: 1, cleanupFailureReason: 1 },
-      });
-    } catch (resetErr: unknown) {
-      const resetMsg = resetErr instanceof Error ? resetErr.message : String(resetErr);
-      const conciseQuarantineMsg = `${reservedNode.name} unavailable: reset required.`;
-
-      await releaseHostingNodeReservation(reservedNode._id.toString(), allocationToken);
-      await HostingNode.findOneAndUpdate(
-        { _id: reservedNode._id },
-        {
-          $set: {
-            status: 'QUARANTINED',
-            quarantineCode: 'RESET_FAILED',
-            quarantineReason: conciseQuarantineMsg,
-            cleanupFailureReason: resetMsg,
-            currentAssignedCount: 0,
-          },
-          $unset: {
-            currentAllocationId: 1,
-            allocationExpiresAt: 1,
-            assignedInstanceId: 1,
-          },
-        }
-      );
-      instance.status = 'FAILED';
-      instance.provisioningStage = 'RESET_FAILED';
-      instance.lastProvisioningError = conciseQuarantineMsg;
-      await instance.save();
-      throw new Error(conciseQuarantineMsg);
+    if (!isResetConfirmed) {
+      throw new Error(`${reservedNode.name} unavailable: reset required.`);
     }
+
+    if (resetResult.newGeneratedRootPassword) {
+      masterPassword = resetResult.newGeneratedRootPassword;
+    }
+
+    await client.waitForReady({ attempts: 8, delayMs: 1000 });
+
+    await HostingNode.findByIdAndUpdate(reservedNode._id, {
+      $set: {
+        lastResetAt: new Date(),
+        encryptedDefaultRootPassword: resetResult.newGeneratedRootPassword
+          ? encrypt(resetResult.newGeneratedRootPassword)
+          : reservedNode.encryptedDefaultRootPassword,
+      },
+      $unset: { requiresReset: 1, quarantineReason: 1, quarantineCode: 1, cleanupFailureReason: 1 },
+    });
+  } catch (resetErr: unknown) {
+    const resetMsg = resetErr instanceof Error ? resetErr.message : String(resetErr);
+    const conciseQuarantineMsg = `${reservedNode.name} unavailable: reset required.`;
+
+    await releaseHostingNodeReservation(reservedNode._id.toString(), allocationToken);
+    await HostingNode.findOneAndUpdate(
+      { _id: reservedNode._id },
+      {
+        $set: {
+          status: 'QUARANTINED',
+          quarantineCode: 'RESET_FAILED',
+          quarantineReason: conciseQuarantineMsg,
+          cleanupFailureReason: resetMsg,
+          currentAssignedCount: 0,
+        },
+        $unset: {
+          currentAllocationId: 1,
+          allocationExpiresAt: 1,
+          assignedInstanceId: 1,
+        },
+      }
+    );
+    instance.status = 'FAILED';
+    instance.provisioningStage = 'RESET_FAILED';
+    instance.lastProvisioningError = conciseQuarantineMsg;
+    await instance.save();
+    throw new Error(conciseQuarantineMsg);
   }
 
   instance.provisioningStage = 'MUTATING_RUST';

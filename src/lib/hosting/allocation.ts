@@ -246,12 +246,74 @@ export async function reserveHostingNodeSlot(params: {
   const candidates = await HostingNode.find({
     ...(params.nodeId ? { _id: params.nodeId } : {}),
     allocationMode: params.allocationMode,
-    status: { $in: ['AVAILABLE', 'ACTIVE'] },
+    status: { $in: params.allocationMode === 'DEDICATED' ? ['AVAILABLE', 'ACTIVE', 'ASSIGNED'] : ['AVAILABLE', 'ACTIVE'] },
     healthStatus: 'HEALTHY',
   }).sort({ isDefault: -1, createdAt: 1 }).lean<IHostingNode[]>();
 
-  for (const candidate of candidates) {
-    const reservations = await ensureHostingNodeAllocationReservations(candidate);
+  for (let candidate of candidates) {
+    let reservations = await ensureHostingNodeAllocationReservations(candidate);
+
+    // Recover legacy/stale dedicated metadata left behind by an interrupted
+    // termination. The Rust server is reset again below before any customer
+    // mutation, so clearing only an orphaned dashboard allocation is safe.
+    if (params.allocationMode === 'DEDICATED') {
+      const reservationInstanceIds = reservations
+        .map((reservation) => reservation.instanceId)
+        .filter((instanceId): instanceId is string => Boolean(instanceId));
+      const linkedInstances = reservationInstanceIds.length > 0
+        ? await ManagedDatabase.find({ _id: { $in: reservationInstanceIds } }).select('_id status').lean()
+        : [];
+      const liveInstanceIds = new Set(
+        linkedInstances
+          .filter((instance) => OCCUPIED_DATABASE_STATUSES.includes(instance.status as (typeof OCCUPIED_DATABASE_STATUSES)[number]))
+          .map((instance) => instance._id.toString())
+      );
+      const activeInstance = await ManagedDatabase.findOne({
+        hostingNodeId: candidate._id,
+        status: { $in: OCCUPIED_DATABASE_STATUSES },
+      }).select('_id').lean();
+      const hasLiveReservation = Boolean(activeInstance) || reservations.some((reservation) => {
+        if (reservationIsExpired(reservation)) return false;
+        if (reservation.state === 'PENDING') return true;
+        return Boolean(reservation.instanceId && liveInstanceIds.has(String(reservation.instanceId)));
+      });
+      const hasStaleAllocationMetadata =
+        reservations.length > 0 ||
+        candidate.status === 'ASSIGNED' ||
+        candidate.currentAssignedCount !== 0 ||
+        candidate.pendingReservations !== 0 ||
+        candidate.capacityRemaining !== getNodeMaxCapacity(candidate);
+
+      if (!hasLiveReservation && hasStaleAllocationMetadata) {
+        const repairFilter: Record<string, unknown> = {
+          _id: candidate._id,
+          status: candidate.status,
+        };
+        repairFilter.allocationRevision = typeof candidate.allocationRevision === 'number'
+          ? candidate.allocationRevision
+          : { $exists: false };
+        const repaired = await HostingNode.updateOne(
+          repairFilter,
+          {
+            $set: {
+              status: 'AVAILABLE',
+              currentAssignedCount: 0,
+              pendingReservations: 0,
+              capacityRemaining: getNodeMaxCapacity(candidate),
+              allocationReservations: [],
+            },
+            $inc: { allocationRevision: 1 },
+            $unset: { assignedInstanceId: 1, currentAllocationId: 1, allocationExpiresAt: 1 },
+          }
+        );
+        if (repaired.matchedCount !== 1) continue;
+        const refreshed = await HostingNode.findById(candidate._id).lean<IHostingNode>();
+        if (!refreshed) continue;
+        candidate = refreshed;
+        reservations = [];
+      }
+    }
+
     const existing = reservations.find(
       (reservation) => reservation.idempotencyKey === params.idempotencyKey && !reservationIsExpired(reservation)
     );
@@ -395,18 +457,28 @@ export async function releaseHostingNodeAssignment(nodeId: string, instanceId: s
 export async function clearHostingNodeAssignment(nodeId: string, instanceId: string): Promise<boolean> {
   const node = await HostingNode.findById(nodeId).lean<IHostingNode>();
   if (!node) return false;
+  const set: Record<string, unknown> = {
+    status: node.allocationMode === 'DEDICATED' ? 'AVAILABLE' : node.status,
+    currentAssignedCount: 0,
+    pendingReservations: 0,
+    capacityRemaining: getNodeMaxCapacity(node),
+  };
+  const update: Record<string, unknown> = {
+    $set: set,
+    $inc: { allocationRevision: 1 },
+    $unset: { assignedInstanceId: 1, currentAllocationId: 1, allocationExpiresAt: 1 },
+  };
+  if (node.allocationMode === 'DEDICATED') {
+    set.allocationReservations = [];
+  } else {
+    update.$pull = { allocationReservations: { instanceId } };
+  }
   const result = await HostingNode.updateOne(
-    { _id: nodeId, 'allocationReservations.instanceId': instanceId },
-    {
-      $set: {
-        currentAssignedCount: 0,
-        pendingReservations: 0,
-        capacityRemaining: getNodeMaxCapacity(node),
-      },
-      $inc: { allocationRevision: 1 },
-      $pull: { allocationReservations: { instanceId } },
-      $unset: { assignedInstanceId: 1, currentAllocationId: 1, allocationExpiresAt: 1 },
-    }
+    // Dedicated nodes are locked while cleanup runs. Clear the complete
+    // allocation snapshot atomically so stale reservations cannot strand the
+    // node after the Rust reset succeeds.
+    { _id: nodeId },
+    update
   );
   return result.matchedCount === 1;
 }

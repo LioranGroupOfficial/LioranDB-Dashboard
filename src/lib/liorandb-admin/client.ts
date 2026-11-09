@@ -645,6 +645,39 @@ export class LioranDBAdminClient {
   }
 
   /**
+   * Waits for the Rust engine to return to a ready state after a destructive
+   * reset. Reset requests can acknowledge before the engine has finished
+   * restarting, so callers must not provision against the transitional state.
+   */
+  public async waitForReady(options?: { attempts?: number; delayMs?: number }): Promise<LioranDBServerStatus> {
+    const attempts = Math.max(1, options?.attempts || 8);
+    const delayMs = Math.max(0, options?.delayMs || 1000);
+    let lastStatus: LioranDBServerStatus | undefined;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        const status = await this.getServerStatus();
+        lastStatus = status;
+        const state = String(status.state || status.status || '').toUpperCase();
+        if (status.status === 'HEALTHY' || ['READY', 'ACTIVE', 'OK', 'HEALTHY'].includes(state)) {
+          return status;
+        }
+      } catch {
+        // The engine may briefly reject status requests while restarting.
+      }
+
+      if (attempt < attempts - 1 && delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    const state = lastStatus ? ` (state: ${lastStatus.state || lastStatus.status})` : '';
+    throw new LioranDBResetError(`LioranDB did not return to Ready state after reset${state}.`, {
+      statusCode: 503,
+    });
+  }
+
+  /**
    * Fetches all registered database user accounts directly from the Rust system catalog.
    * Path: GET /v1/admin/users
    */
@@ -1309,29 +1342,9 @@ export class LioranDBAdminClient {
         });
       }
 
-      // Stage 4: Authoritatively verify engine health and clean state post-reset
-      const postStatus = await this.getServerStatus();
-      const stateUpper = String(postStatus.state || postStatus.status || '').toUpperCase();
-      const isHealthy = stateUpper === 'READY' || stateUpper === 'ACTIVE' || stateUpper === 'OK' || stateUpper === 'HEALTHY';
-
-      if (!isHealthy) {
-        const failReason = `Engine not in Ready state post-reset (status: ${postStatus.status}, state: ${postStatus.state})`;
-        logCleanupStage({
-          stage: 'VERIFICATION_FAILED',
-          instanceId: targetId,
-          nodeId: targetNodeId,
-          endpoint: this.endpoint,
-          isClean: false,
-          failureReason: failReason,
-        });
-
-        return {
-          success: false,
-          instanceId: targetId,
-          verifiedClean: false,
-          error: `Post-reset health verification failed: ${failReason}`,
-        };
-      }
+      // Stage 4: wait for the engine to finish restarting, then verify health.
+      // A reset acknowledgement is not itself proof that the node is reusable.
+      const postStatus = await this.waitForReady({ attempts: 8, delayMs: 1000 });
 
       logCleanupStage({
         stage: 'VERIFICATION_PASSED',
