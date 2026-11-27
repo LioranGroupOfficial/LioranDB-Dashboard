@@ -48,7 +48,8 @@ export async function POST(
       database: instance.databaseName || 'default',
       scheme: isTls ? 'liorandb+https' : 'liorandb',
       tls: isTls,
-      transport: 'grpc',
+      transport: 'auto',
+      allowHttpFallback: true,
     });
 
     instance.encryptedConnectionUri = encrypt(connectionUri);

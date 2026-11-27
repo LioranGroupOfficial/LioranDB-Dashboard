@@ -169,8 +169,8 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         database: params.databaseName || 'default',
         scheme: isTls ? 'liorandb+https' : 'liorandb',
         tls: isTls,
-        transport: 'grpc',
-        allowHttpFallback: false,
+        transport: 'auto',
+        allowHttpFallback: true,
       });
 
       // A factory-reset Rust instance has no customer database yet. Creating
@@ -181,7 +181,11 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
       // gateway or transport failures.
       const { LioranDBClient } = await import('@liorandb/driver');
       const databaseClient = await LioranDBClient.connect(nativeUri, {
-        transport: 'grpc',
+        // CX01 currently exposes reliable HTTPS data operations while its
+        // advertised gRPC listener is unavailable. Use HTTP for the
+        // provisioning mutation; the returned URI keeps auto fallback for
+        // customer clients.
+        transport: 'http',
         allowHttpFallback: false,
         timeoutMS: 15000,
         connectTimeoutMS: 10000,
@@ -229,8 +233,8 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         database: instance.databaseName || 'default',
         scheme: isTls ? 'liorandb+https' : 'liorandb',
         tls: isTls,
-        transport: 'grpc',
-        allowHttpFallback: false,
+        transport: 'auto',
+        allowHttpFallback: true,
       });
 
       instance.encryptedConnectionUri = encrypt(newUri);
@@ -317,8 +321,8 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         database: instance.databaseName || 'default',
         scheme: isTls ? 'liorandb+https' : 'liorandb',
         tls: isTls,
-        transport: 'grpc',
-        allowHttpFallback: false,
+        transport: 'auto',
+        allowHttpFallback: true,
       });
 
       instance.encryptedConnectionUri = encrypt(newUri);
@@ -1191,8 +1195,8 @@ export async function allocateAndProvisionInstance(
     try {
       const { LioranDBClient } = await import('@liorandb/driver');
       const testClient = await LioranDBClient.connect(deploymentResult.nativeConnectionUri, {
-        transport: 'grpc',
-        allowHttpFallback: false,
+        transport: 'auto',
+        allowHttpFallback: true,
         timeoutMS: 10000,
         connectTimeoutMS: 5000,
         requestTimeoutMS: 10000,
@@ -1450,8 +1454,8 @@ export async function provisionInstance(
     try {
       const { LioranDBClient } = await import('@liorandb/driver');
       const testClient = await LioranDBClient.connect(deploymentResult.nativeConnectionUri, {
-        transport: 'grpc',
-        allowHttpFallback: false,
+        transport: 'auto',
+        allowHttpFallback: true,
         timeoutMS: 10000,
         connectTimeoutMS: 5000,
         requestTimeoutMS: 10000,

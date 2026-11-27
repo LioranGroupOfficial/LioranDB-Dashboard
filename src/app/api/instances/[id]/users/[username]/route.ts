@@ -116,7 +116,8 @@ export async function POST(
         database: instance.databaseName || 'default',
         scheme: instance.port === 443 || instance.port === 8443 ? 'liorandb+https' : 'liorandb',
         tls: instance.port === 443 || instance.port === 8443,
-        transport: 'grpc',
+        transport: 'auto',
+        allowHttpFallback: true,
       });
 
       instance.encryptedConnectionUri = encrypt(newUri);

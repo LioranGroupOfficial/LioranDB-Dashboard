@@ -1096,8 +1096,8 @@ function buildSharedConnectionUri(
     port,
     database: logicalDatabaseName,
     tls: true,
-    transport: 'grpc',
-    allowHttpFallback: false,
+    transport: 'auto',
+    allowHttpFallback: true,
   });
 }
 

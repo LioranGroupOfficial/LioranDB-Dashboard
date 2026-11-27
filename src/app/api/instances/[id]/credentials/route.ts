@@ -73,7 +73,8 @@ export async function POST(
         database: customerDatabaseName || 'default',
         scheme: isTls ? 'liorandb+https' : 'liorandb',
         tls: isTls,
-        transport: 'grpc',
+      transport: 'auto',
+      allowHttpFallback: true,
       });
     }
 
