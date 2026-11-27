@@ -236,6 +236,7 @@ export async function POST(req: NextRequest) {
         backupEnabled: Boolean(backupEnabled),
         couponCode: appliedCouponCode,
         couponDiscountPercentage,
+        idempotencyKey: req.headers.get('idempotency-key') || undefined,
       });
 
       if (appliedCouponCode) {
@@ -244,7 +245,11 @@ export async function POST(req: NextRequest) {
     } catch (provErr: unknown) {
       console.error('[Provisioning Error]', provErr);
       const errMessage = provErr instanceof Error ? provErr.message : 'Instance provisioning encountered an infrastructure error. Please try again or contact support.';
-      const statusCode = errMessage.includes('No dedicated database hosting servers') ? 400 : 500;
+      const statusCode = errMessage.includes('No dedicated database hosting servers')
+        ? 400
+        : errMessage.includes('already in progress') || errMessage.includes('already being fulfilled')
+          ? 409
+          : 500;
       return NextResponse.json(
         { error: errMessage, contactEmail: 'support@liorandb.com' },
         { status: statusCode }

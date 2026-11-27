@@ -182,6 +182,11 @@ export async function getHostingNodeAllocationSnapshot(
   }).select('_id status allocationToken').lean();
 
   const occupiedIds = new Set(instances.map((instance) => instance._id.toString()));
+  const occupiedAllocationTokens = new Set(
+    instances
+      .map((instance) => instance.allocationToken)
+      .filter((token): token is string => typeof token === 'string' && token.length > 0)
+  );
   const activeReservationKeys = new Set<string>();
   let pendingReservations = 0;
   const now = Date.now();
@@ -192,7 +197,14 @@ export async function getHostingNodeAllocationSnapshot(
     const hasMatchingInstance = Boolean(
       reservation.instanceId && occupiedIds.has(String(reservation.instanceId))
     );
-    if (!hasMatchingInstance) activeReservationKeys.add(reservation.token);
+    // Older records may have a valid reservation token but a missing
+    // instanceId because positional array updates are not supported by the
+    // LioranDB adapter. The instance allocation token is authoritative in that
+    // case and must not be counted a second time.
+    const hasMatchingAllocationToken = occupiedAllocationTokens.has(reservation.token);
+    if (!hasMatchingInstance && !hasMatchingAllocationToken) {
+      activeReservationKeys.add(reservation.token);
+    }
   }
 
   const currentAssignedCount = occupiedIds.size + activeReservationKeys.size;
@@ -398,9 +410,12 @@ export async function bindHostingReservationToInstance(nodeId: string, token: st
   const reservations = await ensureHostingNodeAllocationReservations(node);
   const reservation = reservations.find((item) => item.token === token);
   if (!reservation) return;
+  const updatedReservations = reservations.map((item) =>
+    item.token === token ? { ...item, instanceId } : item
+  );
   await HostingNode.updateOne(
-    { _id: nodeId, 'allocationReservations.token': token },
-    { $set: { 'allocationReservations.$.instanceId': instanceId }, $inc: { allocationRevision: 1 } }
+    { _id: nodeId, allocationRevision: node.allocationRevision },
+    { $set: { allocationReservations: updatedReservations }, $inc: { allocationRevision: 1 } }
   );
 }
 
@@ -415,18 +430,21 @@ export async function finalizeHostingNodeSlot(params: {
   const reservations = await ensureHostingNodeAllocationReservations(node);
   const pending = reservations.find((item) => item.token === params.token);
   if (!pending) return;
-  const set: Record<string, unknown> = {
-    'allocationReservations.$.instanceId': params.instanceId,
-    'allocationReservations.$.state': 'ACTIVE',
-  };
+  if (pending.state !== 'PENDING') return;
+  const finalizedReservations = reservations.map((item) => {
+    if (item.token !== params.token) return item;
+    const { expiresAt: _expiresAt, ...withoutLease } = item;
+    return { ...withoutLease, instanceId: params.instanceId, state: 'ACTIVE' as const };
+  });
+  const set: Record<string, unknown> = { allocationReservations: finalizedReservations };
   if (params.serverVersion) set.serverVersion = params.serverVersion;
   if (node.allocationMode === 'DEDICATED') {
     set.status = 'ASSIGNED';
     set.assignedInstanceId = params.instanceId;
   }
   await HostingNode.updateOne(
-    { _id: params.nodeId, 'allocationReservations.token': params.token },
-    { $set: set, $inc: { pendingReservations: -1, allocationRevision: 1 }, $unset: { currentAllocationId: 1, allocationExpiresAt: 1, 'allocationReservations.$.expiresAt': 1 } }
+    { _id: params.nodeId, allocationRevision: node.allocationRevision },
+    { $set: set, $inc: { pendingReservations: -1, allocationRevision: 1 }, $unset: { currentAllocationId: 1, allocationExpiresAt: 1 } }
   );
 }
 

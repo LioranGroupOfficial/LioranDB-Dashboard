@@ -686,6 +686,7 @@ export interface AllocateAndProvisionParams {
   couponCode?: string;
   couponDiscountPercentage?: number;
   nodeId?: string;
+  idempotencyKey?: string;
 }
 
 export interface AllocateAndProvisionResult {
@@ -822,7 +823,6 @@ export async function allocateAndProvisionInstance(
   await connectToDatabase();
 
   const now = new Date();
-  const allocationToken = `alloc_${Date.now()}_${generateSecureToken(8)}`;
 
   const plan = getPlan(params.planId);
   if (!plan) {
@@ -834,6 +834,11 @@ export async function allocateAndProvisionInstance(
 
   const cleanName = params.name.trim().toLowerCase();
   const targetDbName = (params.databaseName || cleanName).replace(/-/g, '_');
+  // Use a stable key for the logical create request. This prevents duplicate
+  // POSTs (double-clicks, browser retries, or gateway retries) from creating
+  // a second reservation for the same customer/name pair.
+  const allocationRequestKey = params.idempotencyKey?.trim() ||
+    `database:${params.customerId.toString()}:${cleanName}:${plan.id}`;
 
   // Step 1: Atomic conditional claim (CAS) on an allocatable node
   let reservedNode: IHostingNode | null = null;
@@ -842,23 +847,43 @@ export async function allocateAndProvisionInstance(
     nodeId: params.nodeId,
     allocationMode: 'DEDICATED',
     customerId: params.customerId.toString(),
-    idempotencyKey: allocationToken,
+    idempotencyKey: allocationRequestKey,
   });
 
   if (!reservation && !params.nodeId && await autoRecoverQuarantinedDedicatedNode()) {
     reservation = await reserveHostingNodeSlot({
       allocationMode: 'DEDICATED',
       customerId: params.customerId.toString(),
-      idempotencyKey: allocationToken,
+      idempotencyKey: allocationRequestKey,
     });
   }
 
   if (reservation) reservedNode = reservation.node;
 
-  if (!reservedNode) {
+  if (!reservation || !reservedNode) {
     throw new Error(
       'No dedicated database hosting servers are currently available. Please email support@liorandb.com for this query.'
     );
+  }
+
+  const allocationToken = reservation.reservation.token;
+
+  // A reused reservation belongs to another request already provisioning this
+  // logical database. Never create a second ManagedDatabase against it.
+  if (reservation.reused) {
+    const existingInstance = await ManagedDatabase.findOne({
+      allocationToken,
+      customerId: params.customerId,
+      name: cleanName,
+    }).select('_id status').lean();
+    if (existingInstance) {
+      throw new Error(
+        existingInstance.status === 'PROVISIONING' || existingInstance.status === 'PENDING'
+          ? 'Database provisioning is already in progress for this name. Please refresh shortly.'
+          : 'A database with this name is already being fulfilled. Please refresh your database list.'
+      );
+    }
+    throw new Error('Database provisioning is already in progress for this name. Please refresh shortly.');
   }
 
   // Step 2: Create ManagedDatabase record linked to this allocation
