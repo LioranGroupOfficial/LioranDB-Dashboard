@@ -674,6 +674,113 @@ export interface AllocateAndProvisionResult {
   nativeConnectionUri: string;
 }
 
+const AUTO_RECOVERY_BLOCKING_STATUSES = [
+  'PENDING',
+  'PROVISIONING',
+  'ACTIVE',
+  'RUNNING',
+  'SUSPENDED',
+  'STOPPED',
+  'RESETTING',
+  'DELETING',
+] as const;
+
+/** Recover a quarantined dedicated node only when no live allocation remains. */
+async function autoRecoverQuarantinedDedicatedNode(): Promise<boolean> {
+  const candidates = await HostingNode.find({
+    status: 'QUARANTINED',
+    allocationMode: { $ne: 'SHARED' },
+  }).sort({ isDefault: -1, createdAt: 1 }).lean<IHostingNode[]>();
+
+  for (const candidate of candidates) {
+    const blockingInstance = await ManagedDatabase.findOne({
+      hostingNodeId: candidate._id,
+      status: { $in: AUTO_RECOVERY_BLOCKING_STATUSES },
+    }).select('_id status').lean();
+    if (blockingInstance) continue;
+
+    const lockedNode = await HostingNode.findOneAndUpdate(
+      { _id: candidate._id, status: 'QUARANTINED' },
+      { $set: { status: 'RESETTING', lastCleanupAttemptAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+    if (!lockedNode) continue;
+
+    const client = LioranDBAdminClient.forNode(lockedNode);
+    const purgeResult = await client.purgeAndResetTenant({
+      instanceId: lockedNode.serverIdentity || 'primary',
+      expectedInstanceName: lockedNode.name,
+      nodeId: lockedNode._id.toString(),
+    });
+    const now = new Date();
+
+    if (!purgeResult.success) {
+      await HostingNode.findOneAndUpdate(
+        { _id: lockedNode._id, status: 'RESETTING' },
+        {
+          $set: {
+            status: 'QUARANTINED',
+            healthStatus: 'DEGRADED',
+            currentAssignedCount: 0,
+            pendingReservations: 0,
+            capacityRemaining: getNodeMaxCapacity(lockedNode),
+            allocationReservations: [],
+            quarantineCode: 'RESET_FAILED',
+            quarantineReason: `${lockedNode.name} unavailable: reset required.`,
+            cleanupFailureReason: purgeResult.error || 'Automatic reset failed.',
+          },
+          $unset: { currentAllocationId: 1, allocationExpiresAt: 1, assignedInstanceId: 1 },
+          $inc: { allocationRevision: 1 },
+        }
+      );
+      continue;
+    }
+
+    await HostingNode.findOneAndUpdate(
+      { _id: lockedNode._id, status: 'RESETTING' },
+      {
+        $set: {
+          status: 'AVAILABLE',
+          healthStatus: 'HEALTHY',
+          cleanStatus: 'CLEAN',
+          currentAssignedCount: 0,
+          pendingReservations: 0,
+          capacityRemaining: getNodeMaxCapacity(lockedNode),
+          allocationReservations: [],
+          lastResetAt: now,
+          lastHealthCheckAt: now,
+          ...(purgeResult.rotatedRootPassword ? { lastCredentialRotationAt: now } : {}),
+        },
+        $unset: {
+          currentAllocationId: 1,
+          allocationExpiresAt: 1,
+          assignedInstanceId: 1,
+          quarantineReason: 1,
+          quarantineCode: 1,
+          cleanupFailureReason: 1,
+        },
+        $inc: { allocationRevision: 1 },
+      }
+    );
+
+    await ManagedDatabase.updateMany(
+      { hostingNodeId: lockedNode._id, status: 'FAILED' },
+      {
+        $set: {
+          status: 'TERMINATED',
+          terminatedAt: now,
+          terminationReason: 'Automatically cleaned before retrying node allocation',
+        },
+        $unset: { hostingNodeId: 1 },
+      }
+    );
+
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Authoritative Centralized 1:1 Hosting Node Allocation & Provisioning Service (Phase 2 & 4).
  *
@@ -710,12 +817,21 @@ export async function allocateAndProvisionInstance(
   // Step 1: Atomic conditional claim (CAS) on an allocatable node
   let reservedNode: IHostingNode | null = null;
 
-  const reservation = await reserveHostingNodeSlot({
+  let reservation = await reserveHostingNodeSlot({
     nodeId: params.nodeId,
     allocationMode: 'DEDICATED',
     customerId: params.customerId.toString(),
     idempotencyKey: allocationToken,
   });
+
+  if (!reservation && !params.nodeId && await autoRecoverQuarantinedDedicatedNode()) {
+    reservation = await reserveHostingNodeSlot({
+      allocationMode: 'DEDICATED',
+      customerId: params.customerId.toString(),
+      idempotencyKey: allocationToken,
+    });
+  }
+
   if (reservation) reservedNode = reservation.node;
 
   if (!reservedNode) {
