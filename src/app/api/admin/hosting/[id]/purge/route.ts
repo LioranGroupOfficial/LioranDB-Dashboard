@@ -3,6 +3,7 @@ import { requireAdminAPI } from '@/lib/auth/guards';
 import { connectToDatabase, HostingNode, ManagedDatabase } from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
 import { LioranDBAdminClient, logCleanupStage } from '@/lib/liorandb-admin/client';
+import { getNodeMaxCapacity } from '@/lib/hosting/allocation';
 
 /**
  * Explicit administrator-authorized recovery action:
@@ -99,6 +100,9 @@ export async function POST(
             status: 'AVAILABLE',
             healthStatus: 'HEALTHY',
             currentAssignedCount: 0,
+            pendingReservations: 0,
+            capacityRemaining: getNodeMaxCapacity(lockedNode),
+            allocationReservations: [],
             lastResetAt: now,
             lastHealthCheckAt: now,
             ...(purgeResult.rotatedRootPassword ? { lastCredentialRotationAt: now } : {}),
@@ -112,6 +116,7 @@ export async function POST(
             allocationExpiresAt: 1,
             assignedInstanceId: 1,
           },
+          $inc: { allocationRevision: 1 },
         }
       );
 
@@ -163,6 +168,9 @@ export async function POST(
             quarantineCode: 'RESET_FAILED',
             healthStatus: 'DEGRADED',
             currentAssignedCount: 0,
+            pendingReservations: 0,
+            capacityRemaining: getNodeMaxCapacity(lockedNode),
+            allocationReservations: [],
             quarantineReason: `${lockedNode.name} unavailable: reset required.`,
             cleanupFailureReason: purgeResult.error || 'Server reset failed',
             adminNotes: `QUARANTINED: Admin-authorized purge failed: ${purgeResult.error || 'Reset failed'}`,
@@ -172,6 +180,7 @@ export async function POST(
             allocationExpiresAt: 1,
             assignedInstanceId: 1,
           },
+          $inc: { allocationRevision: 1 },
         }
       );
 

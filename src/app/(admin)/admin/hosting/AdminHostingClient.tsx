@@ -860,7 +860,8 @@ export default function AdminHostingClient({ initialNodes }: Props) {
                             <Edit2 className="w-3 h-3" />
                             <span>Edit</span>
                           </button>
-                          {node.allocationMode !== 'SHARED' && node.currentAssignedCount === 0 && (
+                          {node.allocationMode !== 'SHARED' &&
+                            (node.currentAssignedCount === 0 || node.status === 'QUARANTINED' || node.status === 'FAILED') && (
                             <button
                               type="button"
                               onClick={() => handlePurgeNode(node)}

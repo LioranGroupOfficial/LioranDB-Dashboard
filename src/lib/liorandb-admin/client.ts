@@ -1263,7 +1263,7 @@ export class LioranDBAdminClient {
     expectedInstanceName?: string;
     nodeId?: string;
   }): Promise<PurgeAndResetTenantResult> {
-    const targetId = options?.instanceId || this.instanceId || 'primary';
+    let targetId = options?.instanceId || this.instanceId || 'primary';
     const targetNodeId = options?.nodeId;
     let preResetMemoryBytes: number | undefined;
     let postResetMemoryBytes: number | undefined;
@@ -1282,6 +1282,9 @@ export class LioranDBAdminClient {
       // Stage 1: Pre-cleanup memory & status inspection
       try {
         const preStatus = await this.getServerStatus();
+        // Use the live Rust identity for reset requests. This is important for
+        // legacy hosting records whose serverIdentity was never persisted.
+        if (preStatus.instanceId) targetId = preStatus.instanceId;
         preResetMemoryBytes = preStatus.memoryBytesUsed !== undefined ? preStatus.memoryBytesUsed : preStatus.storageBytes;
         preCollections = preStatus.collectionCount || 0;
         preDocuments = preStatus.documentCount || 0;

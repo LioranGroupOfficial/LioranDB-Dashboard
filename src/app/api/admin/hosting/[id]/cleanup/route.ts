@@ -3,6 +3,7 @@ import { requireAdminAPI } from '@/lib/auth/guards';
 import { connectToDatabase, HostingNode, ManagedDatabase } from '@/lib/db';
 import { createAuditLog } from '@/lib/audit';
 import { LioranDBAdminClient } from '@/lib/liorandb-admin/client';
+import { getNodeMaxCapacity } from '@/lib/hosting/allocation';
 
 /**
  * Explicit Administrator-Approved Hosting Node Recovery & Tenant Purge API
@@ -82,6 +83,10 @@ export async function POST(
       lockedNode.quarantineCode = undefined;
       lockedNode.cleanupFailureReason = undefined;
       lockedNode.currentAssignedCount = 0;
+      lockedNode.pendingReservations = 0;
+      lockedNode.capacityRemaining = getNodeMaxCapacity(lockedNode);
+      lockedNode.allocationReservations = [];
+      lockedNode.allocationRevision = Number(lockedNode.allocationRevision || 0) + 1;
       lockedNode.currentAllocationId = undefined;
       lockedNode.allocationExpiresAt = undefined;
       lockedNode.assignedInstanceId = undefined;
@@ -133,6 +138,10 @@ export async function POST(
       lockedNode.cleanupFailureReason = purgeResult.error || 'Server reset failed.';
       lockedNode.quarantineReason = failureReason;
       lockedNode.adminNotes = `Administrator cleanup failed on ${now.toISOString()}: ${purgeResult.error || 'Server reset failed'}`;
+      lockedNode.pendingReservations = 0;
+      lockedNode.capacityRemaining = getNodeMaxCapacity(lockedNode);
+      lockedNode.allocationReservations = [];
+      lockedNode.allocationRevision = Number(lockedNode.allocationRevision || 0) + 1;
       await lockedNode.save();
 
       await createAuditLog({
