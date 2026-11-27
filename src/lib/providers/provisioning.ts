@@ -792,7 +792,6 @@ export async function allocateAndProvisionInstance(
 
   // Step 3: Pre-allocation health and readiness probe (strictly BEFORE any customer mutations begin)
   const client = LioranDBAdminClient.forNode(reservedNode);
-  const targetInstanceId = reservedNode.serverIdentity || 'primary';
   let serverStatus;
 
   try {
@@ -861,6 +860,18 @@ export async function allocateAndProvisionInstance(
 
       throw new Error(identityMismatchReason);
     }
+
+    // The live control-plane response is authoritative for legacy nodes that
+    // were registered before serverIdentity was persisted in the dashboard.
+    // Persist it before reset so the reset request targets the actual Rust
+    // instance rather than the placeholder "primary" identifier.
+    await HostingNode.findByIdAndUpdate(reservedNode._id, {
+      $set: {
+        healthStatus: 'HEALTHY',
+        lastHealthCheckAt: new Date(),
+        ...(serverStatus.instanceId ? { serverIdentity: serverStatus.instanceId } : {}),
+      },
+    });
   } catch (preCheckErr: unknown) {
     const preCheckMsg = preCheckErr instanceof Error ? preCheckErr.message : String(preCheckErr);
     await releaseHostingNodeReservation(reservedNode._id.toString(), allocationToken);
@@ -894,7 +905,7 @@ export async function allocateAndProvisionInstance(
   // says the node is clean or a prior termination was interrupted.
   try {
     const resetResult = await client.resetInstance({
-      instanceId: targetInstanceId,
+      instanceId: serverStatus.instanceId || reservedNode.serverIdentity || 'primary',
       confirmation: 'RESET_INSTANCE',
     });
 

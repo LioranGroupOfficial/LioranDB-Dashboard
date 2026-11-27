@@ -615,6 +615,11 @@ export class LioranDBAdminClient {
     const rawData = await this.dispatch<RustAdminStatusData>({
       path: '/v1/admin/status',
       method: 'GET',
+      // Management gateways can briefly return 502 while the Rust process is
+      // draining or finishing a reset. Give the caller a stable health probe
+      // instead of failing on the first transient upstream response.
+      retries: 3,
+      timeoutMs: Math.max(this.timeoutMs, 15000),
     });
 
     const stateUpper = String(rawData.state || rawData.status || '').toUpperCase();
