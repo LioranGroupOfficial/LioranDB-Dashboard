@@ -235,6 +235,17 @@ export interface ReservedHostingNode {
   reused: boolean;
 }
 
+/**
+ * Older hosting-node records predate allocationMode and are displayed by the
+ * admin UI as dedicated nodes. Keep those records allocatable while they are
+ * being migrated by the first successful reservation.
+ */
+function getAllocationModeFilter(allocationMode: HostingAllocationMode): Record<string, unknown> {
+  return allocationMode === 'DEDICATED'
+    ? { $or: [{ allocationMode: 'DEDICATED' }, { allocationMode: null }, { allocationMode: { $exists: false } }] }
+    : { allocationMode: 'SHARED' };
+}
+
 export async function reserveHostingNodeSlot(params: {
   nodeId?: string;
   allocationMode: HostingAllocationMode;
@@ -243,9 +254,10 @@ export async function reserveHostingNodeSlot(params: {
   idempotencyKey: string;
 }): Promise<ReservedHostingNode | null> {
   await connectToDatabase();
+  const allocationModeFilter = getAllocationModeFilter(params.allocationMode);
   const candidates = await HostingNode.find({
     ...(params.nodeId ? { _id: params.nodeId } : {}),
-    allocationMode: params.allocationMode,
+    ...allocationModeFilter,
     status: { $in: params.allocationMode === 'DEDICATED' ? ['AVAILABLE', 'ACTIVE', 'ASSIGNED'] : ['AVAILABLE', 'ACTIVE'] },
     healthStatus: 'HEALTHY',
   }).sort({ isDefault: -1, createdAt: 1 }).lean<IHostingNode[]>();
@@ -297,6 +309,8 @@ export async function reserveHostingNodeSlot(params: {
           {
             $set: {
               status: 'AVAILABLE',
+              allocationMode: 'DEDICATED',
+              maxCapacity: getNodeMaxCapacity(candidate),
               currentAssignedCount: 0,
               pendingReservations: 0,
               capacityRemaining: getNodeMaxCapacity(candidate),
@@ -347,6 +361,10 @@ export async function reserveHostingNodeSlot(params: {
     };
     const set: Record<string, unknown> = {};
     if (params.allocationMode === 'DEDICATED') {
+      // Normalize legacy records as part of the same atomic claim that makes
+      // the node unavailable to competing provisioning requests.
+      set.allocationMode = 'DEDICATED';
+      set.maxCapacity = getNodeMaxCapacity(candidate);
       set.status = 'PROVISIONING';
       set.currentAllocationId = token;
       set.allocationExpiresAt = expiresAt;
@@ -357,7 +375,7 @@ export async function reserveHostingNodeSlot(params: {
     const result = await HostingNode.updateOne(
       {
         _id: candidate._id,
-        allocationMode: params.allocationMode,
+        ...allocationModeFilter,
         status: { $in: ['AVAILABLE', 'ACTIVE'] },
         healthStatus: 'HEALTHY',
         capacityRemaining: { $gt: 0 },
