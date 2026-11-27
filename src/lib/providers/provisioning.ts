@@ -173,6 +173,27 @@ export class RealLioranDBProvisioningProvider implements LioranProvisioningProvi
         allowHttpFallback: false,
       });
 
+      // A factory-reset Rust instance has no customer database yet. Creating
+      // the URI and rotating the credential is not enough to fulfill the
+      // allocation: the requested logical database must exist before the
+      // connectivity/readiness phase can succeed. This operation is
+      // idempotent on the Rust server, so it is safe to retry on transient
+      // gateway or transport failures.
+      const { LioranDBClient } = await import('@liorandb/driver');
+      const databaseClient = await LioranDBClient.connect(nativeUri, {
+        transport: 'grpc',
+        allowHttpFallback: false,
+        timeoutMS: 15000,
+        connectTimeoutMS: 10000,
+        requestTimeoutMS: 15000,
+        maxRetries: 2,
+      });
+      try {
+        await databaseClient.createDatabase(params.databaseName || 'default');
+      } finally {
+        await databaseClient.close().catch(() => {});
+      }
+
       return {
         success: true,
         providerDeploymentId: status.instanceId || `node-${node._id.toString().slice(-6)}`,
